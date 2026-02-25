@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neutral Zone - Prototype</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #0d1117;
+            color: white;
+            font-family: sans-serif;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #top-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+        }
+
+        .panel {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border: 1px solid #444;
+            border-radius: 8px;
+        }
+
+        button {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #2ea043;
+        }
+
+        button:disabled {
+            background: #444;
+            cursor: not-allowed;
+            color: #888;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="top-bar">
+        <div class="panel">Control: <span id="control-pct">10</span>%</div>
+        <div class="panel">Energy: <span id="energy-display">150</span></div>
+    </div>
+
+    <div id="ui">
+        <button id="btn-miner">Build Miner (25)</button>
+        <button id="btn-scout">Build Scout (50)</button>
+        <button id="btn-fighter">Build Fighter (100)</button>
+        <div style="font-size: 12px; color: #aaa; max-width: 200px; margin-top: 10px;">
+            <b>Controls:</b><br>
+            - Drag <b>Scouts</b> (Triangles) to expand territory.<br>
+            - Drag from <b>Fighters</b> (Diamonds) to draw patrol paths. Loop to close.<br>
+            - <b>Miners</b> (Squares) auto-mine in territory.
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Game State
+        let energy = 150;
+        const homePlanet = { x: canvas.width / 2, y: canvas.height / 2, radius: 30 };
+
+        const units = {
+            scouts: [],
+            fighters: [],
+            miners: []
+        };
+
+        const asteroids = [];
+        asteroids.push({
+            x: homePlanet.x,
+            y: homePlanet.y - 50,
+            radius: 15,
+            miners: 0,
+            resources: Math.floor(Math.random() * 400 + 200)
+        });
+        for (let i = 1; i < 8; i++) {
+            asteroids.push({
+                x: Math.random() * (canvas.width - 100) + 50,
+                y: Math.random() * (canvas.height - 100) + 50,
+                radius: 15,
+                miners: 0,
+                resources: Math.floor(Math.random() * 400 + 200)
+            });
+        }
+
+        // Starting units
+        units.scouts.push({ x: homePlanet.x - 100, y: homePlanet.y - 100, targetX: homePlanet.x - 100, targetY: homePlanet.y - 100 });
+        units.scouts.push({ x: homePlanet.x + 100, y: homePlanet.y - 100, targetX: homePlanet.x + 100, targetY: homePlanet.y - 100 });
+        units.scouts.push({ x: homePlanet.x, y: homePlanet.y + 120, targetX: homePlanet.x, targetY: homePlanet.y + 120 });
+        units.fighters.push({ x: homePlanet.x - 50, y: homePlanet.y, path: [], pathIndex: 0, pathDir: 1, isLoop: false });
+
+        // Interaction State
+        let activeScout = null;
+        let activeFighter = null;
+        let drawingPath = false;
+
+        // Convex Hull Algorithm (Monotone Chain) to calculate territory
+        function getConvexHull(points) {
+            if (points.length <= 2) return points;
+            const sorted = [...points].sort((a, b) => a.x === b.x ? a.y - b.y : a.x - b.x);
+            const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+            const lower = [];
+            for (let p of sorted) {
+                while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+                lower.push(p);
+            }
+            const upper = [];
+            for (let i = sorted.length - 1; i >= 0; i--) {
+                let p = sorted[i];
+                while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+                upper.push(p);
+            }
+            upper.pop(); lower.pop();
+            return lower.concat(upper);
+        }
+
+        function pointInPolygon(point, vs) {
+            let x = point.x, y = point.y;
+            let inside = false;
+            for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+                let xi = vs[i].x, yi = vs[i].y;
+                let xj = vs[j].x, yj = vs[j].y;
+                let intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        // Input Handling
+        canvas.addEventListener('mousedown', (e) => {
+            const mouseX = e.clientX;
+            const mouseY = e.clientY;
+
+            // Check Fighters first (for drawing path)
+            for (let f of units.fighters) {
+                if (Math.hypot(f.x - mouseX, f.y - mouseY) < 20) {
+                    activeFighter = f;
+                    activeFighter.path = [{ x: mouseX, y: mouseY }];
+                    drawingPath = true;
+                    return;
+                }
+            }
+
+            // Check Scouts (for dragging target)
+            for (let s of units.scouts) {
+                // Check against current position OR its target ghost
+                if (Math.hypot(s.x - mouseX, s.y - mouseY) < 20 || Math.hypot(s.targetX - mouseX, s.targetY - mouseY) < 20) {
+                    activeScout = s;
+                    return;
+                }
+            }
+        });
+
+        const MAX_EDGE_LENGTH = 350;
+
+        canvas.addEventListener('mousemove', (e) => {
+            const mouseX = e.clientX;
+            const mouseY = e.clientY;
+
+            if (activeScout) {
+                const originalX = activeScout.targetX;
+                const originalY = activeScout.targetY;
+                const proposedX = mouseX;
+                const proposedY = mouseY;
+
+                const checkHullValid = (x, y) => {
+                    activeScout.targetX = x;
+                    activeScout.targetY = y;
+                    const points = [homePlanet, ...units.scouts.map(s => ({ x: s.targetX, y: s.targetY }))];
+                    const hull = getConvexHull(points);
+
+                    let perimeter = 0;
+                    for (let i = 0; i < hull.length; i++) {
+                        let p1 = hull[i];
+                        let p2 = hull[(i + 1) % hull.length];
+                        perimeter += Math.hypot(p1.x - p2.x, p1.y - p2.y);
+                    }
+
+                    // Max perimeter is based on number of scouts used to form it.
+                    // We add 1 because the home planet acts like a node.
+                    const MAX_PERIMETER = (units.scouts.length + 1) * 350;
+                    return perimeter <= MAX_PERIMETER;
+                };
+
+                if (checkHullValid(proposedX, proposedY)) {
+                    activeScout.targetX = proposedX;
+                    activeScout.targetY = proposedY;
+                } else {
+                    if (checkHullValid(originalX, originalY)) {
+                        let low = 0;
+                        let high = 1;
+                        let bestT = 0;
+                        for (let step = 0; step < 10; step++) {
+                            let mid = (low + high) / 2;
+                            let testX = originalX + (proposedX - originalX) * mid;
+                            let testY = originalY + (proposedY - originalY) * mid;
+                            if (checkHullValid(testX, testY)) {
+                                bestT = mid;
+                                low = mid;
+                            } else {
+                                high = mid;
+                            }
+                        }
+                        activeScout.targetX = originalX + (proposedX - originalX) * bestT;
+                        activeScout.targetY = originalY + (proposedY - originalY) * bestT;
+                    } else {
+                        activeScout.targetX = originalX;
+                        activeScout.targetY = originalY;
+                    }
+                }
+            }
+            if (drawingPath && activeFighter) {
+                const lastPoint = activeFighter.path[activeFighter.path.length - 1];
+                if (Math.hypot(lastPoint.x - mouseX, lastPoint.y - mouseY) > 15) {
+                    activeFighter.path.push({ x: mouseX, y: mouseY });
+                }
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (drawingPath && activeFighter) {
+                // Check if path is closed (loop)
+                const firstP = activeFighter.path[0];
+                const lastP = activeFighter.path[activeFighter.path.length - 1];
+                if (activeFighter.path.length > 5 && Math.hypot(firstP.x - lastP.x, firstP.y - lastP.y) < 50) {
+                    activeFighter.isLoop = true;
+                    activeFighter.path.push({ x: firstP.x, y: firstP.y }); // close the visual gap
+                } else {
+                    activeFighter.isLoop = false;
+                }
+                activeFighter.pathIndex = 0;
+                activeFighter.pathDir = 1;
+            }
+            activeScout = null;
+            activeFighter = null;
+            drawingPath = false;
+        });
+
+        // Game Loop
+        let lastTime = 0;
+        function update(time) {
+            const dt = (time - lastTime) / 1000 || 0;
+            lastTime = time;
+
+            // Update Energy
+            document.getElementById('energy-display').innerText = Math.floor(energy);
+
+            // UI Buttons
+            document.getElementById('btn-miner').disabled = energy < 25;
+            document.getElementById('btn-scout').disabled = energy < 50;
+            document.getElementById('btn-fighter').disabled = energy < 100;
+
+            // Current Territory Hull
+            const currentPoints = [homePlanet, ...units.scouts.map(s => ({ x: s.x, y: s.y }))];
+            const currentHull = getConvexHull(currentPoints);
+
+            // Update Control Percentage
+            let area = 0;
+            for (let i = 0; i < currentHull.length; i++) {
+                let j = (i + 1) % currentHull.length;
+                area += currentHull[i].x * currentHull[j].y;
+                area -= currentHull[j].x * currentHull[i].y;
+            }
+            area = Math.abs(area / 2);
+            const totalArea = canvas.width * canvas.height;
+            const pct = (area / totalArea) * 100;
+            document.getElementById('control-pct').innerText = pct.toFixed(1);
+
+            // Move Scouts
+            units.scouts.forEach(s => {
+                let dx = s.targetX - s.x;
+                let dy = s.targetY - s.y;
+                let dist = Math.hypot(dx, dy);
+                if (dist > 2) {
+                    s.x += (dx / dist) * 40 * dt;
+                    s.y += (dy / dist) * 40 * dt;
+                } else {
+                    s.x = s.targetX;
+                    s.y = s.targetY;
+                }
+            });
+
+            // Move Fighters along paths
+            units.fighters.forEach(f => {
+                if (f.path && f.path.length > 1 && f !== activeFighter) {
+                    let targetPoint = f.path[f.pathIndex];
+                    let dx = targetPoint.x - f.x;
+                    let dy = targetPoint.y - f.y;
+                    let dist = Math.hypot(dx, dy);
+
+                    if (dist < 5) {
+                        f.pathIndex += f.pathDir;
+                        if (f.pathIndex >= f.path.length || f.pathIndex < 0) {
+                            if (f.isLoop) {
+                                f.pathIndex = 0;
+                            } else {
+                                f.pathDir *= -1;
+                                f.pathIndex += f.pathDir * 2;
+                            }
+                        }
+                    } else {
+                        f.x += (dx / dist) * 80 * dt;
+                        f.y += (dy / dist) * 80 * dt;
+                    }
+                }
+            });
+
+            // Move Miners
+            units.miners.forEach(m => {
+                if (m.payload === undefined) m.payload = 0;
+                if (m.returning === undefined) m.returning = false;
+
+                if (m.returning) {
+                    let dx = homePlanet.x - m.x;
+                    let dy = homePlanet.y - m.y;
+                    let dist = Math.hypot(dx, dy);
+                    if (dist > homePlanet.radius) {
+                        m.x += (dx / dist) * 50 * dt;
+                        m.y += (dy / dist) * 50 * dt;
+                    } else {
+                        energy += m.payload;
+                        m.payload = 0;
+                        m.returning = false;
+                    }
+                } else if (!m.targetAsteroid || m.targetAsteroid.resources <= 0) {
+                    if (m.targetAsteroid) {
+                        m.targetAsteroid.miners = Math.max(0, m.targetAsteroid.miners - 1);
+                        m.targetAsteroid = null;
+                    }
+
+                    let closest = null;
+                    let minDist = Infinity;
+                    asteroids.forEach(a => {
+                        if (a.resources > 0 && a.miners < 3 && pointInPolygon(a, currentHull)) {
+                            let d = Math.hypot(a.x - m.x, a.y - m.y);
+                            if (d < minDist) { minDist = d; closest = a; }
+                        }
+                    });
+
+                    if (closest) {
+                        m.targetAsteroid = closest;
+                        closest.miners++;
+                    } else if (m.payload > 0) {
+                        m.returning = true;
+                    }
+                } else {
+                    let dx = m.targetAsteroid.x - m.x;
+                    let dy = m.targetAsteroid.y - m.y;
+                    let dist = Math.hypot(dx, dy);
+                    if (dist > 20) {
+                        m.x += (dx / dist) * 50 * dt;
+                        m.y += (dy / dist) * 50 * dt;
+                    } else {
+                        let amount = Math.min(20 * dt, m.targetAsteroid.resources, 50 - m.payload);
+                        m.payload += amount;
+                        m.targetAsteroid.resources -= amount;
+                        if (m.payload >= 50 || m.targetAsteroid.resources <= 0) {
+                            m.returning = true;
+                            m.targetAsteroid.miners = Math.max(0, m.targetAsteroid.miners - 1);
+                            m.targetAsteroid = null;
+                        }
+                    }
+                }
+            });
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Calculate and Draw Projected Territory (Lighter, Dashed)
+            let isProjecting = units.scouts.some(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5);
+            if (isProjecting) {
+                const targetPoints = [homePlanet, ...units.scouts.map(s => ({ x: s.targetX, y: s.targetY }))];
+                const targetHull = getConvexHull(targetPoints);
+
+                ctx.beginPath();
+                targetHull.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(46, 160, 67, 0.1)'; // Light green fill
+                ctx.fill();
+
+                ctx.setLineDash([10, 10]);
+                ctx.strokeStyle = 'rgba(46, 160, 67, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.setLineDash([]); // Reset
+            }
+
+            // 2. Calculate and Draw Current Territory (Darker, Solid)
+            const currentPoints = [homePlanet, ...units.scouts.map(s => ({ x: s.x, y: s.y }))];
+            const currentHull = getConvexHull(currentPoints);
+
+            ctx.beginPath();
+            currentHull.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(46, 160, 67, 0.25)'; // Darker green fill
+            ctx.fill();
+
+            ctx.strokeStyle = '#2ea043';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Draw Fighter Paths
+            units.fighters.forEach(f => {
+                if (f.path && f.path.length > 0) {
+                    ctx.beginPath();
+                    ctx.moveTo(f.path[0].x, f.path[0].y);
+                    for (let i = 1; i < f.path.length; i++) ctx.lineTo(f.path[i].x, f.path[i].y);
+                    ctx.strokeStyle = 'rgba(88, 166, 255, 0.4)';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            });
+
+            // Draw Asteroids
+            asteroids.forEach(a => {
+                if (a.resources <= 0) return;
+                ctx.beginPath();
+                ctx.arc(a.x, a.y, a.radius, 0, Math.PI * 2);
+                ctx.fillStyle = '#8b949e';
+                ctx.fill();
+
+                ctx.fillStyle = 'white';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(Math.ceil(a.resources), a.x, a.y - a.radius - 5);
+            });
+
+            // Draw Home Planet
+            ctx.beginPath();
+            ctx.arc(homePlanet.x, homePlanet.y, homePlanet.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#1f6feb';
+            ctx.fill();
+
+            // Draw Scouts
+            units.scouts.forEach(s => {
+                // Draw Ghost if moving
+                if (Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5) {
+                    drawTriangle(s.targetX, s.targetY, 'rgba(46, 160, 67, 0.4)');
+                }
+                // Draw Real Scout
+                drawTriangle(s.x, s.y, '#2ea043');
+            });
+
+            // Draw Fighters
+            units.fighters.forEach(f => drawDiamond(f.x, f.y, '#58a6ff'));
+
+            // Draw Miners
+            units.miners.forEach(m => {
+                drawSquare(m.x, m.y, m.returning ? '#a371f7' : '#d2a8ff');
+                if (m.payload > 0) {
+                    const ratio = m.payload / 50;
+                    ctx.fillStyle = '#2ea043';
+                    ctx.fillRect(m.x - 4, (m.y + 4) - (8 * ratio), 8, 8 * ratio);
+                }
+            });
+
+            requestAnimationFrame((t) => {
+                update(t);
+                draw();
+            });
+        }
+
+        // Drawing Helpers
+        function drawTriangle(x, y, color) {
+            ctx.beginPath();
+            ctx.moveTo(x, y - 10);
+            ctx.lineTo(x + 10, y + 10);
+            ctx.lineTo(x - 10, y + 10);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        function drawDiamond(x, y, color) {
+            ctx.beginPath();
+            ctx.moveTo(x, y - 12);
+            ctx.lineTo(x + 12, y);
+            ctx.lineTo(x, y + 12);
+            ctx.lineTo(x - 12, y);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        function drawSquare(x, y, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x - 8, y - 8, 16, 16);
+        }
+
+        // UI Buttons
+        document.getElementById('btn-miner').addEventListener('click', () => {
+            if (energy >= 25) { energy -= 25; units.miners.push({ x: homePlanet.x, y: homePlanet.y, targetAsteroid: null, payload: 0, returning: false }); }
+        });
+        document.getElementById('btn-scout').addEventListener('click', () => {
+            if (energy >= 50) { energy -= 50; units.scouts.push({ x: homePlanet.x, y: homePlanet.y, targetX: homePlanet.x + 50, targetY: homePlanet.y + 50 }); }
+        });
+        document.getElementById('btn-fighter').addEventListener('click', () => {
+            if (energy >= 100) { energy -= 100; units.fighters.push({ x: homePlanet.x, y: homePlanet.y, path: [], pathIndex: 0, pathDir: 1, isLoop: false }); }
+        });
+
+        // Handle Window Resize
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        // Start
+        requestAnimationFrame((t) => { lastTime = t; draw(); });
+
+    </script>
+</body>
+
+</html>
