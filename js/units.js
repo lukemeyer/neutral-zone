@@ -90,13 +90,22 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             }
 
             let closest = null;
+            let closestUncaptured = null;
             let minDist = Infinity;
+            let minUncapturedDist = Infinity;
             asteroids.forEach(a => {
-                if (a.resources > 0 && a.miners < 3 && pointInPolygon(a, currentHull)) {
+                if (a.resources > 0 && a.miners < 3) {
                     let d = Math.hypot(a.x - m.x, a.y - m.y);
-                    if (d < minDist) { minDist = d; closest = a; }
+                    if (pointInPolygon(a, currentHull)) {
+                        if (d < minDist) { minDist = d; closest = a; }
+                    } else {
+                        if (d < minUncapturedDist) { minUncapturedDist = d; closestUncaptured = a; }
+                    }
                 }
             });
+
+            // Prefer captured, fallback to uncaptured
+            closest = closest || closestUncaptured;
 
             if (closest) {
                 m.targetAsteroid = closest;
