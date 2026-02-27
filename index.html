@@ -35,10 +35,27 @@
             height: 100%;
         }
 
-        #ui {
+        #top-bar {
             position: absolute;
-            bottom: 20px;
-            right: 20px;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            pointer-events: none;
+        }
+
+        .panel {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .player-ui {
+            position: absolute;
+            bottom: 40px;
+            width: 180px;
             background: rgba(0, 0, 0, 0.8);
             padding: 15px;
             border: 1px solid #444;
@@ -48,21 +65,21 @@
             gap: 10px;
         }
 
-        #top-bar {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            right: 20px;
-            display: flex;
-            justify-content: space-between;
-            pointer-events: none;
+        #ui-p1 {
+            left: 128px;
+            transform: translateX(-50%);
         }
 
-        .panel {
-            background: rgba(0, 0, 0, 0.8);
-            padding: 10px 20px;
-            border: 1px solid #444;
-            border-radius: 8px;
+        #ui-p2 {
+            left: 1152px;
+            transform: translateX(-50%);
+        }
+
+        .energy-display {
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 5px;
         }
 
         button {
@@ -84,27 +101,149 @@
             cursor: not-allowed;
             color: #888;
         }
+
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(13, 17, 23, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .setup-box {
+            background: #161b22;
+            padding: 40px;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .setup-row {
+            display: flex;
+            justify-content: space-around;
+            gap: 40px;
+            margin: 30px 0;
+        }
+
+        .player-setup select {
+            background: #0d1117;
+            color: white;
+            border: 1px solid #30363d;
+            padding: 8px;
+            font-size: 16px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(13, 17, 23, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .result-box {
+            background: #161b22;
+            padding: 40px;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        #game-result-text {
+            margin-bottom: 30px;
+            font-size: 32px;
+        }
+
+        #btn-restart-game {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 18px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #btn-restart-game:hover {
+            background: #2ea043;
+        }
     </style>
 </head>
 
 <body>
 
+    <div id="game-over-screen" style="display: none;">
+        <div class="result-box">
+            <h2 id="game-result-text">Player Wins!</h2>
+            <button id="btn-restart-game">Play Again</button>
+        </div>
+    </div>
+
+    <div id="start-screen">
+        <div class="setup-box">
+            <h1>Neutral Zone</h1>
+            <div class="setup-row">
+                <div class="player-setup">
+                    <h2 style="color:#1f6feb">Player 1 (Left)</h2>
+                    <select id="p1-type">
+                        <option value="human">Human</option>
+                        <option value="cpu">CPU (Auto)</option>
+                    </select>
+                </div>
+                <div class="player-setup">
+                    <h2 style="color:#f85149">Player 2 (Right)</h2>
+                    <select id="p2-type">
+                        <option value="cpu">CPU (Auto)</option>
+                        <option value="human">Human</option>
+                    </select>
+                </div>
+            </div>
+            <button id="btn-start-game" style="font-size: 20px; padding: 12px 30px;">Start Game</button>
+        </div>
+    </div>
+
     <div id="game-container">
         <div id="top-bar">
-            <div class="panel">Control: <span id="control-pct">10</span>%</div>
-            <div class="panel">Energy: <span id="energy-display">150</span></div>
+            <div class="panel">
+                <span style="color:#2ea043">P1 Control: <span id="p1-control">0.0</span>%</span>
+                &nbsp; | &nbsp;
+                <span style="color:#da3633">P2 Control: <span id="p2-control">0.0</span>%</span>
+            </div>
         </div>
 
-        <div id="ui">
-            <button id="btn-miner">Build Miner (25)</button>
-            <button id="btn-scout">Build Scout (50)</button>
-            <button id="btn-fighter">Build Fighter (100)</button>
-            <div style="font-size: 12px; color: #aaa; max-width: 200px; margin-top: 10px;">
-                <b>Controls:</b><br>
-                - Drag <b>Scouts</b> (Circles) to expand territory.<br>
-                - Drag from <b>Fighters</b> (Triangles) to draw patrol paths. Loop to close.<br>
-                - <b>Miners</b> (Squares) auto-mine in territory.
-            </div>
+        <div id="ui-p1" class="player-ui">
+            <div class="energy-display" style="color:#1f6feb">Energy: <span id="p1-energy">50</span></div>
+            <button id="p1-btn-miner">Build Miner (25)</button>
+            <button id="p1-btn-scout">Build Scout (50)</button>
+            <button id="p1-btn-fighter">Build Fighter (100)</button>
+        </div>
+
+        <div id="ui-p2" class="player-ui">
+            <div class="energy-display" style="color:#f85149">Energy: <span id="p2-energy">50</span></div>
+            <button id="p2-btn-miner">Build Miner (25)</button>
+            <button id="p2-btn-scout">Build Scout (50)</button>
+            <button id="p2-btn-fighter">Build Fighter (100)</button>
+        </div>
+
+        <div
+            style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); font-size: 12px; color: #aaa; text-align: center; pointer-events: none;">
+            <b>Controls:</b> Drag <b>Scouts</b> (Circles) to expand territory. Drag from <b>Fighters</b> (Triangles) to
+            patrol.
         </div>
 
         <canvas id="gameCanvas" width="1280" height="720"></canvas>
@@ -128,17 +267,23 @@
                 id: 0,
                 color: '#1f6feb', // Blue (Player 1)
                 territoryColor: '#2ea043',
-                energy: 50,
+                energy: 100,
                 homePlanet: { x: 128, y: 360, radius: 30, health: 1000, maxHealth: 1000 },
-                units: { scouts: [], fighters: [], miners: [] }
+                units: { scouts: [], fighters: [], miners: [] },
+                isCPU: false,
+                aiTimer: 0,
+                scoutSettleTimer: 0
             },
             {
                 id: 1,
                 color: '#f85149', // Red (Player 2)
                 territoryColor: '#da3633',
-                energy: 50,
+                energy: 100,
                 homePlanet: { x: 1152, y: 360, radius: 30, health: 1000, maxHealth: 1000 },
-                units: { scouts: [], fighters: [], miners: [] }
+                units: { scouts: [], fighters: [], miners: [] },
+                isCPU: false,
+                aiTimer: 0,
+                scoutSettleTimer: 0
             }
         ];
 
@@ -156,7 +301,7 @@
             // Random asteroids on left half
             for (let i = 1; i < 6; i++) {
                 leftAsteroids.push({
-                    x: Math.random() * (640 - 100) + 50,
+                    x: Math.random() * (640 - 250) + 250, // Keep outside initial territory
                     y: Math.random() * (720 - 100) + 50,
                     radius: 15, miners: 0,
                     resources: Math.floor(Math.random() * 400 + 200)
@@ -166,12 +311,12 @@
         };
 
         const leftAsteroids = generateAsteroids();
-        // Add left side and mirrored right side
+        // Add left side and mirrored right side (only mirror horizontally)
         leftAsteroids.forEach(a => {
             asteroids.push({ ...a });
             asteroids.push({
                 x: 1280 - a.x,
-                y: 720 - a.y,
+                y: a.y,
                 radius: 15, miners: 0,
                 resources: a.resources
             });
@@ -193,6 +338,8 @@
         let activeScoutPlayer = null;
         let activeFighter = null;
         let drawingPath = false;
+        let gameStarted = false;
+        let gameOver = false;
 
         // Convex Hull Algorithm (Monotone Chain) to calculate territory
         function getConvexHull(points) {
@@ -220,7 +367,9 @@
             for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
                 let xi = vs[i].x, yi = vs[i].y;
                 let xj = vs[j].x, yj = vs[j].y;
-                let intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+
+                // Ray-casting algorithm
+                let intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
                 if (intersect) inside = !inside;
             }
             return inside;
@@ -236,12 +385,14 @@
 
         // Input Handling
         canvas.addEventListener('mousedown', (e) => {
+            if (!gameStarted) return;
             const pos = getMousePos(e);
             const mouseX = pos.x;
             const mouseY = pos.y;
 
             // Check Fighters first (for drawing path)
             for (let p of players) {
+                if (p.isCPU) continue;
                 for (let f of p.units.fighters) {
                     if (Math.hypot(f.x - mouseX, f.y - mouseY) < 20) {
                         activeFighter = f;
@@ -254,6 +405,7 @@
 
             // Check Scouts (for dragging target)
             for (let p of players) {
+                if (p.isCPU) continue;
                 for (let s of p.units.scouts) {
                     // Check against current position OR its target ghost
                     if (Math.hypot(s.x - mouseX, s.y - mouseY) < 20 || Math.hypot(s.targetX - mouseX, s.targetY - mouseY) < 20) {
@@ -268,6 +420,7 @@
         const MAX_EDGE_LENGTH = 350;
 
         canvas.addEventListener('mousemove', (e) => {
+            if (!gameStarted) return;
             const pos = getMousePos(e);
             const mouseX = pos.x;
             const mouseY = pos.y;
@@ -330,12 +483,12 @@
             }
         });
 
-        canvas.addEventListener('mouseup', (e) => {
+        const handleMouseUpOrLeave = (e) => {
             if (drawingPath && activeFighter) {
                 // Check if path is closed (loop)
                 const firstP = activeFighter.path[0];
                 const lastP = activeFighter.path[activeFighter.path.length - 1];
-                if (activeFighter.path.length > 5 && Math.hypot(firstP.x - lastP.x, firstP.y - lastP.y) < 50) {
+                if (activeFighter.path.length > 5 && Math.hypot(firstP.x - lastP.x, firstP.y - lastP.y) < 30) {
                     activeFighter.isLoop = true;
                     activeFighter.path.push({ x: firstP.x, y: firstP.y }); // close the visual gap
                 } else {
@@ -348,38 +501,186 @@
             activeScoutPlayer = null;
             activeFighter = null;
             drawingPath = false;
-        });
+        };
+
+        canvas.addEventListener('mouseup', handleMouseUpOrLeave);
+        canvas.addEventListener('mouseleave', handleMouseUpOrLeave);
+
+        // AI Logic
+        function updateAI(p, dt) {
+            // Check if any scouts are currently moving
+            const scoutsMoving = p.units.scouts.some(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5);
+
+            if (scoutsMoving) {
+                p.scoutSettleTimer = 0;
+                return; // Wait for them to arrive
+            }
+
+            p.scoutSettleTimer += dt;
+            if (p.scoutSettleTimer < 1.0) return; // Wait 1 second after they stop before doing new things
+
+            p.aiTimer += dt;
+            if (p.aiTimer < 1.0) return; // run AI logic every 1s
+            p.aiTimer = 0;
+
+            const enemy = players.find(ep => ep.id !== p.id);
+
+            // 1) Combat Fighters (Defensive & Offensive)
+            if (p.units.fighters.length < enemy.units.fighters.length && p.energy >= 100) {
+                // Defensive: Match opponent numbers
+                p.energy -= 100;
+                let patrolOffset = p.id === 0 ? 300 : -300;
+                p.units.fighters.push({ x: p.homePlanet.x, y: p.homePlanet.y, path: [{ x: p.homePlanet.x + patrolOffset, y: p.homePlanet.y - 200 }, { x: p.homePlanet.x + patrolOffset, y: p.homePlanet.y + 200 }], pathIndex: 1, pathDir: 1, isLoop: false, health: 100, maxHealth: 100, cooldown: 0 });
+            } else if (p.units.miners.length >= 2 && p.energy >= 200) {
+                // Offensive: Economy is stable, push for the win
+                p.energy -= 100; // still costs 100, but requires a 200 surplus to trigger
+                p.units.fighters.push({ x: p.homePlanet.x, y: p.homePlanet.y, path: [{ x: p.homePlanet.x, y: p.homePlanet.y }, { x: enemy.homePlanet.x, y: enemy.homePlanet.y }], pathIndex: 1, pathDir: 1, isLoop: false, health: 100, maxHealth: 100, cooldown: 0 });
+            }
+
+            // 2) Expansion (Scouts target closest neutral asteroid)
+            const currentPoints = [p.homePlanet, ...p.units.scouts.map(s => ({ x: s.targetX, y: s.targetY }))];
+            const currentHull = getConvexHull(currentPoints);
+
+            // Helper to see if asteroid + a 25px radius buffer is entirely inside our current hull
+            const isAstCaptured = (a) => {
+                const offsets = [[0, 0], [25, 0], [-25, 0], [0, 25], [0, -25]];
+                return offsets.every(off => pointInPolygon({ x: a.x + off[0], y: a.y + off[1] }, currentHull));
+            };
+
+            let closestAst = null;
+            let minDist = Infinity;
+
+            // Check if we have active captured asteroids being mined
+            let activeCaptured = asteroids.filter(a => a.resources > 0 && isAstCaptured(a));
+
+            // Only expand if we have fully mined our current captures (or have none yet)
+            if (activeCaptured.length === 0) {
+                asteroids.forEach(a => {
+                    if (a.resources > 0 && !isAstCaptured(a)) {
+                        let d = Math.hypot(p.homePlanet.x - a.x, p.homePlanet.y - a.y);
+                        if (d < minDist) {
+                            minDist = d;
+                            closestAst = a;
+                        }
+                    }
+                });
+            }
+
+            let activeExpansionScout = null;
+
+            if (closestAst) {
+                // Find a scout to do the expanding. Prefer one not moving much.
+                activeExpansionScout = p.units.scouts.find(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) < 5);
+                if (activeExpansionScout) {
+                    let dirX = closestAst.x - p.homePlanet.x;
+                    let dirY = closestAst.y - p.homePlanet.y;
+                    let len = Math.hypot(dirX, dirY) || 1;
+                    activeExpansionScout.targetX = closestAst.x + (dirX / len) * 60;
+                    activeExpansionScout.targetY = closestAst.y + (dirY / len) * 60;
+                } else if (p.energy >= 50) {
+                    p.energy -= 50;
+                    p.units.scouts.push({ x: p.homePlanet.x, y: p.homePlanet.y, targetX: p.homePlanet.x, targetY: p.homePlanet.y, health: 50, maxHealth: 50, cooldown: 0 });
+                }
+            }
+
+            // Assign holding positions for captured asteroids
+            let holdingScouts = [];
+            activeCaptured.forEach(a => {
+                let available = p.units.scouts.filter(s => s !== activeExpansionScout && !holdingScouts.includes(s));
+                if (available.length > 0) {
+                    // Find the scout closest to this rock
+                    let holder = available.sort((s1, s2) => Math.hypot(s1.x - a.x, s1.y - a.y) - Math.hypot(s2.x - a.x, s2.y - a.y))[0];
+                    let dirX = a.x - p.homePlanet.x;
+                    let dirY = a.y - p.homePlanet.y;
+                    let len = Math.hypot(dirX, dirY) || 1;
+                    // Push the holding scout just slightly past the rock (matching expansion offset) to guarantee it stays in bounds without oscillating
+                    holder.targetX = a.x + (dirX / len) * 60;
+                    holder.targetY = a.y + (dirY / len) * 60;
+                    holdingScouts.push(holder);
+                }
+            });
+
+            // Distribute remaining scouts to maintain a wide defensive perimeter
+            const idleScouts = p.units.scouts.filter(s => s !== activeExpansionScout && !holdingScouts.includes(s));
+            if (idleScouts.length > 0) {
+                // We want to form a semi-circle facing the center of the board.
+                const dir = p.id === 0 ? 1 : -1;
+                const angleSpread = Math.PI; // 180 degree fan
+                const startAngle = dir === 1 ? -Math.PI / 2 : Math.PI / 2;
+
+                // Get the average distance of our current hull to push the perimeter out slightly
+                let avgDist = 150;
+                if (closestAst) {
+                    avgDist = Math.max(150, Math.hypot(closestAst.x - p.homePlanet.x, closestAst.y - p.homePlanet.y));
+                }
+
+                idleScouts.forEach((s, i) => {
+                    // evenly space them along the arc
+                    const pct = idleScouts.length === 1 ? 0.5 : i / (idleScouts.length - 1);
+                    const angle = startAngle + (pct * angleSpread);
+
+                    s.targetX = p.homePlanet.x + Math.cos(angle) * avgDist * dir;
+                    s.targetY = p.homePlanet.y + Math.sin(angle) * avgDist;
+                });
+            }
+
+            // 3) Economy (Miners)
+            // Count captured asteroids
+            let capturedAsteroids = asteroids.filter(a => a.resources > 0 && isAstCaptured(a));
+            if (p.units.miners.length < capturedAsteroids.length * 2 && p.energy >= 25) {
+                p.energy -= 25;
+                p.units.miners.push({ x: p.homePlanet.x, y: p.homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20 });
+            }
+        }
+
         // Game Loop
         let lastTime = 0;
         function update(time) {
             const dt = (time - lastTime) / 1000 || 0;
             lastTime = time;
 
-            // Only track UI for Player 0 (local player) for now
-            document.getElementById('energy-display').innerText = Math.floor(players[0].energy);
-            document.getElementById('btn-miner').disabled = players[0].energy < 25;
-            document.getElementById('btn-scout').disabled = players[0].energy < 50;
-            document.getElementById('btn-fighter').disabled = players[0].energy < 100;
+            if (!gameStarted) return;
+
+            // UI Refresh for both players
+            document.getElementById('p1-energy').innerText = Math.floor(players[0].energy);
+            document.getElementById('p1-btn-miner').disabled = players[0].energy < 25;
+            document.getElementById('p1-btn-scout').disabled = players[0].energy < 50;
+            document.getElementById('p1-btn-fighter').disabled = players[0].energy < 100;
+
+            document.getElementById('p2-energy').innerText = Math.floor(players[1].energy);
+            document.getElementById('p2-btn-miner').disabled = players[1].energy < 25;
+            document.getElementById('p2-btn-scout').disabled = players[1].energy < 50;
+            document.getElementById('p2-btn-fighter').disabled = players[1].energy < 100;
 
             const currentHulls = [];
 
             // Update Players
             players.forEach(p => {
+                if (p.isCPU) updateAI(p, dt);
+
                 const currentPoints = [p.homePlanet, ...p.units.scouts.map(s => ({ x: s.x, y: s.y }))];
                 const currentHull = getConvexHull(currentPoints);
                 currentHulls.push(currentHull);
 
+                // Control Area Calculation
+                let area = 0;
+                for (let i = 0; i < currentHull.length; i++) {
+                    let j = (i + 1) % currentHull.length;
+                    area += currentHull[i].x * currentHull[j].y;
+                    area -= currentHull[j].x * currentHull[i].y;
+                }
+                area = Math.abs(area / 2);
+                const totalArea = 1280 * 720;
+                const pct = (area / totalArea) * 100;
+
+                if (pct >= 70.0 && !gameOver) {
+                    endGame(p.id, 'Domination');
+                }
+
                 if (p.id === 0) {
-                    let area = 0;
-                    for (let i = 0; i < currentHull.length; i++) {
-                        let j = (i + 1) % currentHull.length;
-                        area += currentHull[i].x * currentHull[j].y;
-                        area -= currentHull[j].x * currentHull[i].y;
-                    }
-                    area = Math.abs(area / 2);
-                    const totalArea = canvas.width * canvas.height;
-                    const pct = (area / totalArea) * 100;
-                    document.getElementById('control-pct').innerText = pct.toFixed(1);
+                    document.getElementById('p1-control').innerText = pct.toFixed(1);
+                } else {
+                    document.getElementById('p2-control').innerText = pct.toFixed(1);
                 }
 
                 p.units.scouts.forEach(s => {
@@ -464,10 +765,12 @@
                             m.x += (dx / dist) * 50 * dt;
                             m.y += (dy / dist) * 50 * dt;
                         } else {
-                            let amount = Math.min(20 * dt, m.targetAsteroid.resources, 50 - m.payload);
-                            m.payload += amount;
+                            // Mining
+                            let amount = Math.min(m.targetAsteroid.resources, 10 * dt);
                             m.targetAsteroid.resources -= amount;
-                            if (m.payload >= 50 || m.targetAsteroid.resources <= 0) {
+                            m.payload += amount;
+                            if (m.payload >= 25) {
+                                m.payload = 25;
                                 m.returning = true;
                                 m.targetAsteroid.miners = Math.max(0, m.targetAsteroid.miners - 1);
                                 m.targetAsteroid = null;
@@ -557,6 +860,28 @@
                 // Keep dead planets around for visual ruin or end game state, but cap at 0
                 if (p.homePlanet.health <= 0) p.homePlanet.health = 0;
             });
+
+            if (gameOver) return;
+            players.forEach(p => {
+                // Destruction Loss
+                if (p.homePlanet.health <= 0) {
+                    endGame(players.find(ep => ep.id !== p.id).id, 'Destruction');
+                }
+                // Bankruptcy Loss
+                let totalUnits = p.units.scouts.length + p.units.fighters.length + p.units.miners.length;
+                if (totalUnits === 0 && p.energy < 25) {
+                    endGame(players.find(ep => ep.id !== p.id).id, 'Bankruptcy');
+                }
+            });
+        }
+
+        function endGame(winnerId, reason) {
+            if (gameOver) return;
+            gameOver = true;
+            document.getElementById('game-over-screen').style.display = 'flex';
+            const winnerName = winnerId === 0 ? "Player 1 (Blue)" : "Player 2 (Red)";
+            document.getElementById('game-result-text').innerText = `${winnerName} Wins via ${reason}!`;
+            document.getElementById('game-result-text').style.color = winnerId === 0 ? '#1f6feb' : '#f85149';
         }
 
         function drawHealthBar(x, y, current, max, width = 20) {
@@ -658,7 +983,7 @@
                 p.units.miners.forEach(m => {
                     drawSquare(m.x, m.y, m.returning ? '#a371f7' : (p.id === 0 ? '#d2a8ff' : '#ff7b72'));
                     if (m.payload > 0) {
-                        const ratio = m.payload / 50;
+                        const ratio = m.payload / 25;
                         ctx.fillStyle = '#2ea043';
                         ctx.fillRect(m.x - 4, (m.y + 4) - (8 * ratio), 8, 8 * ratio);
                     }
@@ -705,24 +1030,66 @@
             ctx.fillRect(x - 8, y - 8, 16, 16);
         }
 
-        // UI Buttons (Player 0 Local Controls)
-        document.getElementById('btn-miner').addEventListener('click', () => {
+        // UI Buttons 
+        document.getElementById('p1-btn-miner').addEventListener('click', () => {
             if (players[0].energy >= 25) {
                 players[0].energy -= 25;
                 players[0].units.miners.push({ x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20 });
             }
         });
-        document.getElementById('btn-scout').addEventListener('click', () => {
+        document.getElementById('p1-btn-scout').addEventListener('click', () => {
             if (players[0].energy >= 50) {
                 players[0].energy -= 50;
                 players[0].units.scouts.push({ x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetX: players[0].homePlanet.x + 50, targetY: players[0].homePlanet.y + 50, health: 50, maxHealth: 50, cooldown: 0 });
             }
         });
-        document.getElementById('btn-fighter').addEventListener('click', () => {
+        document.getElementById('p1-btn-fighter').addEventListener('click', () => {
             if (players[0].energy >= 100) {
                 players[0].energy -= 100;
-                players[0].units.fighters.push({ x: players[0].homePlanet.x, y: players[0].homePlanet.y, path: [], pathIndex: 0, pathDir: 1, isLoop: false, health: 100, maxHealth: 100, cooldown: 0 });
+                players[0].units.fighters.push({ x: players[0].homePlanet.x, y: players[0].homePlanet.y, path: [{ x: players[0].homePlanet.x, y: players[0].homePlanet.y }, { x: players[0].homePlanet.x, y: players[0].homePlanet.y - 60 }], pathIndex: 1, pathDir: 1, isLoop: false, health: 100, maxHealth: 100, cooldown: 0 });
             }
+        });
+
+        document.getElementById('p2-btn-miner').addEventListener('click', () => {
+            if (players[1].energy >= 25) {
+                players[1].energy -= 25;
+                players[1].units.miners.push({ x: players[1].homePlanet.x, y: players[1].homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20 });
+            }
+        });
+        document.getElementById('p2-btn-scout').addEventListener('click', () => {
+            if (players[1].energy >= 50) {
+                players[1].energy -= 50;
+                players[1].units.scouts.push({ x: players[1].homePlanet.x, y: players[1].homePlanet.y, targetX: players[1].homePlanet.x - 50, targetY: players[1].homePlanet.y + 50, health: 50, maxHealth: 50, cooldown: 0 });
+            }
+        });
+        document.getElementById('p2-btn-fighter').addEventListener('click', () => {
+            if (players[1].energy >= 100) {
+                players[1].energy -= 100;
+                players[1].units.fighters.push({ x: players[1].homePlanet.x, y: players[1].homePlanet.y, path: [{ x: players[1].homePlanet.x, y: players[1].homePlanet.y }, { x: players[1].homePlanet.x, y: players[1].homePlanet.y - 60 }], pathIndex: 1, pathDir: 1, isLoop: false, health: 100, maxHealth: 100, cooldown: 0 });
+            }
+        });
+
+        document.getElementById('btn-restart-game').addEventListener('click', () => {
+            window.location.reload();
+        });
+
+        document.getElementById('btn-start-game').addEventListener('click', () => {
+            players[0].isCPU = document.getElementById('p1-type').value === 'cpu';
+            players[1].isCPU = document.getElementById('p2-type').value === 'cpu';
+
+            if (players[0].isCPU) {
+                document.getElementById('p1-btn-miner').style.display = 'none';
+                document.getElementById('p1-btn-scout').style.display = 'none';
+                document.getElementById('p1-btn-fighter').style.display = 'none';
+            }
+            if (players[1].isCPU) {
+                document.getElementById('p2-btn-miner').style.display = 'none';
+                document.getElementById('p2-btn-scout').style.display = 'none';
+                document.getElementById('p2-btn-fighter').style.display = 'none';
+            }
+
+            document.getElementById('start-screen').style.display = 'none';
+            gameStarted = true;
         });
 
         // Start
