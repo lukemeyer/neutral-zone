@@ -23,6 +23,8 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             let cy = u.y + Math.sin(desiredHeading) * d;
 
             for (let pl of players) {
+                // Ignore destination planet to prevent orbiting it during docking
+                if (targetX === pl.homePlanet.x && targetY === pl.homePlanet.y) continue;
                 if (Math.hypot(cx - pl.homePlanet.x, cy - pl.homePlanet.y) < pl.homePlanet.radius + 5) {
                     blocked = true; break;
                 }
@@ -30,8 +32,8 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             if (blocked) break;
 
             for (let a of asteroids) {
-                // If this is a miner targeting this specific asteroid, don't avoid it
-                if (u.payload !== undefined && u.targetAsteroid === a) continue;
+                // Ignore destination asteroid to prevent orbit during approach
+                if (targetX === a.x && targetY === a.y) continue;
                 if (Math.hypot(cx - a.x, cy - a.y) < a.radius + 5) {
                     blocked = true; break;
                 }
@@ -125,8 +127,8 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
                 m.returning = true;
             }
         } else {
-            // Strictly enforce territory checking: if the asteroid is no longer captured
-            if (!pointInPolygon(m.targetAsteroid, currentHull)) {
+            // Strictly enforce territory checking: if the asteroid is no longer captured OR depleted
+            if (!pointInPolygon(m.targetAsteroid, currentHull) || m.targetAsteroid.resources <= 0) {
                 // Drop the asteroid lock and recall home immediately
                 m.targetAsteroid.miners = Math.max(0, m.targetAsteroid.miners - 1);
                 m.targetAsteroid = null;

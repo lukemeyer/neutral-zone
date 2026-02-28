@@ -7,15 +7,7 @@ import { updateUnits, updateProjectiles } from './units.js';
 import { draw, initRenderer } from './renderer.js';
 import { updateUI, updateControlText, showGameOver, setupUIBindings } from './ui.js';
 
-const container = document.getElementById('game-container');
 const canvas = document.getElementById('gameCanvas');
-
-function handleResize() {
-    const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
-    container.style.transform = `scale(${scale})`;
-}
-window.addEventListener('resize', handleResize);
-handleResize();
 
 initGameState();
 initRenderer(canvas);

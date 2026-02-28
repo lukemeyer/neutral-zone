@@ -40,46 +40,97 @@
         </div>
     </div>
 
-    <div id="game-container"
-        style="display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 20px;">
+    <div id="game-wrapper">
         <div id="top-bar" class="panel">
             <span style="color:#2ea043; font-weight: bold;">P1 Territory: <span id="p1-control">0.0</span>%</span>
             &nbsp; | &nbsp;
             <span style="color:#da3633; font-weight: bold;">P2 Territory: <span id="p2-control">0.0</span>%</span>
         </div>
 
-        <div style="display: flex; gap: 20px;">
+        <div id="game-flex-row">
             <div id="ui-p1" class="player-ui">
-                <div class="energy-display" style="color:#1f6feb">Energy: <span id="p1-energy">50</span></div>
-                <button id="p1-btn-miner">Build Miner (25)</button>
-                <button id="p1-btn-scout">Build Scout (50)</button>
-                <button id="p1-btn-fighter">Build Fighter (100)</button>
-                <div style="display: flex; gap: 5px; margin-top: 5px;">
-                    <button id="p1-btn-sel-all" style="flex: 1; font-size: 11px; padding: 5px;">Select All
-                        Fighters</button>
-                    <button id="p1-btn-sel-none" style="flex: 1; font-size: 11px; padding: 5px;">Select None</button>
+                <div class="energy-display" style="color:#1f6feb"><span id="p1-energy">50</span></div>
+                <button id="p1-btn-miner" class="icon-btn" title="Build Miner (25 Energy)">
+                    <svg viewBox="0 0 24 24">
+                        <rect x="4" y="4" width="16" height="16" fill="#1f6feb" />
+                    </svg>
+                </button>
+                <button id="p1-btn-scout" class="icon-btn" title="Build Scout (50 Energy)">
+                    <svg viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="9" fill="#1f6feb" />
+                    </svg>
+                </button>
+                <button id="p1-btn-fighter" class="icon-btn" title="Build Fighter (100 Energy)">
+                    <svg viewBox="0 0 24 24">
+                        <polygon points="12,3 21,19 3,19" fill="#1f6feb" />
+                    </svg>
+                </button>
+                <div class="selection-tools">
+                    <button id="p1-btn-sel-all" class="icon-btn" title="Select All Fighters">
+                        <svg viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="11" fill="none" stroke="#1f6feb" stroke-width="2" />
+                            <polygon points="12,6 16,13 8,13" fill="#1f6feb" />
+                            <polygon points="8,13 12,20 4,20" fill="#1f6feb" />
+                            <polygon points="16,13 20,20 12,20" fill="#1f6feb" />
+                        </svg>
+                    </button>
+                    <button id="p1-btn-sel-none" class="icon-btn" title="Select None">
+                        <svg viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="11" fill="none" stroke="#1f6feb" stroke-width="2"
+                                stroke-dasharray="2,2" />
+                            <polygon points="12,6 16,13 8,13" fill="#1f6feb" />
+                            <polygon points="8,13 12,20 4,20" fill="#1f6feb" />
+                            <polygon points="16,13 20,20 12,20" fill="#1f6feb" />
+                        </svg>
+                    </button>
                 </div>
             </div>
 
-            <canvas id="gameCanvas" width="1280" height="720"
-                style="border: 2px solid #30363d; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.5);"></canvas>
+            <div class="canvas-container">
+                <canvas id="gameCanvas" width="1280" height="720"></canvas>
+            </div>
 
             <div id="ui-p2" class="player-ui">
-                <div class="energy-display" style="color:#f85149">Energy: <span id="p2-energy">50</span></div>
-                <button id="p2-btn-miner">Build Miner (25)</button>
-                <button id="p2-btn-scout">Build Scout (50)</button>
-                <button id="p2-btn-fighter">Build Fighter (100)</button>
-                <div style="display: flex; gap: 5px; margin-top: 5px;">
-                    <button id="p2-btn-sel-all" style="flex: 1; font-size: 11px; padding: 5px;">Select All
-                        Fighters</button>
-                    <button id="p2-btn-sel-none" style="flex: 1; font-size: 11px; padding: 5px;">Select None</button>
+                <div class="energy-display" style="color:#f85149"><span id="p2-energy">50</span></div>
+                <button id="p2-btn-miner" class="icon-btn" title="Build Miner (25 Energy)">
+                    <svg viewBox="0 0 24 24">
+                        <rect x="4" y="4" width="16" height="16" fill="#f85149" />
+                    </svg>
+                </button>
+                <button id="p2-btn-scout" class="icon-btn" title="Build Scout (50 Energy)">
+                    <svg viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="9" fill="#f85149" />
+                    </svg>
+                </button>
+                <button id="p2-btn-fighter" class="icon-btn" title="Build Fighter (100 Energy)">
+                    <svg viewBox="0 0 24 24">
+                        <polygon points="12,3 21,19 3,19" fill="#f85149" />
+                    </svg>
+                </button>
+                <div class="selection-tools">
+                    <button id="p2-btn-sel-all" class="icon-btn" title="Select All Fighters">
+                        <svg viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="11" fill="none" stroke="#f85149" stroke-width="2" />
+                            <polygon points="12,6 16,13 8,13" fill="#f85149" />
+                            <polygon points="8,13 12,20 4,20" fill="#f85149" />
+                            <polygon points="16,13 20,20 12,20" fill="#f85149" />
+                        </svg>
+                    </button>
+                    <button id="p2-btn-sel-none" class="icon-btn" title="Select None">
+                        <svg viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="11" fill="none" stroke="#f85149" stroke-width="2"
+                                stroke-dasharray="2,2" />
+                            <polygon points="12,6 16,13 8,13" fill="#f85149" />
+                            <polygon points="8,13 12,20 4,20" fill="#f85149" />
+                            <polygon points="16,13 20,20 12,20" fill="#f85149" />
+                        </svg>
+                    </button>
                 </div>
             </div>
         </div>
 
-        <div style="font-size: 14px; color: #8b949e; text-align: center;">
-            <b>Controls:</b> Drag <b>Scouts</b> (Circles) to expand territory. Drag from <b>Fighters</b> (Triangles) to
-            patrol. Left-click to move selected fighters.
+        <div id="controls-hint">
+            Drag <b>Scouts</b> (Circles) to expand. Drag from <b>Fighters</b> (Triangles) to patrol.
         </div>
     </div>
 

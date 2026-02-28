@@ -7,8 +7,11 @@ let canvas;
 export function initInput(gameCanvas) {
     canvas = gameCanvas;
 
-    canvas.addEventListener('mousedown', (e) => {
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    canvas.addEventListener('pointerdown', (e) => {
         if (!state.gameStarted) return;
+        e.preventDefault();
         const pos = getMousePos(e);
         const mouseX = pos.x;
         const mouseY = pos.y;
@@ -63,8 +66,9 @@ export function initInput(gameCanvas) {
 
     const MAX_EDGE_LENGTH = 350;
 
-    canvas.addEventListener('mousemove', (e) => {
+    canvas.addEventListener('pointermove', (e) => {
         if (!state.gameStarted) return;
+        e.preventDefault();
         const pos = getMousePos(e);
         const mouseX = pos.x;
         const mouseY = pos.y;
@@ -134,6 +138,7 @@ export function initInput(gameCanvas) {
     });
 
     const handleMouseUpOrLeave = (e) => {
+        e.preventDefault();
         if (state.selectionBox) {
             // Apply box selection
             const minX = Math.min(state.selectionBox.startX, state.selectionBox.endX);
@@ -197,8 +202,9 @@ export function initInput(gameCanvas) {
         state.currentPath = [];
     };
 
-    canvas.addEventListener('mouseup', handleMouseUpOrLeave);
-    canvas.addEventListener('mouseleave', handleMouseUpOrLeave);
+    canvas.addEventListener('pointerup', handleMouseUpOrLeave);
+    canvas.addEventListener('pointercancel', handleMouseUpOrLeave);
+    canvas.addEventListener('pointerleave', handleMouseUpOrLeave);
 }
 
 function getMousePos(e) {
