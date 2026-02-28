@@ -1,5 +1,5 @@
 import { players, asteroids } from './state.js';
-import { getConvexHull } from './utils.js';
+import { getPlayerTerritoryHull } from './utils.js';
 console.log('ai.js loaded');
 
 export function updateAI(p, dt) {
@@ -21,8 +21,7 @@ export function updateAI(p, dt) {
     const enemy = players.find(ep => ep.id !== p.id);
 
     // AI Priority 1: EXPANSION (Scouts & Territory)
-    const currentPoints = [p.homePlanet, ...p.units.scouts.map(s => ({ x: s.targetX, y: s.targetY }))];
-    const currentHull = getConvexHull(currentPoints);
+    const currentHull = getPlayerTerritoryHull(p, players, true);
 
     const pointInPolygon = (point, vs) => {
         let x = point.x, y = point.y;

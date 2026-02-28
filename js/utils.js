@@ -32,3 +32,9 @@ export function pointInPolygon(point, vs) {
     }
     return inside;
 }
+
+export function getPlayerTerritoryHull(player, allPlayers, useTarget = false) {
+    const scoutPoints = player.units.scouts.map(s => useTarget ? { x: s.targetX, y: s.targetY } : { x: s.x, y: s.y });
+    const basePoints = [player.homePlanet, ...scoutPoints];
+    return getConvexHull(basePoints);
+}

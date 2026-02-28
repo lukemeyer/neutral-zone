@@ -1,5 +1,5 @@
 import { players, asteroids, projectiles, state } from './state.js';
-import { getConvexHull } from './utils.js';
+import { getPlayerTerritoryHull } from './utils.js';
 console.log('renderer.js loaded');
 
 let canvas;
@@ -46,14 +46,12 @@ export function draw() {
 
     // Draw Territories
     players.forEach(p => {
-        const currentPoints = [p.homePlanet, ...p.units.scouts.map(s => ({ x: s.x, y: s.y }))];
-        const currentHull = getConvexHull(currentPoints);
+        const currentHull = getPlayerTerritoryHull(p, players, false);
 
         // Projected
         let isProjecting = p.units.scouts.some(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5);
         if (isProjecting) {
-            const targetPoints = [p.homePlanet, ...p.units.scouts.map(s => ({ x: s.targetX, y: s.targetY }))];
-            const targetHull = getConvexHull(targetPoints);
+            const targetHull = getPlayerTerritoryHull(p, players, true);
             ctx.beginPath();
             targetHull.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
             ctx.closePath();

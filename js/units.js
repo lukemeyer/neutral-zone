@@ -1,29 +1,60 @@
-import { players, asteroids, projectiles, state } from './state.js';
-import { pointInPolygon } from './utils.js';
+import { players, asteroids, projectiles } from './state.js';
+import { pointInPolygon, getPlayerTerritoryHull } from './utils.js';
 console.log('units.js loaded');
 
 export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
-    p.units.scouts.forEach(s => {
-        let dx = s.targetX - s.x;
-        let dy = s.targetY - s.y;
+    function applySteering(u, targetX, targetY, speed) {
+        let dx = targetX - u.x;
+        let dy = targetY - u.y;
         let dist = Math.hypot(dx, dy);
-        if (dist > 2) {
-            s.x += (dx / dist) * 40 * dt;
-            s.y += (dy / dist) * 40 * dt;
-        } else {
-            s.x = s.targetX;
-            s.y = s.targetY;
+
+        if (dist <= 2) {
+            u.x = targetX;
+            u.y = targetY;
+            return true; // arrived
         }
 
-        // Anti-overlap Repulsion
-        p.units.scouts.forEach(other => {
-            if (s === other) return;
-            let sepDist = Math.hypot(s.x - other.x, s.y - other.y);
-            if (sepDist > 0 && sepDist < 40) { // Push apart if closer than 40px
-                s.x += ((s.x - other.x) / sepDist) * 30 * dt;
-                s.y += ((s.y - other.y) / sepDist) * 30 * dt;
+        let desiredHeading = Math.atan2(dy, dx);
+        if (u.steerBias === undefined) u.steerBias = 0;
+
+        let blocked = false;
+        for (let d = 5; d <= 30; d += 5) {
+            let cx = u.x + Math.cos(desiredHeading) * d;
+            let cy = u.y + Math.sin(desiredHeading) * d;
+
+            for (let pl of players) {
+                if (Math.hypot(cx - pl.homePlanet.x, cy - pl.homePlanet.y) < pl.homePlanet.radius + 5) {
+                    blocked = true; break;
+                }
             }
-        });
+            if (blocked) break;
+
+            for (let a of asteroids) {
+                // If this is a miner targeting this specific asteroid, don't avoid it
+                if (u.payload !== undefined && u.targetAsteroid === a) continue;
+                if (Math.hypot(cx - a.x, cy - a.y) < a.radius + 5) {
+                    blocked = true; break;
+                }
+            }
+            if (blocked) break;
+        }
+
+        if (blocked) {
+            if (u.steerBias === 0) u.steerBias = Math.random() < 0.5 ? 1 : -1;
+            // Add a ~60 degree deflection to slide off the obstacle
+            desiredHeading += u.steerBias * 1.0;
+        } else {
+            u.steerBias = 0;
+        }
+
+        let moveDist = blocked ? speed * dt : Math.min(speed * dt, dist);
+        u.x += Math.cos(desiredHeading) * moveDist;
+        u.y += Math.sin(desiredHeading) * moveDist;
+        return false;
+    }
+
+    p.units.scouts.forEach(s => {
+        applySteering(s, s.targetX, s.targetY, 40);
     });
 
     p.units.fighters.forEach(f => {
@@ -51,75 +82,60 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
                     }
                 }
             } else {
-                f.x += (dx / dist) * 80 * dt;
-                f.y += (dy / dist) * 80 * dt;
+                applySteering(f, targetPoint.x, targetPoint.y, 80);
             }
         }
-
-        // Anti-overlap Repulsion (Formation)
-        p.units.fighters.forEach(other => {
-            if (f === other) return;
-            let sepDist = Math.hypot(f.x - other.x, f.y - other.y);
-            if (sepDist > 0 && sepDist < 30) { // Push apart if closer than 30px
-                f.x += ((f.x - other.x) / sepDist) * 80 * dt;
-                f.y += ((f.y - other.y) / sepDist) * 80 * dt;
-            }
-        });
     });
+
+    // Determine Current Territory Polygon for this player
+    currentHull = getPlayerTerritoryHull(p, players, false);
 
     p.units.miners.forEach(m => {
         if (m.payload === undefined) m.payload = 0;
         if (m.returning === undefined) m.returning = false;
 
         if (m.returning) {
-            let dx = p.homePlanet.x - m.x;
-            let dy = p.homePlanet.y - m.y;
-            let dist = Math.hypot(dx, dy);
-            if (dist > p.homePlanet.radius) {
-                m.x += (dx / dist) * 50 * dt;
-                m.y += (dy / dist) * 50 * dt;
-            } else {
+            applySteering(m, p.homePlanet.x, p.homePlanet.y, 50);
+            if (Math.hypot(p.homePlanet.x - m.x, p.homePlanet.y - m.y) <= p.homePlanet.radius + 5) {
                 p.energy += m.payload;
                 m.payload = 0;
                 m.returning = false;
             }
-        } else if (!m.targetAsteroid || m.targetAsteroid.resources <= 0) {
-            if (m.targetAsteroid) {
-                m.targetAsteroid.miners = Math.max(0, m.targetAsteroid.miners - 1);
-                m.targetAsteroid = null;
-            }
-
+        } else if (!m.targetAsteroid) {
             let closest = null;
-            let closestUncaptured = null;
             let minDist = Infinity;
-            let minUncapturedDist = Infinity;
+
             asteroids.forEach(a => {
-                if (a.resources > 0 && a.miners < 3) {
-                    let d = Math.hypot(a.x - m.x, a.y - m.y);
-                    if (pointInPolygon(a, currentHull)) {
-                        if (d < minDist) { minDist = d; closest = a; }
-                    } else {
-                        if (d < minUncapturedDist) { minUncapturedDist = d; closestUncaptured = a; }
-                    }
+                if (a.resources > 0 && a.miners < 4 && pointInPolygon(a, currentHull)) {
+                    let dx = m.x - a.x;
+                    let dy = m.y - a.y;
+                    let d = Math.hypot(dx, dy);
+                    if (d < minDist) { minDist = d; closest = a; }
                 }
             });
-
-            // Prefer captured, fallback to uncaptured
-            closest = closest || closestUncaptured;
 
             if (closest) {
                 m.targetAsteroid = closest;
                 closest.miners++;
             } else if (m.payload > 0) {
+                m.returning = true; // No asteroids, go home with currently gathered resources
+            } else {
+                // If NO captured asteroids exist and payload is 0, recall the miner to the home planet.
+                // This prevents them from wandering endlessly.
                 m.returning = true;
             }
         } else {
-            let dx = m.targetAsteroid.x - m.x;
-            let dy = m.targetAsteroid.y - m.y;
-            let dist = Math.hypot(dx, dy);
+            // Strictly enforce territory checking: if the asteroid is no longer captured
+            if (!pointInPolygon(m.targetAsteroid, currentHull)) {
+                // Drop the asteroid lock and recall home immediately
+                m.targetAsteroid.miners = Math.max(0, m.targetAsteroid.miners - 1);
+                m.targetAsteroid = null;
+                m.returning = true;
+                return; // skip the movement loop for this frame
+            }
+            let dist = Math.hypot(m.targetAsteroid.x - m.x, m.targetAsteroid.y - m.y);
             if (dist > 20) {
-                m.x += (dx / dist) * 50 * dt;
-                m.y += (dy / dist) * 50 * dt;
+                applySteering(m, m.targetAsteroid.x, m.targetAsteroid.y, 50);
             } else {
                 // Mining
                 let amount = Math.min(m.targetAsteroid.resources, 10 * dt);
@@ -135,9 +151,51 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
         }
     });
 
-    // Combat Logic
+    // Global Physics & Collisions
     const enemyP = players.find(ep => ep.id !== p.id);
+    const allUnits = [...p.units.scouts, ...p.units.fighters, ...p.units.miners];
+    const allEnemyUnits = [...enemyP.units.scouts, ...enemyP.units.fighters, ...enemyP.units.miners];
+    const globalUnits = [...allUnits, ...allEnemyUnits];
 
+    // Territory definition for bouncing
+    const enemyHull = getPlayerTerritoryHull(enemyP, players, false);
+
+    allUnits.forEach(u => {
+        // 1. Unit vs Unit Repulsion (Radius 12px)
+        globalUnits.forEach(other => {
+            if (u === other) return;
+            let dx = u.x - other.x;
+            let dy = u.y - other.y;
+            let dist = Math.hypot(dx, dy);
+            if (dist > 0 && dist < 12) {
+                u.x += (dx / dist) * 60 * dt;
+                u.y += (dy / dist) * 60 * dt;
+            }
+        });
+    });
+
+    // 4. Scout Territory Bounce
+    p.units.scouts.forEach(s => {
+        // Only violently bounce if this scout is ACTIVELY moving and has successfully expanded 
+        // Only violently bounce if this scout is ACTIVELY moving.
+        // If it is stationary it should just hold its ground (forming a convex dent over time as the borders wrap it).
+        const isMoving = Math.hypot(s.targetX - s.x, s.targetY - s.y) > 2;
+
+        if (isMoving && enemyHull.length > 2 && pointInPolygon(s, enemyHull)) {
+            // Push scout forcefully towards own home planet to escape
+            let dx = p.homePlanet.x - s.x;
+            let dy = p.homePlanet.y - s.y;
+            let dist = Math.hypot(dx, dy) || 1;
+            s.x += (dx / dist) * 200 * dt;
+            s.y += (dy / dist) * 200 * dt;
+
+            // Stop its forward movement 
+            s.targetX = s.x;
+            s.targetY = s.y;
+        }
+    });
+
+    // Combat Logic
     // Fighters attack anything
     p.units.fighters.forEach(f => {
         if (f.cooldown > 0) f.cooldown -= dt;

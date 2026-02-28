@@ -28,12 +28,9 @@
         }
 
         #top-bar {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
             display: flex;
-            pointer-events: none;
+            justify-content: center;
+            width: 100%;
         }
 
         .panel {
@@ -45,8 +42,6 @@
         }
 
         .player-ui {
-            position: absolute;
-            bottom: 40px;
             width: 180px;
             background: rgba(0, 0, 0, 0.8);
             padding: 15px;
@@ -55,16 +50,6 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
-        }
-
-        #ui-p1 {
-            left: 128px;
-            transform: translateX(-50%);
-        }
-
-        #ui-p2 {
-            left: 1152px;
-            transform: translateX(-50%);
         }
 
         .energy-display {
