@@ -38,7 +38,7 @@ export function setupUIBindings() {
             players[0].energy -= 50;
             let tx = players[0].homePlanet.x;
             let ty = players[0].homePlanet.y - 100;
-            players[0].units.scouts.push({ x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetX: tx, targetY: ty, health: 50, maxHealth: 50, cooldown: 0 });
+            players[0].units.scouts.push({ x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetX: tx, targetY: ty, health: 100, maxHealth: 100, cooldown: 0 });
         }
     });
     document.getElementById('p1-btn-fighter').addEventListener('click', () => {
@@ -46,7 +46,9 @@ export function setupUIBindings() {
             players[0].energy -= 100;
             let tx = players[0].homePlanet.x + 100;
             let ty = players[0].homePlanet.y;
-            players[0].units.fighters.push({ x: players[0].homePlanet.x, y: players[0].homePlanet.y, path: [{ x: tx, y: ty }], pathIndex: 0, pathDir: 1, isLoop: false, health: 100, maxHealth: 100, cooldown: 0 });
+            const newFighter = { x: players[0].homePlanet.x, y: players[0].homePlanet.y, path: [{ x: tx, y: ty }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0 };
+            players[0].units.fighters.push(newFighter);
+            state.selectedFighters = [newFighter];
         }
     });
     document.getElementById('p1-btn-sel-all').addEventListener('click', () => {
@@ -67,7 +69,7 @@ export function setupUIBindings() {
             players[1].energy -= 50;
             let tx = players[1].homePlanet.x;
             let ty = players[1].homePlanet.y - 100;
-            players[1].units.scouts.push({ x: players[1].homePlanet.x, y: players[1].homePlanet.y, targetX: tx, targetY: ty, health: 50, maxHealth: 50, cooldown: 0 });
+            players[1].units.scouts.push({ x: players[1].homePlanet.x, y: players[1].homePlanet.y, targetX: tx, targetY: ty, health: 100, maxHealth: 100, cooldown: 0 });
         }
     });
     document.getElementById('p2-btn-fighter').addEventListener('click', () => {
@@ -75,7 +77,9 @@ export function setupUIBindings() {
             players[1].energy -= 100;
             let tx = players[1].homePlanet.x - 100;
             let ty = players[1].homePlanet.y;
-            players[1].units.fighters.push({ x: players[1].homePlanet.x, y: players[1].homePlanet.y, path: [{ x: tx, y: ty }], pathIndex: 0, pathDir: 1, isLoop: false, health: 100, maxHealth: 100, cooldown: 0 });
+            const newFighter = { x: players[1].homePlanet.x, y: players[1].homePlanet.y, path: [{ x: tx, y: ty }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0 };
+            players[1].units.fighters.push(newFighter);
+            state.selectedFighters = [newFighter];
         }
     });
     document.getElementById('p2-btn-sel-all').addEventListener('click', () => {

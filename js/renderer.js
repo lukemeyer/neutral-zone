@@ -142,6 +142,12 @@ export function draw() {
         p.units.scouts.forEach(s => {
             if (Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5) {
                 drawCircle(s.targetX, s.targetY, p.id === 0 ? 'rgba(46, 160, 67, 0.4)' : 'rgba(218, 54, 51, 0.4)', 10);
+            } else {
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, 100, 0, Math.PI * 2);
+                ctx.strokeStyle = p.id === 0 ? 'rgba(46, 160, 67, 0.15)' : 'rgba(218, 54, 51, 0.15)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
             }
             drawCircle(s.x, s.y, p.territoryColor, 10);
             drawHealthBar(s.x, s.y - 20, s.health, s.maxHealth);

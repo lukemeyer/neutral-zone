@@ -1,5 +1,5 @@
 import { players, state } from './state.js';
-import { getConvexHull } from './utils.js';
+import { getConvexHull, getPlayerTerritoryHull, pointInPolygon } from './utils.js';
 console.log('input.js loaded');
 
 let canvas;
@@ -20,7 +20,7 @@ export function initInput(gameCanvas) {
         for (let p of players) {
             if (p.isCPU) continue;
             for (let s of p.units.scouts) {
-                if (Math.hypot(s.x - mouseX, s.y - mouseY) < 20 || Math.hypot(s.targetX - mouseX, s.targetY - mouseY) < 20) {
+                if (Math.hypot(s.x - mouseX, s.y - mouseY) < 40 || Math.hypot(s.targetX - mouseX, s.targetY - mouseY) < 40) {
                     state.activeScout = s;
                     state.activeScoutPlayer = p;
                     return; // drag scout
@@ -33,7 +33,7 @@ export function initInput(gameCanvas) {
         for (let p of players) {
             if (p.isCPU) continue;
             for (let f of p.units.fighters) {
-                if (Math.hypot(f.x - mouseX, f.y - mouseY) < 20) {
+                if (Math.hypot(f.x - mouseX, f.y - mouseY) < 40) {
                     clickedFighter = f;
                     break;
                 }
@@ -97,8 +97,16 @@ export function initInput(gameCanvas) {
                     perimeter += Math.hypot(p1.x - p2.x, p1.y - p2.y);
                 }
 
-                const MAX_PERIMETER = (state.activeScoutPlayer.units.scouts.length + 1) * 350;
-                return perimeter <= MAX_PERIMETER;
+                const MAX_PERIMETER = (state.activeScoutPlayer.units.scouts.length + 1) * 175; // Reduced by 50%
+                if (perimeter > MAX_PERIMETER) return false;
+
+                // Restrict dragging into enemy territories to prevent overlap
+                const enemyPlayer = players.find(p => p.id !== state.activeScoutPlayer.id);
+                const enemyHull = getPlayerTerritoryHull(enemyPlayer, players, false);
+                // Also verify projection point directly against enemy hull mathematically
+                if (enemyHull.length > 2 && pointInPolygon({ x, y }, enemyHull)) return false;
+
+                return true;
             };
 
             if (checkHullValid(proposedX, proposedY)) {

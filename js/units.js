@@ -226,10 +226,14 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
 
     // Scouts attack only fighters
     p.units.scouts.forEach(s => {
+        // Stationary Check: Scouts cannot fire while their movement vector implies they are traveling.
+        const dTarget = Math.hypot(s.targetX - s.x, s.targetY - s.y);
+        if (dTarget >= 2) return; // Currently moving, skip firing phase
+
         if (s.cooldown > 0) s.cooldown -= dt;
         if (s.cooldown <= 0) {
             let target = null;
-            let minDist = 150; // Scout defensive range
+            let minDist = 100; // Decreased Scout defensive firing range
 
             enemyP.units.fighters.forEach(f => {
                 let d = Math.hypot(f.x - s.x, f.y - s.y);
@@ -237,7 +241,8 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             });
 
             if (target) {
-                projectiles.push({ x: s.x, y: s.y, target: target, damage: 5, speed: 400, ownerId: p.id, color: p.territoryColor });
+                // Increased damage drastically for stationary defense
+                projectiles.push({ x: s.x, y: s.y, target: target, damage: 15, speed: 400, ownerId: p.id, color: p.territoryColor });
                 s.cooldown = 0.3; // Firerate
             }
         }

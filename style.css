@@ -57,27 +57,20 @@
 
         canvas {
             display: block;
-            max-width: 100%;
-            max-height: 100%;
-            aspect-ratio: 16 / 9;
-            object-fit: contain;
+            width: 100%;
+            height: 100%;
             border: 2px solid #30363d;
             border-radius: 8px;
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
             background: #000;
         }
 
-        .panel {
-            background: rgba(0, 0, 0, 0.8);
-            padding: 1vh 2vw;
-            border: 1px solid #444;
-            border-radius: 8px;
-            text-align: center;
-        }
+        /* .panel removed (top bar eliminated) */
 
         .player-ui {
-            width: min(15vw, 80px);
-            min-width: 50px;
+            width: min(20vw, 110px);
+            /* Slightly wider to fit side-by-side elements */
+            min-width: 60px;
             background: rgba(0, 0, 0, 0.8);
             padding: 10px;
             border: 1px solid #444;
@@ -87,6 +80,7 @@
             align-items: center;
             gap: 1.5vh;
             flex-shrink: 0;
+            overflow-y: auto;
         }
 
         .energy-display {
@@ -99,8 +93,8 @@
         }
 
         .icon-btn {
-            background: #238636;
-            border: none;
+            background: transparent;
+            border: 1px solid #444;
             border-radius: 8px;
             cursor: pointer;
             width: 100%;
@@ -108,8 +102,24 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 15%;
+            padding: 10%;
+            /* Shrunk padding */
             transition: all 0.1s;
+            position: relative;
+        }
+
+        .badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: #000;
+            color: #fff;
+            font-size: min(1.5vh, 12px);
+            font-weight: bold;
+            padding: 2px 5px;
+            border-radius: 10px;
+            border: 1px solid #444;
+            pointer-events: none;
         }
 
         .icon-btn svg {
@@ -139,6 +149,46 @@
             margin-top: auto;
         }
 
+        .ui-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            width: 100%;
+            margin-top: 10px;
+            border-top: 1px dashed #444;
+            padding-top: 10px;
+        }
+
+        .group-label {
+            font-size: min(1.8vh, 14px);
+            font-weight: bold;
+            color: #8b949e;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .btn-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 42%;
+            /* Fit 2 comfortably side-by-side */
+            gap: 3px;
+        }
+
+        .btn-label {
+            font-size: 11px;
+            color: #c9d1d9;
+            text-align: center;
+        }
+
         #controls-hint {
             font-size: min(1.8vh, 14px);
             color: #8b949e;
@@ -162,17 +212,35 @@
 
         .setup-box {
             background: #161b22;
-            padding: 40px;
+            padding: 30px;
             border: 1px solid #30363d;
             border-radius: 12px;
             text-align: center;
+            max-width: 600px;
         }
 
         .setup-row {
             display: flex;
             justify-content: space-around;
-            gap: 40px;
-            margin: 30px 0;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .tutorial-box {
+            text-align: left;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #30363d;
+            margin-bottom: 25px;
+            font-size: 14px;
+            color: #c9d1d9;
+        }
+
+        .tutorial-box p {
+            margin: 8px 0;
+            display: flex;
+            align-items: center;
         }
 
         .player-setup select {

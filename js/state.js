@@ -5,7 +5,7 @@ export const players = [
         color: '#1f6feb', // Blue (Player 1)
         territoryColor: '#2ea043',
         energy: 100,
-        homePlanet: { x: 128, y: 360, radius: 30, health: 1000, maxHealth: 1000 },
+        homePlanet: { x: 0, y: 0, radius: 30, health: 1000, maxHealth: 1000 },
         units: { scouts: [], fighters: [], miners: [] },
         isCPU: false,
         aiTimer: 0,
@@ -16,7 +16,7 @@ export const players = [
         color: '#f85149', // Red (Player 2)
         territoryColor: '#da3633',
         energy: 100,
-        homePlanet: { x: 1152, y: 360, radius: 30, health: 1000, maxHealth: 1000 },
+        homePlanet: { x: 0, y: 0, radius: 30, health: 1000, maxHealth: 1000 },
         units: { scouts: [], fighters: [], miners: [] },
         isCPU: false,
         aiTimer: 0,
@@ -42,7 +42,13 @@ export const state = {
     lastTime: 0
 };
 
-export function initGameState() {
+export function initGameState(width, height) {
+    // Anchor bases dynamically to 10% and 90% of screen width, centered vertically.
+    players[0].homePlanet.x = width * 0.1;
+    players[0].homePlanet.y = height * 0.5;
+    players[1].homePlanet.x = width * 0.9;
+    players[1].homePlanet.y = height * 0.5;
+
     // Generate Left Side Asteroids
     const generateAsteroids = () => {
         const leftAsteroids = [];
@@ -56,8 +62,8 @@ export function initGameState() {
         // Random asteroids on left half
         for (let i = 1; i < 6; i++) {
             leftAsteroids.push({
-                x: Math.random() * (640 - 250) + 250, // Keep outside initial territory
-                y: Math.random() * (720 - 100) + 50,
+                x: Math.random() * ((width / 2) - (width * 0.2)) + (width * 0.2), // Keep outside initial territory but on left half
+                y: Math.random() * (height - 100) + 50,
                 radius: 15, miners: 0,
                 resources: Math.floor(Math.random() * 400 + 200)
             });
@@ -70,7 +76,7 @@ export function initGameState() {
     leftAsteroids.forEach(a => {
         asteroids.push({ ...a });
         asteroids.push({
-            x: 1280 - a.x,
+            x: width - a.x,
             y: a.y,
             radius: 15, miners: 0,
             resources: a.resources
@@ -79,10 +85,20 @@ export function initGameState() {
 
     // Setup Initial Units for both players
     players.forEach(p => {
-        const dirX = p.homePlanet.x < 640 ? 1 : -1;
-        p.units.scouts.push({ x: p.homePlanet.x - (100 * dirX), y: p.homePlanet.y - 100, targetX: p.homePlanet.x - (100 * dirX), targetY: p.homePlanet.y - 100, health: 50, maxHealth: 50, cooldown: 0 });
-        p.units.scouts.push({ x: p.homePlanet.x + (100 * dirX), y: p.homePlanet.y - 100, targetX: p.homePlanet.x + (100 * dirX), targetY: p.homePlanet.y - 100, health: 50, maxHealth: 50, cooldown: 0 });
-        p.units.scouts.push({ x: p.homePlanet.x, y: p.homePlanet.y + 120, targetX: p.homePlanet.x, targetY: p.homePlanet.y + 120, health: 50, maxHealth: 50, cooldown: 0 });
+        const dirX = p.homePlanet.x < (width / 2) ? 1 : -1;
+
+        let sx1 = p.homePlanet.x + (120 * dirX);
+        let sy1 = p.homePlanet.y;
+        p.units.scouts.push({ x: sx1, y: sy1, targetX: sx1, targetY: sy1, health: 100, maxHealth: 100, cooldown: 0 });
+
+        let sx2 = p.homePlanet.x + (60 * dirX);
+        let sy2 = Math.max(20, p.homePlanet.y - 100);
+        p.units.scouts.push({ x: sx2, y: sy2, targetX: sx2, targetY: sy2, health: 100, maxHealth: 100, cooldown: 0 });
+
+        let sx3 = p.homePlanet.x + (60 * dirX);
+        let sy3 = Math.min(height - 20, p.homePlanet.y + 100);
+        p.units.scouts.push({ x: sx3, y: sy3, targetX: sx3, targetY: sy3, health: 100, maxHealth: 100, cooldown: 0 });
+
         p.units.miners.push({ x: p.homePlanet.x, y: p.homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20 });
     });
 }

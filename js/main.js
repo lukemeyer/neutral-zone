@@ -9,7 +9,11 @@ import { updateUI, updateControlText, showGameOver, setupUIBindings } from './ui
 
 const canvas = document.getElementById('gameCanvas');
 
-initGameState();
+// Set 1:1 hardware pixel resolution from the CSS flex container bounds
+canvas.width = canvas.clientWidth;
+canvas.height = canvas.clientHeight;
+
+initGameState(canvas.width, canvas.height);
 initRenderer(canvas);
 initInput(canvas);
 setupUIBindings();
@@ -33,7 +37,7 @@ function update(time) {
 
     // Update Players
     players.forEach(p => {
-        if (p.isCPU) updateAI(p, dt);
+        if (p.isCPU) updateAI(p, dt, canvas.width, canvas.height);
 
         const currentPoints = [p.homePlanet, ...p.units.scouts.map(s => ({ x: s.x, y: s.y }))];
         const currentHull = getConvexHull(currentPoints);
@@ -47,7 +51,7 @@ function update(time) {
             area -= currentHull[j].x * currentHull[i].y;
         }
         area = Math.abs(area / 2);
-        const totalArea = 1280 * 720;
+        const totalArea = canvas.width * canvas.height;
         const pct = (area / totalArea) * 100;
 
         if (pct >= 70.0 && !state.gameOver) {

@@ -2,7 +2,7 @@ import { players, asteroids } from './state.js';
 import { getPlayerTerritoryHull } from './utils.js';
 console.log('ai.js loaded');
 
-export function updateAI(p, dt) {
+export function updateAI(p, dt, mapWidth, mapHeight) {
     // Check if any scouts are currently moving
     const scoutsMoving = p.units.scouts.some(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5);
 
@@ -70,7 +70,7 @@ export function updateAI(p, dt) {
             p.energy -= 50;
             let tx = p.homePlanet.x;
             let ty = p.homePlanet.y - 100;
-            p.units.scouts.push({ x: p.homePlanet.x, y: p.homePlanet.y, targetX: tx, targetY: ty, health: 50, maxHealth: 50, cooldown: 0 });
+            p.units.scouts.push({ x: p.homePlanet.x, y: p.homePlanet.y, targetX: tx, targetY: ty, health: 100, maxHealth: 100, cooldown: 0 });
             // We just added one, but we wait for next tick to assign it.
             // Only build ONE per tick to prevent draining entirely on one frame.
             return;
@@ -97,9 +97,9 @@ export function updateAI(p, dt) {
     const idleScouts = p.units.scouts.filter(s => !assignedScouts.includes(s) && !holdingScouts.includes(s));
     if (idleScouts.length > 0) {
         const corners = [
-            { x: p.id === 0 ? 1280 : 0, y: 0 },
-            { x: p.id === 0 ? 1280 : 0, y: 720 },
-            { x: p.id === 0 ? 1280 : 0, y: 360 } // center edge push
+            { x: p.id === 0 ? mapWidth : 0, y: 0 },
+            { x: p.id === 0 ? mapWidth : 0, y: mapHeight },
+            { x: p.id === 0 ? mapWidth : 0, y: mapHeight / 2 } // center edge push
         ];
 
         idleScouts.forEach((s, i) => {
@@ -121,11 +121,11 @@ export function updateAI(p, dt) {
         p.energy -= 100;
         let tx = p.id === 0 ? p.homePlanet.x + 100 : p.homePlanet.x - 100;
         let ty = p.homePlanet.y;
-        p.units.fighters.push({ x: p.homePlanet.x, y: p.homePlanet.y, path: [{ x: tx, y: ty }], pathIndex: 0, pathDir: 1, isLoop: false, health: 100, maxHealth: 100, cooldown: 0 });
+        p.units.fighters.push({ x: p.homePlanet.x, y: p.homePlanet.y, path: [{ x: tx, y: ty }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0 });
     } else if (p.units.miners.length >= 2 && p.energy >= 200) {
         // Offensive: Economy is stable, push for the win
         p.energy -= 100;
-        p.units.fighters.push({ x: p.homePlanet.x, y: p.homePlanet.y, path: [{ x: enemy.homePlanet.x, y: enemy.homePlanet.y }], pathIndex: 0, pathDir: 1, isLoop: false, health: 100, maxHealth: 100, cooldown: 0 });
+        p.units.fighters.push({ x: p.homePlanet.x, y: p.homePlanet.y, path: [{ x: enemy.homePlanet.x, y: enemy.homePlanet.y }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0 });
     }
 
     // AI Priority 3: ECONOMY (Miners)
