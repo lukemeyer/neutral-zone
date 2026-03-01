@@ -1,9 +1,9 @@
 import { players, asteroids, projectiles } from './state.js';
-import { pointInPolygon, getPlayerTerritoryHull } from './utils.js';
+import { pointInPolygon, getPlayerTerritoryHull, doPolygonsIntersect } from './utils.js';
 console.log('units.js loaded');
 
 export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
-    function applySteering(u, targetX, targetY, speed) {
+    function applySteering(u, targetX, targetY, speed, p = null) {
         let dx = targetX - u.x;
         let dy = targetY - u.y;
         let dist = Math.hypot(dx, dy);
@@ -50,13 +50,34 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
         }
 
         let moveDist = blocked ? speed * dt : Math.min(speed * dt, dist);
+
+        let oldX = u.x;
+        let oldY = u.y;
+
         u.x += Math.cos(desiredHeading) * moveDist;
         u.y += Math.sin(desiredHeading) * moveDist;
+
+        // Prevent Scout from pushing territory into enemy territory
+        if (p) {
+            const enemyP = players.find(ep => ep.id !== p.id);
+            const enemyHull = getPlayerTerritoryHull(enemyP, players, false);
+            if (enemyHull.length > 2) {
+                const proposedHull = getPlayerTerritoryHull(p, players, false);
+                if (doPolygonsIntersect(proposedHull, enemyHull)) {
+                    u.x = oldX;
+                    u.y = oldY;
+                    u.targetX = oldX; // Stop moving
+                    u.targetY = oldY;
+                    return true;
+                }
+            }
+        }
+
         return false;
     }
 
     p.units.scouts.forEach(s => {
-        applySteering(s, s.targetX, s.targetY, 40);
+        applySteering(s, s.targetX, s.targetY, 40, p);
     });
 
     p.units.fighters.forEach(f => {

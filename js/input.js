@@ -1,5 +1,5 @@
 import { players, state } from './state.js';
-import { getConvexHull, getPlayerTerritoryHull, pointInPolygon } from './utils.js';
+import { getConvexHull, getPlayerTerritoryHull, pointInPolygon, doPolygonsIntersect } from './utils.js';
 console.log('input.js loaded');
 
 let canvas;
@@ -103,8 +103,10 @@ export function initInput(gameCanvas) {
                 // Restrict dragging into enemy territories to prevent overlap
                 const enemyPlayer = players.find(p => p.id !== state.activeScoutPlayer.id);
                 const enemyHull = getPlayerTerritoryHull(enemyPlayer, players, false);
-                // Also verify projection point directly against enemy hull mathematically
-                if (enemyHull.length > 2 && pointInPolygon({ x, y }, enemyHull)) return false;
+                const enemyTargetHull = getPlayerTerritoryHull(enemyPlayer, players, true);
+                // Verify against both current and target enemy hulls
+                if (enemyHull.length > 2 && doPolygonsIntersect(hull, enemyHull)) return false;
+                if (enemyTargetHull.length > 2 && doPolygonsIntersect(hull, enemyTargetHull)) return false;
 
                 return true;
             };
