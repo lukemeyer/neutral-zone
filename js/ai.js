@@ -4,9 +4,20 @@ console.log('ai.js loaded');
 
 export function updateAI(p, dt, mapWidth, mapHeight) {
     // Check if any scouts are currently moving
-    const scoutsMoving = p.units.scouts.some(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5);
+    // Added a more lenient tolerance (10) for movement matching due to physics bounds
+    const movingScouts = p.units.scouts.filter(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) > 10);
 
-    if (scoutsMoving) {
+    // Check if the moving scouts actually made progress recently. If they get stuck on borders they shouldn't freeze the AI.
+    let actuallyMoving = false;
+    movingScouts.forEach(s => {
+        if (!s.lastDist) s.lastDist = Infinity;
+        let currentDist = Math.hypot(s.targetX - s.x, s.targetY - s.y);
+        // If distance improved by at least 1 pixel this tick, they are still moving
+        if (s.lastDist - currentDist > 0.5) actuallyMoving = true;
+        s.lastDist = currentDist;
+    });
+
+    if (actuallyMoving) {
         p.scoutSettleTimer = 0;
         return; // Wait for them to arrive
     }
@@ -36,8 +47,8 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
     };
 
     const isAstCaptured = (a) => {
-        const offsets = [[0, 0], [25, 0], [-25, 0], [0, 25], [0, -25]];
-        return offsets.every(off => pointInPolygon({ x: a.x + off[0], y: a.y + off[1] }, currentHull));
+        // Just checking the center is enough to confirm capture for AI purposes
+        return pointInPolygon({ x: a.x, y: a.y }, currentHull);
     };
 
     // 1. We want to capture asteroids. Let's find ALL uncaptured asteroids with resources.
@@ -65,7 +76,7 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
             scout.targetY = ast.y + (dirY / len) * (ast.radius + 30);
 
             assignedScouts.push(scout);
-        } else if (p.energy >= 50 && (p.energy > 100 || p.units.scouts.length === 0)) {
+        } else if (p.energy >= 50 && (p.energy > 100 || p.units.scouts.length === 0 || p.units.scouts.length < uncaptured.length)) {
             // No idle scout available for this asteroid. Build one if we have the energy.
             p.energy -= 50;
             let tx = p.homePlanet.x;
@@ -99,7 +110,8 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
         const corners = [
             { x: p.id === 0 ? mapWidth : 0, y: 0 },
             { x: p.id === 0 ? mapWidth : 0, y: mapHeight },
-            { x: p.id === 0 ? mapWidth : 0, y: mapHeight / 2 } // center edge push
+            { x: p.id === 0 ? mapWidth : 0, y: mapHeight / 2 },
+            { x: mapWidth / 2, y: mapHeight / 2 } // push towards actual center first
         ];
 
         idleScouts.forEach((s, i) => {
