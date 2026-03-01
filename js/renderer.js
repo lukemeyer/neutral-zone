@@ -1,4 +1,4 @@
-import { players, asteroids, projectiles, state } from './state.js';
+import { players, asteroids, projectiles, state, stars } from './state.js';
 import { getPlayerTerritoryHull } from './utils.js';
 console.log('renderer.js loaded');
 
@@ -10,6 +10,8 @@ export function initRenderer(gameCanvas) {
     ctx = canvas.getContext('2d');
 }
 
+import { graphicsCache } from './graphics.js';
+
 function drawHealthBar(x, y, current, max, width = 20) {
     if (current >= max) return; // Only draw when damaged
     const pct = Math.max(0, current / max);
@@ -19,30 +21,27 @@ function drawHealthBar(x, y, current, max, width = 20) {
     ctx.fillRect(x - width / 2, y, width * pct, 4);
 }
 
-function drawTriangle(x, y, color) {
-    ctx.beginPath();
-    ctx.moveTo(x, y - 10);
-    ctx.lineTo(x + 10, y + 10);
-    ctx.lineTo(x - 10, y + 10);
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
-}
-
-function drawCircle(x, y, color, radius) {
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-}
-
-function drawSquare(x, y, color) {
-    ctx.fillStyle = color;
-    ctx.fillRect(x - 8, y - 8, 16, 16);
+function drawRotatedImage(img, x, y, size, angle) {
+    if (!img) return;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    ctx.restore();
 }
 
 export function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#0d1117';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#ffffff';
+    stars.forEach(star => {
+        ctx.globalAlpha = star.opacity;
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.globalAlpha = 1.0;
 
     // Draw Territories
     players.forEach(p => {
@@ -118,10 +117,16 @@ export function draw() {
     // Draw Asteroids
     asteroids.forEach(a => {
         if (a.resources <= 0) return;
-        ctx.beginPath();
-        ctx.arc(a.x, a.y, a.radius, 0, Math.PI * 2);
-        ctx.fillStyle = '#8b949e';
-        ctx.fill();
+
+        const img = graphicsCache.asteroids[a.variant] || graphicsCache.asteroids[0];
+        if (img) {
+            ctx.drawImage(img, a.x - a.radius, a.y - a.radius, a.radius * 2, a.radius * 2);
+        } else {
+            ctx.beginPath();
+            ctx.arc(a.x, a.y, a.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#8b949e';
+            ctx.fill();
+        }
 
         ctx.fillStyle = 'white';
         ctx.font = '12px sans-serif';
@@ -131,31 +136,58 @@ export function draw() {
 
     // Draw Units & Planets
     players.forEach(p => {
+        const cache = p.id === 0 ? graphicsCache.p1 : graphicsCache.p2;
+
         // Home Planet
-        ctx.beginPath();
-        ctx.arc(p.homePlanet.x, p.homePlanet.y, p.homePlanet.radius, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.fill();
-        drawHealthBar(p.homePlanet.x, p.homePlanet.y + 40, p.homePlanet.health, p.homePlanet.maxHealth, 40);
+        const planetImg = p.id === 0 ? graphicsCache.planet1 : graphicsCache.planet2;
+        if (planetImg) {
+            ctx.drawImage(planetImg, p.homePlanet.x - p.homePlanet.radius, p.homePlanet.y - p.homePlanet.radius, p.homePlanet.radius * 2, p.homePlanet.radius * 2);
+        } else {
+            ctx.beginPath();
+            ctx.arc(p.homePlanet.x, p.homePlanet.y, p.homePlanet.radius, 0, Math.PI * 2);
+            ctx.fillStyle = p.color;
+            ctx.fill();
+        }
+        drawHealthBar(p.homePlanet.x, p.homePlanet.y + p.homePlanet.radius + 10, p.homePlanet.health, p.homePlanet.maxHealth, 40);
 
         // Scouts
         p.units.scouts.forEach(s => {
-            if (Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5) {
-                drawCircle(s.targetX, s.targetY, p.id === 0 ? 'rgba(46, 160, 67, 0.4)' : 'rgba(218, 54, 51, 0.4)', 10);
+            const isMoving = Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5;
+            if (isMoving) {
+                ctx.beginPath();
+                ctx.arc(s.targetX, s.targetY, 10, 0, Math.PI * 2);
+                ctx.fillStyle = p.id === 0 ? 'rgba(46, 160, 67, 0.4)' : 'rgba(218, 54, 51, 0.4)';
+                ctx.fill();
             } else {
                 ctx.beginPath();
-                ctx.arc(s.x, s.y, 100, 0, Math.PI * 2);
+                ctx.arc(s.x, s.y, 50, 0, Math.PI * 2);
                 ctx.strokeStyle = p.id === 0 ? 'rgba(46, 160, 67, 0.15)' : 'rgba(218, 54, 51, 0.15)';
                 ctx.lineWidth = 1;
                 ctx.stroke();
             }
-            drawCircle(s.x, s.y, p.territoryColor, 10);
+
+            // Calculate angle matching desired movement
+            let angle = Math.atan2(s.targetY - s.y, s.targetX - s.x) + Math.PI / 2;
+            if (!isMoving) angle = 0; // Upright if stationary
+
+            drawRotatedImage(cache.scout, s.x, s.y, 26, angle);
             drawHealthBar(s.x, s.y - 20, s.health, s.maxHealth);
         });
 
         // Fighters
         p.units.fighters.forEach(f => {
-            drawTriangle(f.x, f.y, p.color);
+            // Determine direction. If they have a path, point towards next node. 
+            // If they are colliding/repelling, we don't have a rigid velocity vector so we use path if available
+            let angle = 0;
+            if (f.path && f.path.length > 0) {
+                const targetPoint = f.path[f.pathIndex];
+                if (targetPoint) {
+                    angle = Math.atan2(targetPoint.y - f.y, targetPoint.x - f.x) + Math.PI / 2;
+                }
+            }
+
+            drawRotatedImage(cache.fighter, f.x, f.y, 24, angle);
+
             // Highlight if selected
             if (state.selectedFighters && state.selectedFighters.includes(f)) {
                 ctx.beginPath();
@@ -169,11 +201,21 @@ export function draw() {
 
         // Miners
         p.units.miners.forEach(m => {
-            drawSquare(m.x, m.y, m.returning ? '#a371f7' : (p.id === 0 ? '#d2a8ff' : '#ff7b72'));
+            let angle = 0;
+            if (m.returning) {
+                angle = Math.atan2(p.homePlanet.y - m.y, p.homePlanet.x - m.x) + Math.PI / 2;
+            } else if (m.targetAsteroid) {
+                angle = Math.atan2(m.targetAsteroid.y - m.y, m.targetAsteroid.x - m.x) + Math.PI / 2;
+            }
+
+            const isMining = m.targetAsteroid && Math.hypot(m.targetAsteroid.x - m.x, m.targetAsteroid.y - m.y) <= 20;
+
+            drawRotatedImage(isMining ? cache.minerActive : cache.miner, m.x, m.y, 24, angle);
+
             if (m.payload > 0) {
                 const ratio = m.payload / 25;
                 ctx.fillStyle = '#2ea043';
-                ctx.fillRect(m.x - 4, (m.y + 4) - (8 * ratio), 8, 8 * ratio);
+                ctx.fillRect(m.x - 4, (m.y + 12) - (8 * ratio), 8, 8 * ratio);
             }
             drawHealthBar(m.x, m.y - 20, m.health, m.maxHealth);
         });

@@ -28,6 +28,8 @@ export const asteroids = [];
 
 export const projectiles = [];
 
+export const stars = [];
+
 // Interaction State
 export const state = {
     activeScout: null,
@@ -57,7 +59,8 @@ export function initGameState(width, height) {
             x: players[0].homePlanet.x + 80,
             y: players[0].homePlanet.y,
             radius: 15, miners: 0,
-            resources: Math.floor(Math.random() * 400 + 200)
+            resources: Math.floor(Math.random() * 400 + 200),
+            variant: Math.floor(Math.random() * 3)
         });
         // Random asteroids on left half
         for (let i = 1; i < 6; i++) {
@@ -65,7 +68,8 @@ export function initGameState(width, height) {
                 x: Math.random() * ((width / 2) - (width * 0.2)) + (width * 0.2), // Keep outside initial territory but on left half
                 y: Math.random() * (height - 100) + 50,
                 radius: 15, miners: 0,
-                resources: Math.floor(Math.random() * 400 + 200)
+                resources: Math.floor(Math.random() * 400 + 200),
+                variant: Math.floor(Math.random() * 3)
             });
         }
         return leftAsteroids;
@@ -79,9 +83,21 @@ export function initGameState(width, height) {
             x: width - a.x,
             y: a.y,
             radius: 15, miners: 0,
-            resources: a.resources
+            resources: a.resources,
+            variant: a.variant
         });
     });
+
+    // Generate Starfield
+    stars.length = 0;
+    for (let i = 0; i < 200; i++) {
+        stars.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            size: Math.random() * 1.5 + 0.5,
+            opacity: Math.random() * 0.5 + 0.1
+        });
+    }
 
     // Setup Initial Units for both players
     players.forEach(p => {
@@ -89,15 +105,15 @@ export function initGameState(width, height) {
 
         let sx1 = p.homePlanet.x + (120 * dirX);
         let sy1 = p.homePlanet.y;
-        p.units.scouts.push({ x: sx1, y: sy1, targetX: sx1, targetY: sy1, health: 100, maxHealth: 100, cooldown: 0 });
+        p.units.scouts.push({ x: sx1, y: sy1, targetX: sx1, targetY: sy1, health: 200, maxHealth: 200, cooldown: 0 });
 
         let sx2 = p.homePlanet.x + (60 * dirX);
         let sy2 = Math.max(20, p.homePlanet.y - 100);
-        p.units.scouts.push({ x: sx2, y: sy2, targetX: sx2, targetY: sy2, health: 100, maxHealth: 100, cooldown: 0 });
+        p.units.scouts.push({ x: sx2, y: sy2, targetX: sx2, targetY: sy2, health: 200, maxHealth: 200, cooldown: 0 });
 
         let sx3 = p.homePlanet.x + (60 * dirX);
         let sy3 = Math.min(height - 20, p.homePlanet.y + 100);
-        p.units.scouts.push({ x: sx3, y: sy3, targetX: sx3, targetY: sy3, health: 100, maxHealth: 100, cooldown: 0 });
+        p.units.scouts.push({ x: sx3, y: sy3, targetX: sx3, targetY: sy3, health: 200, maxHealth: 200, cooldown: 0 });
 
         p.units.miners.push({ x: p.homePlanet.x, y: p.homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20 });
     });

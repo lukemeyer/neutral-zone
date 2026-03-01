@@ -7,6 +7,8 @@ import { updateUnits, updateProjectiles } from './units.js';
 import { draw, initRenderer } from './renderer.js';
 import { updateUI, updateControlText, showGameOver, setupUIBindings } from './ui.js';
 
+import { pregenerateGraphics, rawGraphics } from './graphics.js';
+
 const canvas = document.getElementById('gameCanvas');
 
 // Set 1:1 hardware pixel resolution from the CSS flex container bounds
@@ -17,6 +19,20 @@ initGameState(canvas.width, canvas.height);
 initRenderer(canvas);
 initInput(canvas);
 setupUIBindings();
+
+// Inject dynamic SVGs into UI Elements
+document.querySelector('#p1-btn-miner svg').outerHTML = rawGraphics.miner('#1f6feb', false);
+document.querySelector('#p1-btn-scout svg').outerHTML = rawGraphics.scout('#1f6feb');
+document.querySelector('#p1-btn-fighter svg').outerHTML = rawGraphics.fighter('#1f6feb');
+
+document.querySelector('#p2-btn-miner svg').outerHTML = rawGraphics.miner('#f85149', false);
+document.querySelector('#p2-btn-scout svg').outerHTML = rawGraphics.scout('#f85149');
+document.querySelector('#p2-btn-fighter svg').outerHTML = rawGraphics.fighter('#f85149');
+
+let graphicsLoaded = false;
+pregenerateGraphics().then(() => {
+    graphicsLoaded = true;
+});
 
 function endGame(winnerId, reason) {
     if (state.gameOver) return;
@@ -29,7 +45,7 @@ function update(time) {
     const dt = (time - state.lastTime) / 1000 || 0;
     state.lastTime = time;
 
-    if (!state.gameStarted) return;
+    if (!state.gameStarted || !graphicsLoaded) return;
 
     updateUI();
 

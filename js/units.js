@@ -203,7 +203,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
         if (f.cooldown > 0) f.cooldown -= dt;
         if (f.cooldown <= 0) {
             let target = null;
-            let minDist = 200; // Fighter Range
+            let minDist = 50; // Fighter Range (matched to 50% of old scout range)
 
             // Check Enemy Planet
             let dPlanet = Math.hypot(enemyP.homePlanet.x - f.x, enemyP.homePlanet.y - f.y);
@@ -233,7 +233,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
         if (s.cooldown > 0) s.cooldown -= dt;
         if (s.cooldown <= 0) {
             let target = null;
-            let minDist = 100; // Decreased Scout defensive firing range
+            let minDist = 50; // Decreased Scout defensive firing range (now 50% of original 100)
 
             enemyP.units.fighters.forEach(f => {
                 let d = Math.hypot(f.x - s.x, f.y - s.y);
@@ -241,8 +241,8 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             });
 
             if (target) {
-                // Increased damage drastically for stationary defense
-                projectiles.push({ x: s.x, y: s.y, target: target, damage: 15, speed: 400, ownerId: p.id, color: p.territoryColor });
+                // Scout deals less damage than Fighter (Fighter is 10, so Scout is 5)
+                projectiles.push({ x: s.x, y: s.y, target: target, damage: 5, speed: 400, ownerId: p.id, color: p.territoryColor });
                 s.cooldown = 0.3; // Firerate
             }
         }
