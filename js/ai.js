@@ -1,5 +1,5 @@
 import { players, asteroids } from './state.js';
-import { getPlayerTerritoryHull, isValidScoutPlacement } from './utils.js';
+import { getPlayerTerritoryHull, isValidScoutPlacement, pointInPolygon, isAsteroidInPolygon } from './utils.js';
 console.log('ai.js loaded');
 
 export function updateAI(p, dt, mapWidth, mapHeight) {
@@ -30,91 +30,73 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
         }
     });
 
-    // Check if any scouts are currently moving
-    // Added a more lenient tolerance (10) for movement matching due to physics bounds
-    const movingScouts = p.units.scouts.filter(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) > 10);
-
-    // Check if the moving scouts actually made progress recently. If they get stuck on borders they shouldn't freeze the AI.
-    let actuallyMoving = false;
-    movingScouts.forEach(s => {
-        if (!s.lastDist) s.lastDist = Infinity;
-        let currentDist = Math.hypot(s.targetX - s.x, s.targetY - s.y);
-        // If distance improved by at least 1 pixel this tick, they are still moving
-        if (s.lastDist - currentDist > 0.5) actuallyMoving = true;
-        s.lastDist = currentDist;
-    });
-
-    if (actuallyMoving) {
-        p.scoutSettleTimer = 0;
-        return; // Wait for them to arrive
-    }
-
-    p.scoutSettleTimer += dt;
-    if (p.scoutSettleTimer < 1.0) return; // Wait 1 second after they stop before doing new things
-
-    p.aiTimer += dt;
-    if (p.aiTimer < 1.0) return; // run AI logic every 1s
-    p.aiTimer = 0;
-
     const enemy = players.find(ep => ep.id !== p.id);
+
+    // We use a flag to track if we spent energy this frame. We can only queue one build per frame.
+    let buildActionTaken = false;
 
     // AI Priority 1: EXPANSION (Scouts & Territory)
     const currentHull = getPlayerTerritoryHull(p, players, true);
+    const enemyHull = getPlayerTerritoryHull(enemy, players, false);
 
-    const pointInPolygon = (point, vs) => {
-        let x = point.x, y = point.y;
-        let inside = false;
-        for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
-            let xi = vs[i].x, yi = vs[i].y;
-            let xj = vs[j].x, yj = vs[j].y;
-            let intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-            if (intersect) inside = !inside;
-        }
-        return inside;
-    };
+    function isAstCaptured(a) {
+        if (currentHull.length < 3) return false;
+        return isAsteroidInPolygon(a, currentHull);
+    }
 
-    const isAstCaptured = (a) => {
-        // Just checking the center is enough to confirm capture for AI purposes
-        return pointInPolygon({ x: a.x, y: a.y }, currentHull);
-    };
+    function isAstEnemyControlled(a) {
+        if (enemyHull.length < 3) return false;
+        return isAsteroidInPolygon(a, enemyHull);
+    }
 
     // 1. We want to capture asteroids. Let's find ALL uncaptured asteroids with resources.
-    let uncaptured = asteroids.filter(a => a.resources > 0 && !isAstCaptured(a));
+    // Filter out ones that are fully inside enemy territory to prevent getting stuck
+    let uncaptured = asteroids.filter(a => a.resources > 0 && !isAstCaptured(a) && !isAstEnemyControlled(a));
+
     // Sort them by distance to home planet
     uncaptured.sort((a, b) => Math.hypot(p.homePlanet.x - a.x, p.homePlanet.y - a.y) - Math.hypot(p.homePlanet.x - b.x, p.homePlanet.y - b.y));
 
     let assignedScouts = [];
 
     for (let ast of uncaptured) {
-        // Find a scout that isn't already assigned
+        // Find idle scouts to assign (up to 2 per asteroid for a pincer envelopment)
         let availableScouts = p.units.scouts.filter(s => !assignedScouts.includes(s));
-        let scout = availableScouts.find(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) < 5); // Must be an idle scout
+        let idleScoutsForAst = availableScouts.filter(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) < 5);
 
-        if (scout) {
-            let dirX = ast.x - p.homePlanet.x;
-            let dirY = ast.y - p.homePlanet.y;
-            let len = Math.hypot(dirX, dirY) || 1;
+        if (idleScoutsForAst.length > 0) {
+            let offsetSign = 1;
+            for (let i = 0; i < Math.min(2, idleScoutsForAst.length); i++) {
+                let scout = idleScoutsForAst[i];
+                let offsetSign = p.units.scouts.indexOf(scout) % 2 === 0 ? 1 : -1;
 
-            // Push PAST the asteroid by its radius + 30 to fully encapsulate it
-            let targetX = ast.x + (dirX / len) * (ast.radius + 30);
-            let targetY = ast.y + (dirY / len) * (ast.radius + 30);
+                let dirX = ast.x - p.homePlanet.x;
+                let dirY = ast.y - p.homePlanet.y;
+                let len = Math.hypot(dirX, dirY) || 1;
 
-            assignedScouts.push(scout);
+                let perpX = -dirY / len * 40;
+                let perpY = dirX / len * 40;
 
-            if (Math.hypot((scout.desiredTargetX || scout.targetX) - targetX, (scout.desiredTargetY || scout.targetY) - targetY) > 5) {
-                scout.desiredTargetX = targetX;
-                scout.desiredTargetY = targetY;
-                return; // ACTION TAKEN
+                let targetX = ast.x + (dirX / len) * (ast.radius + 30) + (perpX * offsetSign);
+                let targetY = ast.y + (dirY / len) * (ast.radius + 30) + (perpY * offsetSign);
+
+                assignedScouts.push(scout);
+
+                if (Math.hypot((scout.desiredTargetX || scout.targetX) - targetX, (scout.desiredTargetY || scout.targetY) - targetY) > 5) {
+                    scout.desiredTargetX = targetX;
+                    scout.desiredTargetY = targetY;
+                }
             }
-        } else if (p.energy >= 50 && p.buildCooldowns.scout <= 0 && (p.energy > 100 || p.units.scouts.length === 0 || p.units.scouts.length < uncaptured.length)) {
-            // No idle scout available for this asteroid. Build one if we have the energy.
-            p.energy -= 50;
-            p.buildCooldowns.scout = 10;
-            let tx = p.homePlanet.x;
-            let ty = p.homePlanet.y - 100;
-            p.buildQueue.push({ type: 'scouts', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, targetX: p.homePlanet.x, targetY: p.homePlanet.y, desiredTargetX: tx, desiredTargetY: ty, health: 100, maxHealth: 100, cooldown: 0 } });
-            return; // ACTION TAKEN
         }
+    }
+
+    // Try to build scouts if we have uncaptured asteroids but no scouts available
+    if (!buildActionTaken && p.energy >= 50 && p.buildCooldowns.scout <= 0 && (p.energy > 100 || p.units.scouts.length < 2 || p.units.scouts.length < uncaptured.length)) {
+        p.energy -= 50;
+        p.buildCooldowns.scout = 10;
+        let tx = p.homePlanet.x;
+        let ty = p.homePlanet.y - 100;
+        p.buildQueue.push({ type: 'scouts', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, targetX: p.homePlanet.x, targetY: p.homePlanet.y, desiredTargetX: tx, desiredTargetY: ty, health: 100, maxHealth: 100, cooldown: 0 } });
+        buildActionTaken = true;
     }
 
     // Assign holding positions for captured asteroids
@@ -134,13 +116,12 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
             if (Math.hypot((holder.desiredTargetX || holder.targetX) - targetX, (holder.desiredTargetY || holder.targetY) - targetY) > 5) {
                 holder.desiredTargetX = targetX;
                 holder.desiredTargetY = targetY;
-                return; // ACTION TAKEN
             }
         }
     }
 
     // Pushing idle scouts to the corners for map domination %
-    const idleScouts = p.units.scouts.filter(s => !assignedScouts.includes(s) && !holdingScouts.includes(s));
+    const idleScouts = p.units.scouts.filter(s => !assignedScouts.includes(s) && !holdingScouts.includes(s) && Math.hypot(s.targetX - s.x, s.targetY - s.y) < 5);
     if (idleScouts.length > 0) {
         const corners = [
             { x: p.id === 0 ? mapWidth : 0, y: 0 },
@@ -164,34 +145,49 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
             if (Math.hypot((s.desiredTargetX || s.targetX) - targetX, (s.desiredTargetY || s.targetY) - targetY) > 5) {
                 s.desiredTargetX = targetX;
                 s.desiredTargetY = targetY;
-                return; // ACTION TAKEN
             }
         }
     }
 
+    // Calculate target miners early to determine if economy is critical
+    let targetMiners = Math.max(1, activeCaptured.length * 3);
+    // Economy is critical if we have 0 miners, or fewer than 2 when we have targets
+    let economyCritical = p.units.miners.length < Math.min(2, targetMiners);
+
     // AI Priority 2: DEFENSE & OFFENSE (Fighters)
-    if (p.units.fighters.length < enemy.units.fighters.length && p.energy >= 100 && p.buildCooldowns.fighter <= 0) {
-        // Defensive: Match opponent numbers
-        p.energy -= 100;
-        p.buildCooldowns.fighter = 15;
-        let tx = p.id === 0 ? p.homePlanet.x + 100 : p.homePlanet.x - 100;
-        let ty = p.homePlanet.y;
-        p.buildQueue.push({ type: 'fighters', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, path: [{ x: tx, y: ty }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0 } });
-        return; // ACTION TAKEN
-    } else if (p.units.miners.length >= 2 && p.energy >= 200 && p.buildCooldowns.fighter <= 0) {
-        // Offensive: Economy is stable, push for the win
-        p.energy -= 100;
-        p.buildCooldowns.fighter = 15;
-        p.buildQueue.push({ type: 'fighters', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, path: [{ x: enemy.homePlanet.x, y: enemy.homePlanet.y }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0 } });
-        return; // ACTION TAKEN
+    let minFighters = Math.max(1, enemy.units.fighters.length + 1); // Always want an edge
+    let savingEnergy = false;
+
+    if (!buildActionTaken && !economyCritical && p.units.fighters.length < minFighters && p.buildCooldowns.fighter <= 0) {
+        if (p.energy >= 100) {
+            // Defensive/Matching: Build fighters to keep up or retake control
+            p.energy -= 100;
+            p.buildCooldowns.fighter = 15;
+            let tx = p.id === 0 ? p.homePlanet.x + 100 : p.homePlanet.x - 100;
+            let ty = p.homePlanet.y;
+            p.buildQueue.push({ type: 'fighters', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, path: [{ x: tx, y: ty }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0 } });
+            buildActionTaken = true;
+        } else {
+            savingEnergy = true; // Block lower priorities from spending energy
+        }
+    } else if (!buildActionTaken && !economyCritical && p.units.miners.length >= 3 && p.buildCooldowns.fighter <= 0) {
+        if (p.energy >= 100) { // Note: changed from 150 surplus requirement so it actually pushes
+            // Offensive: Economy is stable, push for the win
+            p.energy -= 100;
+            p.buildCooldowns.fighter = 10; // Build faster offensively
+            p.buildQueue.push({ type: 'fighters', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, path: [{ x: enemy.homePlanet.x, y: enemy.homePlanet.y }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0 } });
+            buildActionTaken = true;
+        } else {
+            savingEnergy = true;
+        }
     }
 
     // AI Priority 3: ECONOMY (Miners)
-    // Scale miners dynamically based on total captured asteroids
-    if (p.units.miners.length < activeCaptured.length * 3 && p.energy >= 25 && p.buildCooldowns.miner <= 0) {
+    // Scale miners dynamically based on total captured asteroids, but ensure at least 1 at start
+    if (!buildActionTaken && !savingEnergy && p.units.miners.length < targetMiners && p.energy >= 25 && p.buildCooldowns.miner <= 0) {
         p.energy -= 25;
         p.buildCooldowns.miner = 5;
         p.buildQueue.push({ type: 'miners', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20 } });
-        return; // ACTION TAKEN
+        buildActionTaken = true;
     }
 }

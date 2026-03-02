@@ -1,5 +1,5 @@
 import { players, asteroids, projectiles } from './state.js';
-import { pointInPolygon, getPlayerTerritoryHull, doPolygonsIntersect } from './utils.js';
+import { pointInPolygon, getPlayerTerritoryHull, doPolygonsIntersect, isAsteroidInPolygon } from './utils.js';
 console.log('units.js loaded');
 
 export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
@@ -163,7 +163,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             let minDist = Infinity;
 
             asteroids.forEach(a => {
-                if (a.resources > 0 && a.miners < 4 && pointInPolygon(a, currentHull)) {
+                if (a.resources > 0 && a.miners < 4 && isAsteroidInPolygon(a, currentHull)) {
                     let dx = m.x - a.x;
                     let dy = m.y - a.y;
                     let d = Math.hypot(dx, dy);
@@ -183,7 +183,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             }
         } else {
             // Strictly enforce territory checking: if the asteroid is no longer captured OR depleted
-            if (!pointInPolygon(m.targetAsteroid, currentHull) || m.targetAsteroid.resources <= 0) {
+            if (!isAsteroidInPolygon(m.targetAsteroid, currentHull) || m.targetAsteroid.resources <= 0) {
                 // Drop the asteroid lock and recall home immediately
                 m.targetAsteroid.miners = Math.max(0, m.targetAsteroid.miners - 1);
                 m.targetAsteroid = null;

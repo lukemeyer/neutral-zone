@@ -1,0 +1,115 @@
+{
+  "timestamp": "2026-03-02T04-59-37-340Z",
+  "date": "3/1/2026, 11:59:37 PM",
+  "metadata": {
+    "units": {
+      "scout": {
+        "health": 200,
+        "damage": 5,
+        "firerate_cd": 0.3
+      },
+      "fighter": {
+        "health": 150,
+        "damage": 10,
+        "firerate_cd": 0.5
+      },
+      "miner": {
+        "health": 20,
+        "payload_capacity": 25,
+        "mine_rate_per_sec": 10
+      }
+    },
+    "planet": {
+      "health": 1000
+    },
+    "asteroid": {
+      "starting_resources": "Varies (200-800 per scenario test)"
+    }
+  },
+  "results": [
+    {
+      "name": "Scout movement when territories overlap",
+      "category": "Pathfinding",
+      "timeSeconds": 1,
+      "scoutMoved": true,
+      "finalY": 359.99999999999886
+    },
+    {
+      "name": "1 Fighter vs 1 Scout (Head-on)",
+      "category": "Combat",
+      "timeSeconds": 13.583333333333334,
+      "p1FightersLeft": 1,
+      "p1FightersHP": 130,
+      "p2ScoutsLeft": 0,
+      "p2ScoutsHP": 0
+    },
+    {
+      "name": "1 Fighter vs 2 Scouts",
+      "category": "Combat",
+      "timeSeconds": 15.416666666666666,
+      "p1FightersLeft": 0,
+      "p1FightersHP": 0,
+      "p2ScoutsLeft": 2,
+      "p2ScoutsHP": 310
+    },
+    {
+      "name": "2 Fighters vs 1 Scout",
+      "category": "Combat",
+      "timeSeconds": 8.566666666666666,
+      "p1FightersLeft": 2,
+      "p1FightersHP": 225,
+      "p2ScoutsLeft": 0,
+      "p2ScoutsHP": 0
+    },
+    {
+      "name": "Time to mine all asteroids on one side",
+      "category": "Economy",
+      "timeSeconds": 600,
+      "asteroidsMined": true,
+      "p1Energy": 50.000000000002615,
+      "p1MinersBuilt": 3
+    },
+    {
+      "name": "Time to takeover gameboard with no combat",
+      "category": "Economy",
+      "timeSeconds": 600,
+      "p1Energy": 25.000000000002615,
+      "p1ScoutsBuilt": 3
+    },
+    {
+      "name": "Economy to Military (Build 5 Fighters)",
+      "category": "Economy",
+      "timeSeconds": 600,
+      "p1Energy": 25,
+      "p1MinersBuilt": 1,
+      "p1FightersBuilt": 0
+    },
+    {
+      "name": "3 Fighters vs 1 Fighter + 2 Scouts",
+      "category": "Combat",
+      "timeSeconds": 11.9,
+      "p1FightersLeft": 3,
+      "p1FightersHP": 145,
+      "p2DefendersLeft": 0,
+      "p2DefendersHP": 0
+    },
+    {
+      "name": "Full map resource drain time",
+      "category": "Economy",
+      "timeSeconds": 600,
+      "asteroidsMined": true,
+      "p1Energy": 25,
+      "p1MinersBuilt": 1
+    },
+    {
+      "name": "Standard game (CPU vs CPU)",
+      "category": "Full Game",
+      "timeSeconds": 600,
+      "winner": "Player 2",
+      "p1RemainingPlanetHP": 1000,
+      "p2RemainingPlanetHP": 1000,
+      "p1TotalUnitsLeft": 3,
+      "p2TotalUnitsLeft": 4
+    }
+  ]
+}

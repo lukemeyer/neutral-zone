@@ -15,6 +15,10 @@ export function resetGameState() {
         p.units.scouts = [];
         p.units.fighters = [];
         p.units.miners = [];
+        p.buildCooldowns = { miner: 0, scout: 0, fighter: 0 };
+        p.buildQueue = [];
+        p.aiTimer = 0;
+        p.scoutSettleTimer = 0;
     });
     asteroids.length = 0;
     projectiles.length = 0;
@@ -34,6 +38,28 @@ export function runSimulation(conditionToStop, onTick = () => { }) {
 
     while (!conditionToStop(ticks) && ticks < MAX_TICKS) {
         players.forEach(p => {
+            if (p.buildCooldowns.miner > 0) {
+                p.buildCooldowns.miner -= TICK_RATE;
+                if (p.buildCooldowns.miner <= 0) {
+                    let qi = p.buildQueue.findIndex(b => b.type === 'miners');
+                    if (qi !== -1) { p.units.miners.push(p.buildQueue[qi].unitData); p.buildQueue.splice(qi, 1); }
+                }
+            }
+            if (p.buildCooldowns.scout > 0) {
+                p.buildCooldowns.scout -= TICK_RATE;
+                if (p.buildCooldowns.scout <= 0) {
+                    let qi = p.buildQueue.findIndex(b => b.type === 'scouts');
+                    if (qi !== -1) { p.units.scouts.push(p.buildQueue[qi].unitData); p.buildQueue.splice(qi, 1); }
+                }
+            }
+            if (p.buildCooldowns.fighter > 0) {
+                p.buildCooldowns.fighter -= TICK_RATE;
+                if (p.buildCooldowns.fighter <= 0) {
+                    let qi = p.buildQueue.findIndex(b => b.type === 'fighters');
+                    if (qi !== -1) { p.units.fighters.push(p.buildQueue[qi].unitData); p.buildQueue.splice(qi, 1); }
+                }
+            }
+
             const currentPoints = [p.homePlanet, ...p.units.scouts.map(s => ({ x: s.x, y: s.y }))];
             const currentHull = getConvexHull(currentPoints);
             // No selected fighters or drawing paths during headless mode

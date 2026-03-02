@@ -46,6 +46,18 @@ export function getPlayerTerritoryHull(player, allPlayers, useTarget = false) {
     return getConvexHull(basePoints);
 }
 
+// Lenient check for asteroids on the edge of territories
+export function isAsteroidInPolygon(ast, vs) {
+    if (pointInPolygon(ast, vs)) return true;
+    // Check 4 points along the radius
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 2) {
+        if (pointInPolygon({ x: ast.x + Math.cos(angle) * (ast.radius - 2), y: ast.y + Math.sin(angle) * (ast.radius - 2) }, vs)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Geometric intersection helpers
 export function doLineSegmentsIntersect(p1, q1, p2, q2) {
     const orientation = (p, q, r) => {
