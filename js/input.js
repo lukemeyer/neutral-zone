@@ -1,5 +1,5 @@
 import { players, state } from './state.js';
-import { getConvexHull, getPlayerTerritoryHull, pointInPolygon, doPolygonsIntersect } from './utils.js';
+import { getConvexHull, getPlayerTerritoryHull, pointInPolygon, doPolygonsIntersect, isValidScoutPlacement } from './utils.js';
 console.log('input.js loaded');
 
 let canvas;
@@ -85,30 +85,7 @@ export function initInput(gameCanvas) {
             const proposedY = mouseY;
 
             const checkHullValid = (x, y) => {
-                state.activeScout.targetX = x;
-                state.activeScout.targetY = y;
-                const points = [state.activeScoutPlayer.homePlanet, ...state.activeScoutPlayer.units.scouts.map(s => ({ x: s.targetX, y: s.targetY }))];
-                const hull = getConvexHull(points);
-
-                let perimeter = 0;
-                for (let i = 0; i < hull.length; i++) {
-                    let p1 = hull[i];
-                    let p2 = hull[(i + 1) % hull.length];
-                    perimeter += Math.hypot(p1.x - p2.x, p1.y - p2.y);
-                }
-
-                const MAX_PERIMETER = (state.activeScoutPlayer.units.scouts.length + 1) * 175; // Reduced by 50%
-                if (perimeter > MAX_PERIMETER) return false;
-
-                // Restrict dragging into enemy territories to prevent overlap
-                const enemyPlayer = players.find(p => p.id !== state.activeScoutPlayer.id);
-                const enemyHull = getPlayerTerritoryHull(enemyPlayer, players, false);
-                const enemyTargetHull = getPlayerTerritoryHull(enemyPlayer, players, true);
-                // Verify against both current and target enemy hulls
-                if (enemyHull.length > 2 && doPolygonsIntersect(hull, enemyHull)) return false;
-                if (enemyTargetHull.length > 2 && doPolygonsIntersect(hull, enemyTargetHull)) return false;
-
-                return true;
+                return isValidScoutPlacement(x, y, state.activeScout, state.activeScoutPlayer, players, canvas.width, canvas.height);
             };
 
             if (checkHullValid(proposedX, proposedY)) {

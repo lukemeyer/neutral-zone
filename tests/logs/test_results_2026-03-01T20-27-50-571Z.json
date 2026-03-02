@@ -1,0 +1,73 @@
+{
+  "timestamp": "2026-03-01T20-27-50-571Z",
+  "date": "3/1/2026, 3:27:50 PM",
+  "results": [
+    {
+      "name": "1 Fighter vs 1 Scout (Head-on)",
+      "category": "Combat",
+      "timeSeconds": 11.066666666666666,
+      "p1FightersLeft": 0,
+      "p1FightersHP": 0,
+      "p2ScoutsLeft": 1,
+      "p2ScoutsHP": 20
+    },
+    {
+      "name": "1 Fighter vs 2 Scouts",
+      "category": "Combat",
+      "timeSeconds": 18.583333333333332,
+      "p1FightersLeft": 0,
+      "p1FightersHP": 0,
+      "p2ScoutsLeft": 2,
+      "p2ScoutsHP": 290
+    },
+    {
+      "name": "2 Fighters vs 1 Scout",
+      "category": "Combat",
+      "timeSeconds": 6.633333333333333,
+      "p1FightersLeft": 2,
+      "p1FightersHP": 225,
+      "p2ScoutsLeft": 0,
+      "p2ScoutsHP": 0
+    },
+    {
+      "name": "Time to mine all asteroids on one side",
+      "category": "Economy",
+      "timeSeconds": 94.75,
+      "asteroidsMined": true,
+      "p1Energy": 149.99999999999784,
+      "p1MinersBuilt": 6
+    },
+    {
+      "name": "Time to takeover gameboard with no combat",
+      "category": "Economy",
+      "timeSeconds": 22.133333333333333,
+      "p1Energy": 0,
+      "p1ScoutsBuilt": 3
+    },
+    {
+      "name": "Economy to Military (Build 5 Fighters)",
+      "category": "Economy",
+      "timeSeconds": 300,
+      "p1Energy": 0,
+      "p1MinersBuilt": 0,
+      "p1FightersBuilt": 0
+    },
+    {
+      "name": "3 Fighters vs 1 Fighter + 2 Scouts",
+      "category": "Combat",
+      "timeSeconds": 300,
+      "p1FightersLeft": 3,
+      "p1FightersHP": 240,
+      "p2DefendersLeft": 1,
+      "p2DefendersHP": 90
+    },
+    {
+      "name": "Full map resource drain time",
+      "category": "Economy",
+      "timeSeconds": 300,
+      "asteroidsMined": true,
+      "p1Energy": 0,
+      "p1MinersBuilt": 0
+    }
+  ]
+}

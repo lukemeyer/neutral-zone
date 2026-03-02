@@ -1,8 +1,35 @@
 import { players, asteroids } from './state.js';
-import { getPlayerTerritoryHull } from './utils.js';
+import { getPlayerTerritoryHull, isValidScoutPlacement } from './utils.js';
 console.log('ai.js loaded');
 
 export function updateAI(p, dt, mapWidth, mapHeight) {
+    // Process "dragging" of scout targets to simulate human players and intersect borders precisely
+    p.units.scouts.forEach(s => {
+        if (s.desiredTargetX !== undefined && s.desiredTargetY !== undefined) {
+            let dx = s.desiredTargetX - s.targetX;
+            let dy = s.desiredTargetY - s.targetY;
+            let dist = Math.hypot(dx, dy);
+            if (dist > 1) {
+                let dragSpeed = 800 * dt; // simulated rapid mouse drag
+                let moveDist = Math.min(dragSpeed, dist);
+                let proposedX = s.targetX + (dx / dist) * moveDist;
+                let proposedY = s.targetY + (dy / dist) * moveDist;
+
+                if (isValidScoutPlacement(proposedX, proposedY, s, p, players, mapWidth, mapHeight)) {
+                    s.targetX = proposedX;
+                    s.targetY = proposedY;
+                } else {
+                    // Hit a territory boundary or max perimeter, stop dragging the target
+                    s.desiredTargetX = s.targetX;
+                    s.desiredTargetY = s.targetY;
+                }
+            } else {
+                s.targetX = s.desiredTargetX;
+                s.targetY = s.desiredTargetY;
+            }
+        }
+    });
+
     // Check if any scouts are currently moving
     // Added a more lenient tolerance (10) for movement matching due to physics bounds
     const movingScouts = p.units.scouts.filter(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) > 10);
@@ -72,8 +99,8 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
             let len = Math.hypot(dirX, dirY) || 1;
 
             // Push PAST the asteroid by its radius + 30 to fully encapsulate it
-            scout.targetX = ast.x + (dirX / len) * (ast.radius + 30);
-            scout.targetY = ast.y + (dirY / len) * (ast.radius + 30);
+            scout.desiredTargetX = ast.x + (dirX / len) * (ast.radius + 30);
+            scout.desiredTargetY = ast.y + (dirY / len) * (ast.radius + 30);
 
             assignedScouts.push(scout);
         } else if (p.energy >= 50 && (p.energy > 100 || p.units.scouts.length === 0 || p.units.scouts.length < uncaptured.length)) {
@@ -81,7 +108,7 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
             p.energy -= 50;
             let tx = p.homePlanet.x;
             let ty = p.homePlanet.y - 100;
-            p.units.scouts.push({ x: p.homePlanet.x, y: p.homePlanet.y, targetX: tx, targetY: ty, health: 100, maxHealth: 100, cooldown: 0 });
+            p.units.scouts.push({ x: p.homePlanet.x, y: p.homePlanet.y, targetX: p.homePlanet.x, targetY: p.homePlanet.y, desiredTargetX: tx, desiredTargetY: ty, health: 100, maxHealth: 100, cooldown: 0 });
             // We just added one, but we wait for next tick to assign it.
             // Only build ONE per tick to prevent draining entirely on one frame.
             return;
@@ -98,8 +125,8 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
             let dirX = a.x - p.homePlanet.x;
             let dirY = a.y - p.homePlanet.y;
             let len = Math.hypot(dirX, dirY) || 1;
-            holder.targetX = a.x + (dirX / len) * (a.radius + 30);
-            holder.targetY = a.y + (dirY / len) * (a.radius + 30);
+            holder.desiredTargetX = a.x + (dirX / len) * (a.radius + 30);
+            holder.desiredTargetY = a.y + (dirY / len) * (a.radius + 30);
             holdingScouts.push(holder);
         }
     });
@@ -107,6 +134,9 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
     // Pushing idle scouts to the corners for map domination %
     const idleScouts = p.units.scouts.filter(s => !assignedScouts.includes(s) && !holdingScouts.includes(s));
     if (idleScouts.length > 0) {
+        // We need the validation method specifically for corner pushes since they naturally clip into enemy hulls
+        // Since we know AI is loaded after Utils, we can lazily load the imported function synchronously through window if it exists or use dynamic import conceptually:
+        // However, for ai.js it's easier to just import it globally at the top. We will rewrite the top of this file next.
         const corners = [
             { x: p.id === 0 ? mapWidth : 0, y: 0 },
             { x: p.id === 0 ? mapWidth : 0, y: mapHeight },
@@ -122,8 +152,8 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
 
             // Push out progressively further based on total scouts to mimic perimeter expansion
             let pushDist = 200 + (idleScouts.length * 50);
-            s.targetX = p.homePlanet.x + (dirX / len) * pushDist;
-            s.targetY = p.homePlanet.y + (dirY / len) * pushDist;
+            s.desiredTargetX = p.homePlanet.x + (dirX / len) * pushDist;
+            s.desiredTargetY = p.homePlanet.y + (dirY / len) * pushDist;
         });
     }
 

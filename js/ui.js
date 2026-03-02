@@ -7,10 +7,18 @@ export function updateUI() {
     document.getElementById('p1-btn-scout').disabled = players[0].energy < 50;
     document.getElementById('p1-btn-fighter').disabled = players[0].energy < 100;
 
+    document.getElementById('p1-fighters').innerText = players[0].units.fighters.length;
+    document.getElementById('p1-scouts').innerText = players[0].units.scouts.length;
+    document.getElementById('p1-miners').innerText = players[0].units.miners.length;
+
     document.getElementById('p2-energy').innerText = Math.floor(players[1].energy);
     document.getElementById('p2-btn-miner').disabled = players[1].energy < 25;
     document.getElementById('p2-btn-scout').disabled = players[1].energy < 50;
     document.getElementById('p2-btn-fighter').disabled = players[1].energy < 100;
+
+    document.getElementById('p2-fighters').innerText = players[1].units.fighters.length;
+    document.getElementById('p2-scouts').innerText = players[1].units.scouts.length;
+    document.getElementById('p2-miners').innerText = players[1].units.miners.length;
 }
 
 export function updateControlText(p1pct, p2pct) {
@@ -98,16 +106,10 @@ export function setupUIBindings() {
         players[1].isCPU = document.getElementById('p2-type').value === 'cpu';
 
         if (players[0].isCPU) {
-            document.getElementById('p1-btn-miner').style.display = 'none';
-            document.getElementById('p1-btn-scout').style.display = 'none';
-            document.getElementById('p1-btn-fighter').style.display = 'none';
-            document.getElementById('p1-btn-sel-all').parentElement.style.display = 'none';
+            document.querySelectorAll('#ui-p1 .ui-group').forEach(el => el.style.display = 'none');
         }
         if (players[1].isCPU) {
-            document.getElementById('p2-btn-miner').style.display = 'none';
-            document.getElementById('p2-btn-scout').style.display = 'none';
-            document.getElementById('p2-btn-fighter').style.display = 'none';
-            document.getElementById('p2-btn-sel-all').parentElement.style.display = 'none';
+            document.querySelectorAll('#ui-p2 .ui-group').forEach(el => el.style.display = 'none');
         }
 
         document.getElementById('start-screen').style.display = 'none';

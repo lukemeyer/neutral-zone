@@ -304,7 +304,37 @@ function testCPUvsCPU() {
     });
 }
 
+// --- Bug Fix Scenarios ---
+
+function testScoutMovementWhenTerritoriesIntersect() {
+    resetGameState();
+    const p1 = createDummyPlayer(0, 100, 400);
+    const p2 = createDummyPlayer(1, 900, 400);
+
+    // Create an intersection between P1 and P2
+    p1.units.scouts.push({ x: 500, y: 350, targetX: 500, targetY: 350, health: 200, maxHealth: 200, cooldown: 0 });
+    p1.units.scouts.push({ x: 500, y: 450, targetX: 500, targetY: 450, health: 200, maxHealth: 200, cooldown: 0 });
+    p2.units.scouts.push({ x: 450, y: 350, targetX: 450, targetY: 350, health: 200, maxHealth: 200, cooldown: 0 });
+    p2.units.scouts.push({ x: 450, y: 450, targetX: 450, targetY: 450, health: 200, maxHealth: 200, cooldown: 0 });
+
+    // P1 has a FREE scout far away, trying to move.
+    p1.units.scouts.push({ x: 200, y: 400, targetX: 200, targetY: 200, health: 200, maxHealth: 200, cooldown: 0 });
+
+    const stopCondition = (ticks) => ticks >= 60; // Run for 1 second (60 frames)
+
+    runSimulation(stopCondition);
+
+    const testScout = p1.units.scouts[2]; // The free scout
+
+    recordResult("Scout movement when territories overlap", "Pathfinding", {
+        timeSeconds: 1,
+        scoutMoved: testScout.y < 390, // It should have moved towards y:200
+        finalY: testScout.y
+    });
+}
+
 // Run existing tests
+testScoutMovementWhenTerritoriesIntersect();
 testFighterVsScout();
 testFighterVsTwoScouts();
 testTwoFightersVsScout();

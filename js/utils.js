@@ -104,3 +104,71 @@ export function doPolygonsIntersect(poly1, poly2) {
 
     return false;
 }
+
+export function isValidScoutPlacement(proposedX, proposedY, activeScout, activePlayer, allPlayers, canvasWidth, canvasHeight) {
+    // Ensure target is within game bounds
+    if (proposedX < 0 || proposedX > canvasWidth || proposedY < 0 || proposedY > canvasHeight) return false;
+
+    // Temporarily apply the proposed position to calculate the proposed hull
+    const originalTargetX = activeScout.targetX;
+    const originalTargetY = activeScout.targetY;
+    activeScout.targetX = proposedX;
+    activeScout.targetY = proposedY;
+
+    const points = [activePlayer.homePlanet, ...activePlayer.units.scouts.map(s => ({ x: s.targetX, y: s.targetY }))];
+    const hull = getConvexHull(points);
+
+    let perimeter = 0;
+    for (let i = 0; i < hull.length; i++) {
+        let p1 = hull[i];
+        let p2 = hull[(i + 1) % hull.length];
+        perimeter += Math.hypot(p1.x - p2.x, p1.y - p2.y);
+    }
+
+    const MAX_PERIMETER = (activePlayer.units.scouts.length + 1) * 175;
+
+    let isValid = true;
+
+    if (perimeter > MAX_PERIMETER) {
+        // Calculate original perimeter BEFORE this movement
+        const originalPoints = [activePlayer.homePlanet];
+        for (let s of activePlayer.units.scouts) {
+            if (s === activeScout) {
+                originalPoints.push({ x: originalTargetX, y: originalTargetY });
+            } else {
+                originalPoints.push({ x: s.targetX, y: s.targetY });
+            }
+        }
+
+        const originalHull = getConvexHull(originalPoints);
+        let originalPerimeter = 0;
+        for (let i = 0; i < originalHull.length; i++) {
+            let p1 = originalHull[i];
+            let p2 = originalHull[(i + 1) % originalHull.length];
+            originalPerimeter += Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        }
+
+        // Only block the drag if we are strictly EXPANDING the perimeter beyond its current illegal size.
+        // Shrinking or maintaining the size is allowed.
+        if (perimeter > originalPerimeter) {
+            isValid = false;
+        }
+    }
+
+    if (isValid) {
+        // Restrict dragging into enemy territories to prevent overlap
+        const enemyPlayer = allPlayers.find(p => p.id !== activePlayer.id);
+        const enemyHull = getPlayerTerritoryHull(enemyPlayer, allPlayers, false);
+        const enemyTargetHull = getPlayerTerritoryHull(enemyPlayer, allPlayers, true);
+
+        // Verify against both current and target enemy hulls
+        if (enemyHull.length > 2 && doPolygonsIntersect(hull, enemyHull)) isValid = false;
+        if (enemyTargetHull.length > 2 && doPolygonsIntersect(hull, enemyTargetHull)) isValid = false;
+    }
+
+    // Restore the scout's original target position so the input caller can decide whether to actually commit the move
+    activeScout.targetX = originalTargetX;
+    activeScout.targetY = originalTargetY;
+
+    return isValid;
+}

@@ -64,11 +64,26 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             if (enemyHull.length > 2) {
                 const proposedHull = getPlayerTerritoryHull(p, players, false);
                 if (doPolygonsIntersect(proposedHull, enemyHull)) {
+                    // Check if they were already intersecting before this movement
+                    const tempX = u.x;
+                    const tempY = u.y;
                     u.x = oldX;
                     u.y = oldY;
-                    u.targetX = oldX; // Stop moving
-                    u.targetY = oldY;
-                    return true;
+                    const oldHull = getPlayerTerritoryHull(p, players, false);
+
+                    if (!doPolygonsIntersect(oldHull, enemyHull)) {
+                        // The movement CAUSED the intersection. Block it but DO NOT clear the target coordinates.
+                        // By leaving u.targetX untouched, the scout will keep marching "against" the wall until:
+                        // 1. The wall moves naturally, opening a path.
+                        // 2. The AI's actuallyMoving watcher realizes the scout hasn't progressed in 1 second and re-assigns it.
+                        u.x = oldX;
+                        u.y = oldY;
+                        return true;
+                    }
+
+                    // Otherwise it was already intersecting, allow it. Bouncing will push it back cleaner globally.
+                    u.x = tempX;
+                    u.y = tempY;
                 }
             }
         }

@@ -1,0 +1,35 @@
+state.js loaded
+utils.js loaded
+units.js loaded
+ai.js loaded
+--- TEST: 1 Fighter vs 1 Scout (Head-on) ---
+Simulation finished in 11.07 seconds.
+P1 Fighters Remaining: 0 (HP: 0)
+P2 Scouts Remaining: 1 (HP: 20)
+
+
+--- TEST: 1 Fighter vs 2 Scouts ---
+Simulation finished in 18.58 seconds.
+P1 Fighters Remaining: 0 (HP: 0)
+P2 Scouts Remaining: 2 (Total HP: 290)
+
+
+--- TEST: 2 Fighters vs 1 Scout ---
+Simulation finished in 6.63 seconds.
+P1 Fighters Remaining: 2 (Total HP: 225)
+P2 Scouts Remaining: 0
+
+
+--- TEST: Time to mine all asteroids on one side ---
+Simulation finished in 95.83 seconds.
+Asteroids fully mined.
+P1 Energy amassed: 149.99999999999778
+P1 Total Miners Built: 6
+
+
+--- TEST: Time to takeover gameboard with no combat ---
+Simulation finished in 23.60 seconds.
+P1 Energy amassed: 0
+P1 Scouts Built: 3
+
+
