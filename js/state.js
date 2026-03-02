@@ -9,7 +9,9 @@ export const players = [
         units: { scouts: [], fighters: [], miners: [] },
         isCPU: false,
         aiTimer: 0,
-        scoutSettleTimer: 0
+        scoutSettleTimer: 0,
+        buildCooldowns: { miner: 0, scout: 0, fighter: 0 },
+        buildQueue: []
     },
     {
         id: 1,
@@ -20,7 +22,9 @@ export const players = [
         units: { scouts: [], fighters: [], miners: [] },
         isCPU: false,
         aiTimer: 0,
-        scoutSettleTimer: 0
+        scoutSettleTimer: 0,
+        buildCooldowns: { miner: 0, scout: 0, fighter: 0 },
+        buildQueue: []
     }
 ];
 

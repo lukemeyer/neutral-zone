@@ -3,18 +3,18 @@ console.log('ui.js loaded');
 
 export function updateUI() {
     document.getElementById('p1-energy').innerText = Math.floor(players[0].energy);
-    document.getElementById('p1-btn-miner').disabled = players[0].energy < 25;
-    document.getElementById('p1-btn-scout').disabled = players[0].energy < 50;
-    document.getElementById('p1-btn-fighter').disabled = players[0].energy < 100;
+    document.getElementById('p1-btn-miner').disabled = players[0].energy < 25 || players[0].buildCooldowns.miner > 0;
+    document.getElementById('p1-btn-scout').disabled = players[0].energy < 50 || players[0].buildCooldowns.scout > 0;
+    document.getElementById('p1-btn-fighter').disabled = players[0].energy < 100 || players[0].buildCooldowns.fighter > 0;
 
     document.getElementById('p1-fighters').innerText = players[0].units.fighters.length;
     document.getElementById('p1-scouts').innerText = players[0].units.scouts.length;
     document.getElementById('p1-miners').innerText = players[0].units.miners.length;
 
     document.getElementById('p2-energy').innerText = Math.floor(players[1].energy);
-    document.getElementById('p2-btn-miner').disabled = players[1].energy < 25;
-    document.getElementById('p2-btn-scout').disabled = players[1].energy < 50;
-    document.getElementById('p2-btn-fighter').disabled = players[1].energy < 100;
+    document.getElementById('p2-btn-miner').disabled = players[1].energy < 25 || players[1].buildCooldowns.miner > 0;
+    document.getElementById('p2-btn-scout').disabled = players[1].energy < 50 || players[1].buildCooldowns.scout > 0;
+    document.getElementById('p2-btn-fighter').disabled = players[1].energy < 100 || players[1].buildCooldowns.fighter > 0;
 
     document.getElementById('p2-fighters').innerText = players[1].units.fighters.length;
     document.getElementById('p2-scouts').innerText = players[1].units.scouts.length;
@@ -36,27 +36,29 @@ export function showGameOver(winnerId, reason) {
 export function setupUIBindings() {
     // UI Buttons 
     document.getElementById('p1-btn-miner').addEventListener('click', () => {
-        if (players[0].energy >= 25) {
+        if (players[0].energy >= 25 && players[0].buildCooldowns.miner <= 0) {
             players[0].energy -= 25;
-            players[0].units.miners.push({ x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20 });
+            players[0].buildCooldowns.miner = 5;
+            players[0].buildQueue.push({ type: 'miners', unitData: { x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20 } });
         }
     });
     document.getElementById('p1-btn-scout').addEventListener('click', () => {
-        if (players[0].energy >= 50) {
+        if (players[0].energy >= 50 && players[0].buildCooldowns.scout <= 0) {
             players[0].energy -= 50;
+            players[0].buildCooldowns.scout = 10;
             let tx = players[0].homePlanet.x;
             let ty = players[0].homePlanet.y - 100;
-            players[0].units.scouts.push({ x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetX: tx, targetY: ty, health: 100, maxHealth: 100, cooldown: 0 });
+            players[0].buildQueue.push({ type: 'scouts', unitData: { x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetX: tx, targetY: ty, health: 100, maxHealth: 100, cooldown: 0 } });
         }
     });
     document.getElementById('p1-btn-fighter').addEventListener('click', () => {
-        if (players[0].energy >= 100) {
+        if (players[0].energy >= 100 && players[0].buildCooldowns.fighter <= 0) {
             players[0].energy -= 100;
+            players[0].buildCooldowns.fighter = 15;
             let tx = players[0].homePlanet.x + 100;
             let ty = players[0].homePlanet.y;
             const newFighter = { x: players[0].homePlanet.x, y: players[0].homePlanet.y, path: [{ x: tx, y: ty }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0 };
-            players[0].units.fighters.push(newFighter);
-            state.selectedFighters = [newFighter];
+            players[0].buildQueue.push({ type: 'fighters', unitData: newFighter });
         }
     });
     document.getElementById('p1-btn-sel-all').addEventListener('click', () => {
@@ -67,27 +69,29 @@ export function setupUIBindings() {
     });
 
     document.getElementById('p2-btn-miner').addEventListener('click', () => {
-        if (players[1].energy >= 25) {
+        if (players[1].energy >= 25 && players[1].buildCooldowns.miner <= 0) {
             players[1].energy -= 25;
-            players[1].units.miners.push({ x: players[1].homePlanet.x, y: players[1].homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20 });
+            players[1].buildCooldowns.miner = 5;
+            players[1].buildQueue.push({ type: 'miners', unitData: { x: players[1].homePlanet.x, y: players[1].homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20 } });
         }
     });
     document.getElementById('p2-btn-scout').addEventListener('click', () => {
-        if (players[1].energy >= 50) {
+        if (players[1].energy >= 50 && players[1].buildCooldowns.scout <= 0) {
             players[1].energy -= 50;
+            players[1].buildCooldowns.scout = 10;
             let tx = players[1].homePlanet.x;
             let ty = players[1].homePlanet.y - 100;
-            players[1].units.scouts.push({ x: players[1].homePlanet.x, y: players[1].homePlanet.y, targetX: tx, targetY: ty, health: 100, maxHealth: 100, cooldown: 0 });
+            players[1].buildQueue.push({ type: 'scouts', unitData: { x: players[1].homePlanet.x, y: players[1].homePlanet.y, targetX: tx, targetY: ty, health: 100, maxHealth: 100, cooldown: 0 } });
         }
     });
     document.getElementById('p2-btn-fighter').addEventListener('click', () => {
-        if (players[1].energy >= 100) {
+        if (players[1].energy >= 100 && players[1].buildCooldowns.fighter <= 0) {
             players[1].energy -= 100;
+            players[1].buildCooldowns.fighter = 15;
             let tx = players[1].homePlanet.x - 100;
             let ty = players[1].homePlanet.y;
             const newFighter = { x: players[1].homePlanet.x, y: players[1].homePlanet.y, path: [{ x: tx, y: ty }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0 };
-            players[1].units.fighters.push(newFighter);
-            state.selectedFighters = [newFighter];
+            players[1].buildQueue.push({ type: 'fighters', unitData: newFighter });
         }
     });
     document.getElementById('p2-btn-sel-all').addEventListener('click', () => {

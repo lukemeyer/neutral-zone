@@ -53,6 +53,28 @@ function update(time) {
 
     // Update Players
     players.forEach(p => {
+        if (p.buildCooldowns.miner > 0) {
+            p.buildCooldowns.miner -= dt;
+            if (p.buildCooldowns.miner <= 0) {
+                let qi = p.buildQueue.findIndex(b => b.type === 'miners');
+                if (qi !== -1) { p.units.miners.push(p.buildQueue[qi].unitData); p.buildQueue.splice(qi, 1); }
+            }
+        }
+        if (p.buildCooldowns.scout > 0) {
+            p.buildCooldowns.scout -= dt;
+            if (p.buildCooldowns.scout <= 0) {
+                let qi = p.buildQueue.findIndex(b => b.type === 'scouts');
+                if (qi !== -1) { p.units.scouts.push(p.buildQueue[qi].unitData); p.buildQueue.splice(qi, 1); }
+            }
+        }
+        if (p.buildCooldowns.fighter > 0) {
+            p.buildCooldowns.fighter -= dt;
+            if (p.buildCooldowns.fighter <= 0) {
+                let qi = p.buildQueue.findIndex(b => b.type === 'fighters');
+                if (qi !== -1) { p.units.fighters.push(p.buildQueue[qi].unitData); p.buildQueue.splice(qi, 1); }
+            }
+        }
+
         if (p.isCPU) updateAI(p, dt, canvas.width, canvas.height);
 
         const currentPoints = [p.homePlanet, ...p.units.scouts.map(s => ({ x: s.x, y: s.y }))];

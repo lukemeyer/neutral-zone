@@ -107,7 +107,22 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             let dy = targetPoint.y - f.y;
             let dist = Math.hypot(dx, dy);
 
-            if (dist < 5) {
+            // Determine arrival distance based on target
+            let isFinal = f.path.length === 1 || (!f.isLoop && f.pathIndex === f.path.length - 1 && f.pathDir === 1);
+            let stopDist = 5;
+
+            if (isFinal) {
+                const enemyP = players.find(ep => ep.id !== p.id);
+                // If the target point is on/inside the enemy planet, stop at firing range (50)
+                let distToPlanet = Math.hypot(enemyP.homePlanet.x - targetPoint.x, enemyP.homePlanet.y - targetPoint.y);
+                if (distToPlanet < enemyP.homePlanet.radius + 10) {
+                    stopDist = 45; // Just under max firing range to ensure it can shoot
+                } else {
+                    stopDist = 10; // Slightly larger stop dist for generic waypoints to help clumping
+                }
+            }
+
+            if (dist < stopDist) {
                 if (f.path.length > 1) {
                     f.pathIndex += f.pathDir;
                     if (f.pathIndex >= f.path.length || f.pathIndex < 0) {
@@ -120,7 +135,11 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
                     }
                 }
             } else {
-                applySteering(f, targetPoint.x, targetPoint.y, 80);
+                let currentSpeed = 80;
+                if (!pointInPolygon({ x: f.x, y: f.y }, currentHull)) {
+                    currentSpeed = 40; // 50% slower outside territory
+                }
+                applySteering(f, targetPoint.x, targetPoint.y, currentSpeed);
             }
         }
     });
@@ -195,6 +214,29 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
     const allEnemyUnits = [...enemyP.units.scouts, ...enemyP.units.fighters, ...enemyP.units.miners];
     const globalUnits = [...allUnits, ...allEnemyUnits];
 
+    // Pre-calculate movement status for parking push logic
+    const calcMoving = (u, ownerPlayer) => {
+        if (u.maxHealth === 150) { // Fighter
+            if (!u.path || u.path.length === 0) return false;
+            let targetPoint = u.path[u.pathIndex];
+            if (!targetPoint) return false;
+            let isFinal = u.path.length === 1 || (!u.isLoop && u.pathIndex === u.path.length - 1 && u.pathDir === 1);
+            let stopDist = 10;
+            if (isFinal && Math.hypot(enemyP.homePlanet.x - targetPoint.x, enemyP.homePlanet.y - targetPoint.y) < enemyP.homePlanet.radius + 10) stopDist = 45;
+            return Math.hypot(targetPoint.x - u.x, targetPoint.y - u.y) > stopDist;
+        } else if (u.maxHealth === 200) { // Scout
+            return Math.hypot(u.targetX - u.x, u.targetY - u.y) > 5;
+        } else if (u.maxHealth === 20) { // Miner
+            if (u.returning) return Math.hypot(ownerPlayer.homePlanet.x - u.x, ownerPlayer.homePlanet.y - u.y) > ownerPlayer.homePlanet.radius + 5;
+            if (u.targetAsteroid) return Math.hypot(u.targetAsteroid.x - u.x, u.targetAsteroid.y - u.y) > 20;
+            return false;
+        }
+        return false;
+    };
+
+    allUnits.forEach(u => { u._moving = calcMoving(u, p); u._team = p.id; });
+    allEnemyUnits.forEach(u => { u._moving = calcMoving(u, enemyP); u._team = enemyP.id; });
+
     // Territory definition for bouncing
     const enemyHull = getPlayerTerritoryHull(enemyP, players, false);
 
@@ -202,12 +244,29 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
         // 1. Unit vs Unit Repulsion (Radius 12px)
         globalUnits.forEach(other => {
             if (u === other) return;
+
+            // Prevent same-side fighters on the same path/team from colliding
+            if (u.maxHealth === 150 && other.maxHealth === 150 && u._team === other._team) {
+                return; // skip collision entirely for same-team fighters
+            }
+
             let dx = u.x - other.x;
             let dy = u.y - other.y;
             let dist = Math.hypot(dx, dy);
+
             if (dist > 0 && dist < 12) {
-                u.x += (dx / dist) * 60 * dt;
-                u.y += (dy / dist) * 60 * dt;
+                let force = 60; // default force
+
+                if (u._moving && !other._moving) {
+                    force = 5; // moving units barely get pushed by parked units
+                } else if (!u._moving && other._moving) {
+                    force = 200; // parked units yield heavily to moving units
+                } else if (!u._moving && !other._moving) {
+                    force = 20; // parked units gently clump without violent vibration
+                }
+
+                u.x += (dx / dist) * force * dt;
+                u.y += (dy / dist) * force * dt;
             }
         });
     });
