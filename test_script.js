@@ -17,7 +17,7 @@
                 territoryColor: '#2ea043',
                 energy: 50,
                 homePlanet: { x: 128, y: 360, radius: 30, health: 1000, maxHealth: 1000 },
-                units: { scouts: [], fighters: [], miners: [] }
+                units: { stations: [], fighters: [], miners: [] }
             },
             {
                 id: 1,
@@ -25,7 +25,7 @@
                 territoryColor: '#da3633',
                 energy: 50,
                 homePlanet: { x: 1152, y: 360, radius: 30, health: 1000, maxHealth: 1000 },
-                units: { scouts: [], fighters: [], miners: [] }
+                units: { stations: [], fighters: [], miners: [] }
             }
         ];
 
@@ -67,17 +67,17 @@
         // Setup Initial Units for both players
         players.forEach(p => {
             const dirX = p.homePlanet.x < 640 ? 1 : -1;
-            p.units.scouts.push({ x: p.homePlanet.x - (100 * dirX), y: p.homePlanet.y - 100, targetX: p.homePlanet.x - (100 * dirX), targetY: p.homePlanet.y - 100, health: 50, maxHealth: 50, cooldown: 0 });
-            p.units.scouts.push({ x: p.homePlanet.x + (100 * dirX), y: p.homePlanet.y - 100, targetX: p.homePlanet.x + (100 * dirX), targetY: p.homePlanet.y - 100, health: 50, maxHealth: 50, cooldown: 0 });
-            p.units.scouts.push({ x: p.homePlanet.x, y: p.homePlanet.y + 120, targetX: p.homePlanet.x, targetY: p.homePlanet.y + 120, health: 50, maxHealth: 50, cooldown: 0 });
+            p.units.stations.push({ x: p.homePlanet.x - (100 * dirX), y: p.homePlanet.y - 100, targetX: p.homePlanet.x - (100 * dirX), targetY: p.homePlanet.y - 100, health: 50, maxHealth: 50, cooldown: 0 });
+            p.units.stations.push({ x: p.homePlanet.x + (100 * dirX), y: p.homePlanet.y - 100, targetX: p.homePlanet.x + (100 * dirX), targetY: p.homePlanet.y - 100, health: 50, maxHealth: 50, cooldown: 0 });
+            p.units.stations.push({ x: p.homePlanet.x, y: p.homePlanet.y + 120, targetX: p.homePlanet.x, targetY: p.homePlanet.y + 120, health: 50, maxHealth: 50, cooldown: 0 });
             p.units.miners.push({ x: p.homePlanet.x, y: p.homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20 });
         });
 
         let projectiles = [];
 
         // Interaction State
-        let activeScout = null;
-        let activeScoutPlayer = null;
+        let activeStation = null;
+        let activeStationPlayer = null;
         let activeFighter = null;
         let drawingPath = false;
 
@@ -139,13 +139,13 @@
                 }
             }
 
-            // Check Scouts (for dragging target)
+            // Check Stations (for dragging target)
             for (let p of players) {
-                for (let s of p.units.scouts) {
+                for (let s of p.units.stations) {
                     // Check against current position OR its target ghost
                     if (Math.hypot(s.x - mouseX, s.y - mouseY) < 20 || Math.hypot(s.targetX - mouseX, s.targetY - mouseY) < 20) {
-                        activeScout = s;
-                        activeScoutPlayer = p; // need to track which player's scout is active for hull checking
+                        activeStation = s;
+                        activeStationPlayer = p; // need to track which player's station is active for hull checking
                         return;
                     }
                 }
@@ -159,16 +159,16 @@
             const mouseX = pos.x;
             const mouseY = pos.y;
 
-            if (activeScout && activeScoutPlayer) {
-                const originalX = activeScout.targetX;
-                const originalY = activeScout.targetY;
+            if (activeStation && activeStationPlayer) {
+                const originalX = activeStation.targetX;
+                const originalY = activeStation.targetY;
                 const proposedX = mouseX;
                 const proposedY = mouseY;
 
                 const checkHullValid = (x, y) => {
-                    activeScout.targetX = x;
-                    activeScout.targetY = y;
-                    const points = [activeScoutPlayer.homePlanet, ...activeScoutPlayer.units.scouts.map(s => ({ x: s.targetX, y: s.targetY }))];
+                    activeStation.targetX = x;
+                    activeStation.targetY = y;
+                    const points = [activeStationPlayer.homePlanet, ...activeStationPlayer.units.stations.map(s => ({ x: s.targetX, y: s.targetY }))];
                     const hull = getConvexHull(points);
 
                     let perimeter = 0;
@@ -178,13 +178,13 @@
                         perimeter += Math.hypot(p1.x - p2.x, p1.y - p2.y);
                     }
 
-                    const MAX_PERIMETER = (activeScoutPlayer.units.scouts.length + 1) * 350;
+                    const MAX_PERIMETER = (activeStationPlayer.units.stations.length + 1) * 350;
                     return perimeter <= MAX_PERIMETER;
                 };
 
                 if (checkHullValid(proposedX, proposedY)) {
-                    activeScout.targetX = proposedX;
-                    activeScout.targetY = proposedY;
+                    activeStation.targetX = proposedX;
+                    activeStation.targetY = proposedY;
                 } else {
                     if (checkHullValid(originalX, originalY)) {
                         let low = 0;
@@ -201,11 +201,11 @@
                                 high = mid;
                             }
                         }
-                        activeScout.targetX = originalX + (proposedX - originalX) * bestT;
-                        activeScout.targetY = originalY + (proposedY - originalY) * bestT;
+                        activeStation.targetX = originalX + (proposedX - originalX) * bestT;
+                        activeStation.targetY = originalY + (proposedY - originalY) * bestT;
                     } else {
-                        activeScout.targetX = originalX;
-                        activeScout.targetY = originalY;
+                        activeStation.targetX = originalX;
+                        activeStation.targetY = originalY;
                     }
                 }
             }
@@ -231,8 +231,8 @@
                 activeFighter.pathIndex = 0;
                 activeFighter.pathDir = 1;
             }
-            activeScout = null;
-            activeScoutPlayer = null;
+            activeStation = null;
+            activeStationPlayer = null;
             activeFighter = null;
             drawingPath = false;
         });
@@ -245,14 +245,14 @@
             // Only track UI for Player 0 (local player) for now
             document.getElementById('energy-display').innerText = Math.floor(players[0].energy);
             document.getElementById('btn-miner').disabled = players[0].energy < 25;
-            document.getElementById('btn-scout').disabled = players[0].energy < 50;
+            document.getElementById('btn-station').disabled = players[0].energy < 50;
             document.getElementById('btn-fighter').disabled = players[0].energy < 100;
 
             const currentHulls = [];
 
             // Update Players
             players.forEach(p => {
-                const currentPoints = [p.homePlanet, ...p.units.scouts.map(s => ({ x: s.x, y: s.y }))];
+                const currentPoints = [p.homePlanet, ...p.units.stations.map(s => ({ x: s.x, y: s.y }))];
                 const currentHull = getConvexHull(currentPoints);
                 currentHulls.push(currentHull);
 
@@ -269,7 +269,7 @@
                     document.getElementById('control-pct').innerText = pct.toFixed(1);
                 }
 
-                p.units.scouts.forEach(s => {
+                p.units.stations.forEach(s => {
                     let dx = s.targetX - s.x;
                     let dy = s.targetY - s.y;
                     let dist = Math.hypot(dx, dy);
@@ -378,7 +378,7 @@
                         if (dPlanet < minDist) { minDist = dPlanet; target = { type: 'planet', ref: enemyP.homePlanet }; }
 
                         // Check Enemy Units
-                        ['fighters', 'scouts', 'miners'].forEach(type => {
+                        ['fighters', 'stations', 'miners'].forEach(type => {
                             enemyP.units[type].forEach(u => {
                                 let d = Math.hypot(u.x - f.x, u.y - f.y);
                                 if (d < minDist) { minDist = d; target = { type: 'unit', ref: u }; }
@@ -392,12 +392,12 @@
                     }
                 });
 
-                // Scouts attack only fighters
-                p.units.scouts.forEach(s => {
+                // Stations attack only fighters
+                p.units.stations.forEach(s => {
                     if (s.cooldown > 0) s.cooldown -= dt;
                     if (s.cooldown <= 0) {
                         let target = null;
-                        let minDist = 150; // Scout defensive range
+                        let minDist = 150; // Station defensive range
 
                         enemyP.units.fighters.forEach(f => {
                             let d = Math.hypot(f.x - s.x, f.y - s.y);
@@ -432,7 +432,7 @@
 
             // Cleanup Dead Entities
             players.forEach(p => {
-                p.units.scouts = p.units.scouts.filter(u => u.health > 0);
+                p.units.stations = p.units.stations.filter(u => u.health > 0);
                 p.units.fighters = p.units.fighters.filter(u => u.health > 0);
                 p.units.miners = p.units.miners.filter(u => {
                     if (u.health <= 0 && u.targetAsteroid) {
@@ -460,13 +460,13 @@
 
             // Draw Territories
             players.forEach(p => {
-                const currentPoints = [p.homePlanet, ...p.units.scouts.map(s => ({ x: s.x, y: s.y }))];
+                const currentPoints = [p.homePlanet, ...p.units.stations.map(s => ({ x: s.x, y: s.y }))];
                 const currentHull = getConvexHull(currentPoints);
 
                 // Projected
-                let isProjecting = p.units.scouts.some(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5);
+                let isProjecting = p.units.stations.some(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5);
                 if (isProjecting) {
-                    const targetPoints = [p.homePlanet, ...p.units.scouts.map(s => ({ x: s.targetX, y: s.targetY }))];
+                    const targetPoints = [p.homePlanet, ...p.units.stations.map(s => ({ x: s.targetX, y: s.targetY }))];
                     const targetHull = getConvexHull(targetPoints);
                     ctx.beginPath();
                     targetHull.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
@@ -526,8 +526,8 @@
                 ctx.fill();
                 drawHealthBar(p.homePlanet.x, p.homePlanet.y + 40, p.homePlanet.health, p.homePlanet.maxHealth, 40);
 
-                // Scouts
-                p.units.scouts.forEach(s => {
+                // Stations
+                p.units.stations.forEach(s => {
                     if (Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5) {
                         drawCircle(s.targetX, s.targetY, p.id === 0 ? 'rgba(46, 160, 67, 0.4)' : 'rgba(218, 54, 51, 0.4)', 10);
                     }
@@ -599,10 +599,10 @@
                 players[0].units.miners.push({ x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20 });
             }
         });
-        document.getElementById('btn-scout').addEventListener('click', () => {
+        document.getElementById('btn-station').addEventListener('click', () => {
             if (players[0].energy >= 50) {
                 players[0].energy -= 50;
-                players[0].units.scouts.push({ x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetX: players[0].homePlanet.x + 50, targetY: players[0].homePlanet.y + 50, health: 50, maxHealth: 50, cooldown: 0 });
+                players[0].units.stations.push({ x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetX: players[0].homePlanet.x + 50, targetY: players[0].homePlanet.y + 50, health: 50, maxHealth: 50, cooldown: 0 });
             }
         });
         document.getElementById('btn-fighter').addEventListener('click', () => {

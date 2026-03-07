@@ -1,6 +1,6 @@
 console.log('main.js loaded');
 import { players, state, initGameState } from './state.js';
-import { getConvexHull } from './utils.js';
+import { getStationGraph, getPlayerTerritoryHulls } from './utils.js';
 import { initInput } from './input.js';
 import { updateAI } from './ai.js';
 import { updateUnits, updateProjectiles } from './units.js';
@@ -21,13 +21,19 @@ initInput(canvas);
 setupUIBindings();
 
 // Inject dynamic SVGs into UI Elements
-document.querySelector('#p1-btn-miner svg').outerHTML = rawGraphics.miner('#1f6feb', false);
-document.querySelector('#p1-btn-scout svg').outerHTML = rawGraphics.scout('#1f6feb');
-document.querySelector('#p1-btn-fighter svg').outerHTML = rawGraphics.fighter('#1f6feb');
+const injectIcon = (selector, html) => {
+    const el = document.querySelector(selector);
+    if (el) el.outerHTML = html;
+};
 
-document.querySelector('#p2-btn-miner svg').outerHTML = rawGraphics.miner('#f85149', false);
-document.querySelector('#p2-btn-scout svg').outerHTML = rawGraphics.scout('#f85149');
-document.querySelector('#p2-btn-fighter svg').outerHTML = rawGraphics.fighter('#f85149');
+// Inject dynamic SVGs into UI Elements
+injectIcon('#p1-btn-miner svg', rawGraphics.miner('#1f6feb', false));
+injectIcon('#p1-btn-station svg', rawGraphics.station('#1f6feb'));
+injectIcon('#p1-btn-fighter svg', rawGraphics.fighter('#1f6feb'));
+
+injectIcon('#p2-btn-miner svg', rawGraphics.miner('#f85149', false));
+injectIcon('#p2-btn-station svg', rawGraphics.station('#f85149'));
+injectIcon('#p2-btn-fighter svg', rawGraphics.fighter('#f85149'));
 
 let graphicsLoaded = false;
 pregenerateGraphics().then(() => {
@@ -56,7 +62,7 @@ function update(time) {
         // Handle Build Queue and Cooldowns
         const buildTypes = [
             { key: 'miner', type: 'miners', time: 5 },
-            { key: 'scout', type: 'scouts', time: 10 },
+            { key: 'station', type: 'stations', time: 10 },
             { key: 'fighter', type: 'fighters', time: 15 }
         ];
 
@@ -86,18 +92,20 @@ function update(time) {
 
         if (p.isCPU) updateAI(p, dt, canvas.width, canvas.height);
 
-        const currentPoints = [p.homePlanet, ...p.units.scouts.map(s => ({ x: s.x, y: s.y }))];
-        const currentHull = getConvexHull(currentPoints);
-        currentHulls.push(currentHull);
+        const hulls = getPlayerTerritoryHulls(p, players, false);
 
         // Control Area Calculation
         let area = 0;
-        for (let i = 0; i < currentHull.length; i++) {
-            let j = (i + 1) % currentHull.length;
-            area += currentHull[i].x * currentHull[j].y;
-            area -= currentHull[j].x * currentHull[i].y;
+        for (let hull of hulls) {
+            let subArea = 0;
+            for (let i = 0; i < hull.length; i++) {
+                let j = (i + 1) % hull.length;
+                subArea += hull[i].x * hull[j].y;
+                subArea -= hull[j].x * hull[i].y;
+            }
+            area += Math.abs(subArea / 2);
         }
-        area = Math.abs(area / 2);
+
         const totalArea = canvas.width * canvas.height;
         const pct = (area / totalArea) * 100;
 
@@ -111,11 +119,11 @@ function update(time) {
             updateControlText(parseFloat(document.getElementById('p1-control').innerText || 0), pct);
         }
 
-        updateUnits(p, dt, currentHull, state.selectedFighters, state.drawingPath);
+        updateUnits(p, dt, null, state.selectedFighters, state.drawingPath);
 
         // Update Damage Timers for all units/planets
         p.homePlanet.damageTime = Math.max(0, (p.homePlanet.damageTime || 0) - dt);
-        ['scouts', 'fighters', 'miners'].forEach(type => {
+        ['stations', 'fighters', 'miners'].forEach(type => {
             p.units[type].forEach(u => {
                 u.damageTime = Math.max(0, (u.damageTime || 0) - dt);
             });
@@ -126,7 +134,7 @@ function update(time) {
 
     // Cleanup Dead Entities
     players.forEach(p => {
-        p.units.scouts = p.units.scouts.filter(u => u.health > 0);
+        p.units.stations = p.units.stations.filter(u => u.health > 0);
         p.units.fighters = p.units.fighters.filter(u => u.health > 0);
         p.units.miners = p.units.miners.filter(u => {
             if (u.health <= 0 && u.targetAsteroid) {
@@ -146,7 +154,7 @@ function update(time) {
             endGame(players.find(ep => ep.id !== p.id).id, 'Destruction');
         }
         // Bankruptcy Loss
-        let totalUnits = p.units.scouts.length + p.units.fighters.length + p.units.miners.length;
+        let totalUnits = p.units.stations.length + p.units.fighters.length + p.units.miners.length;
         if (totalUnits === 0 && p.energy < 25) {
             endGame(players.find(ep => ep.id !== p.id).id, 'Bankruptcy');
         }

@@ -1,10 +1,10 @@
 import { players, asteroids } from './state.js';
-import { getPlayerTerritoryHull, isValidScoutPlacement, pointInPolygon, isAsteroidInPolygon } from './utils.js';
+import { isValidStationPlacement, isAsteroidInPolygon } from './utils.js';
 console.log('ai.js loaded');
 
 export function updateAI(p, dt, mapWidth, mapHeight) {
-    // Process "dragging" of scout targets to simulate human players and intersect borders precisely
-    p.units.scouts.forEach(s => {
+    // Process "dragging" of station targets to simulate human players and intersect borders precisely
+    p.units.stations.forEach(s => {
         if (s.desiredTargetX !== undefined && s.desiredTargetY !== undefined) {
             let dx = s.desiredTargetX - s.targetX;
             let dy = s.desiredTargetY - s.targetY;
@@ -15,7 +15,7 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
                 let proposedX = s.targetX + (dx / dist) * moveDist;
                 let proposedY = s.targetY + (dy / dist) * moveDist;
 
-                if (isValidScoutPlacement(proposedX, proposedY, s, p, players, mapWidth, mapHeight)) {
+                if (isValidStationPlacement(proposedX, proposedY, s, p, players, mapWidth, mapHeight)) {
                     s.targetX = proposedX;
                     s.targetY = proposedY;
                 } else {
@@ -35,18 +35,13 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
     // We use a flag to track if we spent energy this frame. We can only queue one build per frame.
     let buildActionTaken = false;
 
-    // AI Priority 1: EXPANSION (Scouts & Territory)
-    const currentHull = getPlayerTerritoryHull(p, players, true);
-    const enemyHull = getPlayerTerritoryHull(enemy, players, false);
-
+    // AI Priority 1: EXPANSION (Stations & Territory)
     function isAstCaptured(a) {
-        if (currentHull.length < 3) return false;
-        return isAsteroidInPolygon(a, currentHull);
+        return isAsteroidInPolygon(a, p);
     }
 
     function isAstEnemyControlled(a) {
-        if (enemyHull.length < 3) return false;
-        return isAsteroidInPolygon(a, enemyHull);
+        return isAsteroidInPolygon(a, enemy);
     }
 
     // 1. We want to capture asteroids. Let's find ALL uncaptured asteroids with resources.
@@ -56,18 +51,18 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
     // Sort them by distance to home planet
     uncaptured.sort((a, b) => Math.hypot(p.homePlanet.x - a.x, p.homePlanet.y - a.y) - Math.hypot(p.homePlanet.x - b.x, p.homePlanet.y - b.y));
 
-    let assignedScouts = [];
+    let assignedStations = [];
 
     for (let ast of uncaptured) {
-        // Find idle scouts to assign (up to 2 per asteroid for a pincer envelopment)
-        let availableScouts = p.units.scouts.filter(s => !assignedScouts.includes(s));
-        let idleScoutsForAst = availableScouts.filter(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) < 5);
+        // Find idle stations to assign (up to 2 per asteroid for a pincer envelopment)
+        let availableStations = p.units.stations.filter(s => !assignedStations.includes(s));
+        let idleStationsForAst = availableStations.filter(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) < 5);
 
-        if (idleScoutsForAst.length > 0) {
+        if (idleStationsForAst.length > 0) {
             let offsetSign = 1;
-            for (let i = 0; i < Math.min(2, idleScoutsForAst.length); i++) {
-                let scout = idleScoutsForAst[i];
-                let offsetSign = p.units.scouts.indexOf(scout) % 2 === 0 ? 1 : -1;
+            for (let i = 0; i < Math.min(2, idleStationsForAst.length); i++) {
+                let station = idleStationsForAst[i];
+                let offsetSign = p.units.stations.indexOf(station) % 2 === 0 ? 1 : -1;
 
                 let dirX = ast.x - p.homePlanet.x;
                 let dirY = ast.y - p.homePlanet.y;
@@ -79,31 +74,31 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
                 let targetX = ast.x + (dirX / len) * (ast.radius + 30) + (perpX * offsetSign);
                 let targetY = ast.y + (dirY / len) * (ast.radius + 30) + (perpY * offsetSign);
 
-                assignedScouts.push(scout);
+                assignedStations.push(station);
 
-                if (Math.hypot((scout.desiredTargetX || scout.targetX) - targetX, (scout.desiredTargetY || scout.targetY) - targetY) > 5) {
-                    scout.desiredTargetX = targetX;
-                    scout.desiredTargetY = targetY;
+                if (Math.hypot((station.desiredTargetX || station.targetX) - targetX, (station.desiredTargetY || station.targetY) - targetY) > 5) {
+                    station.desiredTargetX = targetX;
+                    station.desiredTargetY = targetY;
                 }
             }
         }
     }
 
-    // Try to build scouts if we have uncaptured asteroids but no scouts available
-    if (!buildActionTaken && p.energy >= 50 && p.buildCooldowns.scout <= 0 && (p.energy > 100 || p.units.scouts.length < 2 || p.units.scouts.length < uncaptured.length)) {
+    // Try to build stations if we have uncaptured asteroids but no stations available
+    if (!buildActionTaken && p.energy >= 50 && p.buildCooldowns.station <= 0 && (p.energy > 100 || p.units.stations.length < 2 || p.units.stations.length < uncaptured.length)) {
         p.energy -= 50;
-        p.buildCooldowns.scout = 10;
+        p.buildCooldowns.station = 10;
         let tx = p.homePlanet.x;
         let ty = p.homePlanet.y - 100;
-        p.buildQueue.push({ type: 'scouts', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, targetX: p.homePlanet.x, targetY: p.homePlanet.y, desiredTargetX: tx, desiredTargetY: ty, health: 100, maxHealth: 100, cooldown: 0 } });
+        p.buildQueue.push({ type: 'stations', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, targetX: p.homePlanet.x, targetY: p.homePlanet.y, desiredTargetX: tx, desiredTargetY: ty, health: 100, maxHealth: 100, cooldown: 0 } });
         buildActionTaken = true;
     }
 
     // Assign holding positions for captured asteroids
     let activeCaptured = asteroids.filter(a => a.resources > 0 && isAstCaptured(a));
-    let holdingScouts = [];
+    let holdingStations = [];
     for (let a of activeCaptured) {
-        let available = p.units.scouts.filter(s => !assignedScouts.includes(s) && !holdingScouts.includes(s));
+        let available = p.units.stations.filter(s => !assignedStations.includes(s) && !holdingStations.includes(s));
         if (available.length > 0) {
             let holder = available.sort((s1, s2) => Math.hypot(s1.x - a.x, s1.y - a.y) - Math.hypot(s2.x - a.x, s2.y - a.y))[0];
             let dirX = a.x - p.homePlanet.x;
@@ -111,7 +106,7 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
             let len = Math.hypot(dirX, dirY) || 1;
             let targetX = a.x + (dirX / len) * (a.radius + 30);
             let targetY = a.y + (dirY / len) * (a.radius + 30);
-            holdingScouts.push(holder);
+            holdingStations.push(holder);
 
             if (Math.hypot((holder.desiredTargetX || holder.targetX) - targetX, (holder.desiredTargetY || holder.targetY) - targetY) > 5) {
                 holder.desiredTargetX = targetX;
@@ -120,9 +115,9 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
         }
     }
 
-    // Pushing idle scouts to the corners for map domination %
-    const idleScouts = p.units.scouts.filter(s => !assignedScouts.includes(s) && !holdingScouts.includes(s) && Math.hypot(s.targetX - s.x, s.targetY - s.y) < 5);
-    if (idleScouts.length > 0) {
+    // Pushing idle stations to the corners for map domination %
+    const idleStations = p.units.stations.filter(s => !assignedStations.includes(s) && !holdingStations.includes(s) && Math.hypot(s.targetX - s.x, s.targetY - s.y) < 5);
+    if (idleStations.length > 0) {
         const corners = [
             { x: p.id === 0 ? mapWidth : 0, y: 0 },
             { x: p.id === 0 ? mapWidth : 0, y: mapHeight },
@@ -130,15 +125,15 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
             { x: mapWidth / 2, y: mapHeight / 2 } // push towards actual center first
         ];
 
-        for (let i = 0; i < idleScouts.length; i++) {
-            let s = idleScouts[i];
+        for (let i = 0; i < idleStations.length; i++) {
+            let s = idleStations[i];
             let targetCorner = corners[i % corners.length];
             let dirX = targetCorner.x - p.homePlanet.x;
             let dirY = targetCorner.y - p.homePlanet.y;
             let len = Math.hypot(dirX, dirY) || 1;
 
-            // Push out progressively further based on total scouts to mimic perimeter expansion
-            let pushDist = 200 + (idleScouts.length * 50);
+            // Push out progressively further based on total stations to mimic perimeter expansion
+            let pushDist = 200 + (idleStations.length * 50);
             let targetX = p.homePlanet.x + (dirX / len) * pushDist;
             let targetY = p.homePlanet.y + (dirY / len) * pushDist;
 

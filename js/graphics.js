@@ -55,7 +55,7 @@ export const rawGraphics = {
         </svg>`,
 
     // 24x24 Round satellite
-    scout: (color) => `
+    station: (color) => `
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
             <!-- Solar Panels -->
             <rect x="1" y="10" width="8" height="4" fill="#21262d" stroke="${color}" stroke-width="1" />
@@ -127,7 +127,7 @@ export async function pregenerateGraphics() {
     graphicsCache.p1.fighter = await svgToImage(rawGraphics.fighter(p1Color));
     graphicsCache.p1.miner = await svgToImage(rawGraphics.miner(p1Color, false));
     graphicsCache.p1.minerActive = await svgToImage(rawGraphics.miner(p1Color, true));
-    graphicsCache.p1.scout = await svgToImage(rawGraphics.scout(p1Color));
+    graphicsCache.p1.station = await svgToImage(rawGraphics.station(p1Color));
     graphicsCache.planet1 = await svgToImage(rawGraphics.planet(p1Color));
 
     // Player 2 (Reddish #f85149 or custom defined)
@@ -135,7 +135,7 @@ export async function pregenerateGraphics() {
     graphicsCache.p2.fighter = await svgToImage(rawGraphics.fighter(p2Color));
     graphicsCache.p2.miner = await svgToImage(rawGraphics.miner(p2Color, false));
     graphicsCache.p2.minerActive = await svgToImage(rawGraphics.miner(p2Color, true));
-    graphicsCache.p2.scout = await svgToImage(rawGraphics.scout(p2Color));
+    graphicsCache.p2.station = await svgToImage(rawGraphics.station(p2Color));
     graphicsCache.planet2 = await svgToImage(rawGraphics.planet(p2Color));
 
     // Asteroids

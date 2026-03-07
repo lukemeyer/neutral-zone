@@ -57,8 +57,8 @@ for (const [testName, runs] of Object.entries(testHistory)) {
             const p1Trend = lastP1Hp === firstP1Hp ? "No change" : (lastP1Hp > firstP1Hp ? `+${lastP1Hp - firstP1Hp} (Stronger)` : `${lastP1Hp - firstP1Hp} (Weaker)`);
             console.log(`  P1 Remaining HP: ${lastP1Hp} (Trend: ${p1Trend})`);
 
-            const firstP2Hp = first.p2ScoutsHP || 0;
-            const lastP2Hp = last.p2ScoutsHP || 0;
+            const firstP2Hp = first.p2StationsHP || 0;
+            const lastP2Hp = last.p2StationsHP || 0;
             const p2Trend = lastP2Hp === firstP2Hp ? "No change" : (lastP2Hp > firstP2Hp ? `+${lastP2Hp - firstP2Hp} (Stronger)` : `${lastP2Hp - firstP2Hp} (Weaker)`);
             console.log(`  P2 Remaining HP: ${lastP2Hp} (Trend: ${p2Trend})`);
         } else if (last.category === 'Economy') {

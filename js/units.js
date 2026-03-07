@@ -1,5 +1,5 @@
 import { players, asteroids, projectiles } from './state.js';
-import { pointInPolygon, getPlayerTerritoryHull, doPolygonsIntersect, isAsteroidInPolygon } from './utils.js';
+import { doTerritoriesIntersect, isAsteroidInPolygon, isPointInTerritory } from './utils.js';
 console.log('units.js loaded');
 
 export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
@@ -57,41 +57,32 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
         u.x += Math.cos(desiredHeading) * moveDist;
         u.y += Math.sin(desiredHeading) * moveDist;
 
-        // Prevent Scout from pushing territory into enemy territory
+        // Prevent Station from pushing territory into enemy territory
         if (p) {
             const enemyP = players.find(ep => ep.id !== p.id);
-            const enemyHull = getPlayerTerritoryHull(enemyP, players, false);
-            if (enemyHull.length > 2) {
-                const proposedHull = getPlayerTerritoryHull(p, players, false);
-                if (doPolygonsIntersect(proposedHull, enemyHull)) {
-                    // Check if they were already intersecting before this movement
-                    const tempX = u.x;
-                    const tempY = u.y;
+            if (doTerritoriesIntersect(enemyP, p, false, false)) {
+                const tempX = u.x;
+                const tempY = u.y;
+                u.x = oldX;
+                u.y = oldY;
+
+                if (!doTerritoriesIntersect(enemyP, p, false, false)) {
+                    // The movement CAUSED the intersection. Block it but DO NOT clear the target coordinates.
                     u.x = oldX;
                     u.y = oldY;
-                    const oldHull = getPlayerTerritoryHull(p, players, false);
-
-                    if (!doPolygonsIntersect(oldHull, enemyHull)) {
-                        // The movement CAUSED the intersection. Block it but DO NOT clear the target coordinates.
-                        // By leaving u.targetX untouched, the scout will keep marching "against" the wall until:
-                        // 1. The wall moves naturally, opening a path.
-                        // 2. The AI's actuallyMoving watcher realizes the scout hasn't progressed in 1 second and re-assigns it.
-                        u.x = oldX;
-                        u.y = oldY;
-                        return true;
-                    }
-
-                    // Otherwise it was already intersecting, allow it. Bouncing will push it back cleaner globally.
-                    u.x = tempX;
-                    u.y = tempY;
+                    return true;
                 }
+
+                // Otherwise it was already intersecting, allow it. Bouncing will push it back cleaner globally.
+                u.x = tempX;
+                u.y = tempY;
             }
         }
 
         return false;
     }
 
-    p.units.scouts.forEach(s => {
+    p.units.stations.forEach(s => {
         applySteering(s, s.targetX, s.targetY, 40, p);
     });
 
@@ -159,7 +150,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
                 }
             } else {
                 let currentSpeed = 80;
-                if (!pointInPolygon({ x: f.x, y: f.y }, currentHull)) {
+                if (!isPointInTerritory({ x: f.x, y: f.y }, p)) {
                     currentSpeed = 40; // 50% slower outside territory
                 }
                 applySteering(f, targetPoint.x, targetPoint.y, currentSpeed);
@@ -167,15 +158,19 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
         }
     });
 
-    // Determine Current Territory Polygon for this player
-    currentHull = getPlayerTerritoryHull(p, players, false);
+    // currentHull is removed; we query distance directly.
 
     p.units.miners.forEach(m => {
         if (m.payload === undefined) m.payload = 0;
         if (m.returning === undefined) m.returning = false;
 
+        let currentMinerSpeed = 50;
+        if (!isPointInTerritory({ x: m.x, y: m.y }, p)) {
+            currentMinerSpeed = 25; // Miners are 50% slower outside territory
+        }
+
         if (m.returning) {
-            applySteering(m, p.homePlanet.x, p.homePlanet.y, 50);
+            applySteering(m, p.homePlanet.x, p.homePlanet.y, currentMinerSpeed);
             if (Math.hypot(p.homePlanet.x - m.x, p.homePlanet.y - m.y) <= p.homePlanet.radius + 5) {
                 p.energy += m.payload;
                 m.payload = 0;
@@ -186,7 +181,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             let minDist = Infinity;
 
             asteroids.forEach(a => {
-                if (a.resources > 0 && a.miners < 4 && isAsteroidInPolygon(a, currentHull)) {
+                if (a.resources > 0 && a.miners < 4 && isAsteroidInPolygon(a, p)) {
                     let dx = m.x - a.x;
                     let dy = m.y - a.y;
                     let d = Math.hypot(dx, dy);
@@ -206,7 +201,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             }
         } else {
             // Strictly enforce territory checking: if the asteroid is no longer captured OR depleted
-            if (!isAsteroidInPolygon(m.targetAsteroid, currentHull) || m.targetAsteroid.resources <= 0) {
+            if (!isAsteroidInPolygon(m.targetAsteroid, p) || m.targetAsteroid.resources <= 0) {
                 // Drop the asteroid lock and recall home immediately
                 m.targetAsteroid.miners = Math.max(0, m.targetAsteroid.miners - 1);
                 m.targetAsteroid = null;
@@ -215,7 +210,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             }
             let dist = Math.hypot(m.targetAsteroid.x - m.x, m.targetAsteroid.y - m.y);
             if (dist > 20) {
-                applySteering(m, m.targetAsteroid.x, m.targetAsteroid.y, 50);
+                applySteering(m, m.targetAsteroid.x, m.targetAsteroid.y, currentMinerSpeed);
             } else {
                 // Mining
                 let amount = Math.min(m.targetAsteroid.resources, 10 * dt);
@@ -233,8 +228,8 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
 
     // Global Physics & Collisions
     const enemyP = players.find(ep => ep.id !== p.id);
-    const allUnits = [...p.units.scouts, ...p.units.fighters, ...p.units.miners];
-    const allEnemyUnits = [...enemyP.units.scouts, ...enemyP.units.fighters, ...enemyP.units.miners];
+    const allUnits = [...p.units.stations, ...p.units.fighters, ...p.units.miners];
+    const allEnemyUnits = [...enemyP.units.stations, ...enemyP.units.fighters, ...enemyP.units.miners];
     const globalUnits = [...allUnits, ...allEnemyUnits];
 
     // Pre-calculate movement status for parking push logic
@@ -247,7 +242,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             let stopDist = 10;
             if (isFinal && Math.hypot(enemyP.homePlanet.x - targetPoint.x, enemyP.homePlanet.y - targetPoint.y) < enemyP.homePlanet.radius + 10) stopDist = 45;
             return Math.hypot(targetPoint.x - u.x, targetPoint.y - u.y) > stopDist;
-        } else if (u.maxHealth === 200) { // Scout
+        } else if (u.maxHealth === 200) { // Station
             return Math.hypot(u.targetX - u.x, u.targetY - u.y) > 5;
         } else if (u.maxHealth === 60) { // Miner
             if (u.returning) return Math.hypot(ownerPlayer.homePlanet.x - u.x, ownerPlayer.homePlanet.y - u.y) > ownerPlayer.homePlanet.radius + 5;
@@ -260,9 +255,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
     allUnits.forEach(u => { u._moving = calcMoving(u, p); u._team = p.id; });
     allEnemyUnits.forEach(u => { u._moving = calcMoving(u, enemyP); u._team = enemyP.id; });
 
-    // Territory definition for bouncing
-    const enemyHull = getPlayerTerritoryHull(enemyP, players, false);
-
+    // enemyHull check removed, do it inline
     allUnits.forEach(u => {
         // 1. Unit vs Unit Repulsion (Radius 12px)
         globalUnits.forEach(other => {
@@ -296,15 +289,15 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
         });
     });
 
-    // 4. Scout Territory Bounce
-    p.units.scouts.forEach(s => {
-        // Only violently bounce if this scout is ACTIVELY moving and has successfully expanded 
-        // Only violently bounce if this scout is ACTIVELY moving.
+    // 4. Station Territory Bounce
+    p.units.stations.forEach(s => {
+        // Only violently bounce if this station is ACTIVELY moving and has successfully expanded 
+        // Only violently bounce if this station is ACTIVELY moving.
         // If it is stationary it should just hold its ground (forming a convex dent over time as the borders wrap it).
         const isMoving = Math.hypot(s.targetX - s.x, s.targetY - s.y) > 2;
 
-        if (isMoving && enemyHull.length > 2 && pointInPolygon(s, enemyHull)) {
-            // Push scout forcefully towards own home planet to escape
+        if (isMoving && isPointInTerritory(s, enemyP)) {
+            // Push station forcefully towards own home planet to escape
             let dx = p.homePlanet.x - s.x;
             let dy = p.homePlanet.y - s.y;
             let dist = Math.hypot(dx, dy) || 1;
@@ -323,14 +316,14 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
         if (f.cooldown > 0) f.cooldown -= dt;
         if (f.cooldown <= 0) {
             let target = null;
-            let minDist = 50; // Fighter Range (matched to 50% of old scout range)
+            let minDist = 50; // Fighter Range (matched to 50% of old station range)
 
             // Check Enemy Planet
             let dPlanet = Math.hypot(enemyP.homePlanet.x - f.x, enemyP.homePlanet.y - f.y);
             if (dPlanet < minDist) { minDist = dPlanet; target = { type: 'planet', ref: enemyP.homePlanet }; }
 
             // Check Enemy Units
-            ['fighters', 'scouts', 'miners'].forEach(type => {
+            ['fighters', 'stations', 'miners'].forEach(type => {
                 enemyP.units[type].forEach(u => {
                     let d = Math.hypot(u.x - f.x, u.y - f.y);
                     if (d < minDist) { minDist = d; target = { type: 'unit', ref: u }; }
@@ -354,16 +347,16 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
         }
     });
 
-    // Scouts attack only fighters
-    p.units.scouts.forEach(s => {
-        // Stationary Check: Scouts cannot fire while their movement vector implies they are traveling.
+    // Stations attack only fighters
+    p.units.stations.forEach(s => {
+        // Stationary Check: Stations cannot fire while their movement vector implies they are traveling.
         const dTarget = Math.hypot(s.targetX - s.x, s.targetY - s.y);
         if (dTarget >= 2) return; // Currently moving, skip firing phase
 
         if (s.cooldown > 0) s.cooldown -= dt;
         if (s.cooldown <= 0) {
             let target = null;
-            let minDist = 50; // Decreased Scout defensive firing range (now 50% of original 100)
+            let minDist = 50; // Decreased Station defensive firing range (now 50% of original 100)
 
             enemyP.units.fighters.forEach(f => {
                 let d = Math.hypot(f.x - s.x, f.y - s.y);
@@ -371,7 +364,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             });
 
             if (target) {
-                // Scout deals less damage than Fighter (Fighter is 10, so Scout is 5)
+                // Station deals less damage than Fighter (Fighter is 10, so Station is 5)
                 projectiles.push({ x: s.x, y: s.y, target: target, damage: 5, speed: 400, ownerId: p.id, color: p.territoryColor });
                 s.cooldown = 0.3; // Firerate
             }

@@ -1,13 +1,17 @@
 import { players, asteroids, projectiles, state, stars } from './state.js';
-import { getPlayerTerritoryHull } from './utils.js';
+import { getStationGraph, TERRITORY_RADIUS, getPlayerTerritoryHulls } from './utils.js';
 console.log('renderer.js loaded');
 
 let canvas;
 let ctx;
 
+const terrLayer = document.createElement('canvas');
+let tCtx;
+
 export function initRenderer(gameCanvas) {
     canvas = gameCanvas;
     ctx = canvas.getContext('2d');
+    tCtx = terrLayer.getContext('2d');
 }
 
 import { graphicsCache } from './graphics.js';
@@ -44,34 +48,86 @@ export function draw() {
     ctx.globalAlpha = 1.0;
 
     // Draw Territories
+    // Draw Territories
     players.forEach(p => {
-        const currentHull = getPlayerTerritoryHull(p, players, false);
+        let isProjecting = p.units.stations.some(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5);
 
-        // Projected
-        let isProjecting = p.units.scouts.some(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5);
+        const drawTerritoryArea = (g, alpha, isProj, hull) => {
+            if (terrLayer.width !== canvas.width || terrLayer.height !== canvas.height) {
+                terrLayer.width = canvas.width;
+                terrLayer.height = canvas.height;
+            }
+            tCtx.clearRect(0, 0, terrLayer.width, terrLayer.height);
+            const fillStyle = p.id === 0 ? 'rgba(46, 160, 67, 1)' : 'rgba(218, 54, 51, 1)';
+            tCtx.fillStyle = fillStyle;
+            tCtx.strokeStyle = fillStyle;
+            tCtx.lineCap = 'round';
+            tCtx.lineJoin = 'round';
+
+            if (hull.length > 2) {
+                tCtx.beginPath();
+                tCtx.moveTo(hull[0].x, hull[0].y);
+                for (let i = 1; i < hull.length; i++) tCtx.lineTo(hull[i].x, hull[i].y);
+                tCtx.closePath();
+                tCtx.fill();
+            }
+
+            if (hull.length > 1) {
+                tCtx.lineWidth = 2; // Thin explicit sharp boundary lines
+                tCtx.beginPath();
+                tCtx.moveTo(hull[0].x, hull[0].y);
+                for (let i = 1; i < hull.length; i++) tCtx.lineTo(hull[i].x, hull[i].y);
+                tCtx.closePath();
+                tCtx.stroke();
+            }
+
+            ctx.globalAlpha = alpha;
+            ctx.drawImage(terrLayer, 0, 0);
+            ctx.globalAlpha = 1.0;
+        };
+
+        const drawGraphLines = (g, isProj) => {
+            const colorValid = p.id === 0 ? 'rgba(46, 160, 67, 0.8)' : 'rgba(218, 54, 51, 0.8)';
+            const colorBroken = 'rgba(139, 148, 158, 0.4)';
+
+            g.brokenEdges.forEach(e => {
+                ctx.beginPath();
+                ctx.moveTo(e.posA.x, e.posA.y);
+                ctx.lineTo(e.posB.x, e.posB.y);
+                ctx.strokeStyle = colorBroken;
+                if (isProj) ctx.setLineDash([5, 5]);
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.setLineDash([]);
+            });
+
+            g.validEdges.forEach(e => {
+                ctx.beginPath();
+                ctx.moveTo(e.posA.x, e.posA.y);
+                ctx.lineTo(e.posB.x, e.posB.y);
+                ctx.strokeStyle = colorValid;
+                if (isProj) ctx.setLineDash([5, 5]);
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.setLineDash([]);
+            });
+        };
+
         if (isProjecting) {
-            const targetHull = getPlayerTerritoryHull(p, players, true);
-            ctx.beginPath();
-            targetHull.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
-            ctx.closePath();
-            ctx.fillStyle = p.id === 0 ? 'rgba(46, 160, 67, 0.1)' : 'rgba(218, 54, 51, 0.1)';
-            ctx.fill();
-            ctx.setLineDash([10, 10]);
-            ctx.strokeStyle = p.id === 0 ? 'rgba(46, 160, 67, 0.5)' : 'rgba(218, 54, 51, 0.5)';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            ctx.setLineDash([]);
+            const projectedGraph = getStationGraph(p, true);
+            const hulls = getPlayerTerritoryHulls(p, players, true);
+            for (let hull of hulls) {
+                drawTerritoryArea(projectedGraph, 0.1, true, hull);
+            }
+            drawGraphLines(projectedGraph, true);
         }
 
-        // Current
-        ctx.beginPath();
-        currentHull.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
-        ctx.closePath();
-        ctx.fillStyle = p.id === 0 ? 'rgba(46, 160, 67, 0.25)' : 'rgba(218, 54, 51, 0.25)';
-        ctx.fill();
-        ctx.strokeStyle = p.territoryColor;
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        const graph = getStationGraph(p, false);
+        const hulls = getPlayerTerritoryHulls(p, players, false);
+        for (let hull of hulls) {
+            drawTerritoryArea(graph, 0.25, false, hull);
+        }
+        drawGraphLines(graph, false);
 
         // Fighter Paths
         p.units.fighters.forEach(f => {
@@ -156,8 +212,8 @@ export function draw() {
         }
         drawHealthBar(p.homePlanet.x, p.homePlanet.y + p.homePlanet.radius + 10, p.homePlanet.health, p.homePlanet.maxHealth, 40);
 
-        // Scouts
-        p.units.scouts.forEach(s => {
+        // Stations
+        p.units.stations.forEach(s => {
             const isMoving = Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5;
             if (isMoving) {
                 ctx.beginPath();
@@ -183,7 +239,7 @@ export function draw() {
                 ctx.fill();
             }
 
-            drawRotatedImage(cache.scout, s.x, s.y, 26, angle);
+            drawRotatedImage(cache.station, s.x, s.y, 26, angle);
             drawHealthBar(s.x, s.y - 20, s.health, s.maxHealth);
         });
 

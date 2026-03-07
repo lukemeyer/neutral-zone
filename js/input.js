@@ -1,5 +1,5 @@
 import { players, state } from './state.js';
-import { getConvexHull, getPlayerTerritoryHull, pointInPolygon, doPolygonsIntersect, isValidScoutPlacement } from './utils.js';
+import { isValidStationPlacement, getStationGraph, MAX_CONNECTION_LENGTH } from './utils.js';
 console.log('input.js loaded');
 
 let canvas;
@@ -16,14 +16,14 @@ export function initInput(gameCanvas) {
         const mouseX = pos.x;
         const mouseY = pos.y;
 
-        // Check Scouts first (for dragging target)
+        // Check Stations first (for dragging target)
         for (let p of players) {
             if (p.isCPU) continue;
-            for (let s of p.units.scouts) {
+            for (let s of p.units.stations) {
                 if (Math.hypot(s.x - mouseX, s.y - mouseY) < 40 || Math.hypot(s.targetX - mouseX, s.targetY - mouseY) < 40) {
-                    state.activeScout = s;
-                    state.activeScoutPlayer = p;
-                    return; // drag scout
+                    state.activeStation = s;
+                    state.activeStationPlayer = p;
+                    return; // drag station
                 }
             }
         }
@@ -78,41 +78,59 @@ export function initInput(gameCanvas) {
             state.selectionBox.endY = mouseY;
         }
 
-        if (state.activeScout && state.activeScoutPlayer) {
-            const originalX = state.activeScout.targetX;
-            const originalY = state.activeScout.targetY;
+        if (state.activeStation && state.activeStationPlayer) {
             const proposedX = mouseX;
             const proposedY = mouseY;
 
-            const checkHullValid = (x, y) => {
-                return isValidScoutPlacement(x, y, state.activeScout, state.activeScoutPlayer, players, canvas.width, canvas.height);
-            };
+            const initialGraph = getStationGraph(state.activeStationPlayer, true);
+            const edgesToEnforce = initialGraph.validEdges.filter(e =>
+                initialGraph.components.some(comp => comp.includes(e.nodeA))
+            );
 
-            if (checkHullValid(proposedX, proposedY)) {
-                state.activeScout.targetX = proposedX;
-                state.activeScout.targetY = proposedY;
-            } else {
-                if (checkHullValid(originalX, originalY)) {
-                    let low = 0;
-                    let high = 1;
-                    let bestT = 0;
-                    for (let step = 0; step < 10; step++) {
-                        let mid = (low + high) / 2;
-                        let testX = originalX + (proposedX - originalX) * mid;
-                        let testY = originalY + (proposedY - originalY) * mid;
-                        if (checkHullValid(testX, testY)) {
-                            bestT = mid;
-                            low = mid;
-                        } else {
-                            high = mid;
+            const backupTargets = state.activeStationPlayer.units.stations.map(s => ({ s, tx: s.targetX, ty: s.targetY }));
+            const origActX = backupTargets.find(b => b.s === state.activeStation).tx;
+            const origActY = backupTargets.find(b => b.s === state.activeStation).ty;
+
+            const applyIK = (propX, propY) => {
+                backupTargets.forEach(b => { b.s.targetX = b.tx; b.s.targetY = b.ty; });
+                state.activeStation.targetX = propX;
+                state.activeStation.targetY = propY;
+                for (let i = 0; i < 5; i++) {
+                    for (let edge of edgesToEnforce) {
+                        let A = edge.nodeA;
+                        let B = edge.nodeB;
+                        let dx = B.targetX - A.targetX;
+                        let dy = B.targetY - A.targetY;
+                        let dist = Math.hypot(dx, dy);
+                        if (dist > MAX_CONNECTION_LENGTH) {
+                            let diff = dist - MAX_CONNECTION_LENGTH;
+                            let nx = dx / dist;
+                            let ny = dy / dist;
+                            let movA = (A === state.activeStation || A === state.activeStationPlayer.homePlanet) ? 0 : 1;
+                            let movB = (B === state.activeStation || B === state.activeStationPlayer.homePlanet) ? 0 : 1;
+                            if (movA + movB > 0) {
+                                let totalW = movA + movB;
+                                if (movA > 0) { A.targetX += nx * (diff * (movA / totalW)); A.targetY += ny * (diff * (movA / totalW)); }
+                                if (movB > 0) { B.targetX -= nx * (diff * (movB / totalW)); B.targetY -= ny * (diff * (movB / totalW)); }
+                            }
                         }
                     }
-                    state.activeScout.targetX = originalX + (proposedX - originalX) * bestT;
-                    state.activeScout.targetY = originalY + (proposedY - originalY) * bestT;
-                } else {
-                    state.activeScout.targetX = originalX;
-                    state.activeScout.targetY = originalY;
                 }
+            };
+
+            const checkValid = () => isValidStationPlacement(state.activeStation.targetX, state.activeStation.targetY, state.activeStation, state.activeStationPlayer, players, canvas.width, canvas.height);
+
+            applyIK(proposedX, proposedY);
+
+            if (!checkValid()) {
+                let low = 0; let high = 1; let bestT = 0;
+                for (let step = 0; step < 10; step++) {
+                    let mid = (low + high) / 2;
+                    applyIK(origActX + (proposedX - origActX) * mid, origActY + (proposedY - origActY) * mid);
+                    if (checkValid()) { bestT = mid; low = mid; }
+                    else { high = mid; }
+                }
+                applyIK(origActX + (proposedX - origActX) * bestT, origActY + (proposedY - origActY) * bestT);
             }
         }
 
@@ -183,8 +201,8 @@ export function initInput(gameCanvas) {
             }
         }
 
-        state.activeScout = null;
-        state.activeScoutPlayer = null;
+        state.activeStation = null;
+        state.activeStationPlayer = null;
         state.drawingPath = false;
         state.currentPath = [];
     };
