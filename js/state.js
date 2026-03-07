@@ -5,7 +5,7 @@ export const players = [
         color: '#1f6feb', // Blue (Player 1)
         territoryColor: '#2ea043',
         energy: 100,
-        homePlanet: { x: 0, y: 0, radius: 30, health: 1000, maxHealth: 1000 },
+        homePlanet: { x: 0, y: 0, radius: 30, health: 1000, maxHealth: 1000, damageTime: 0 },
         units: { scouts: [], fighters: [], miners: [] },
         isCPU: false,
         aiTimer: 0,
@@ -18,7 +18,7 @@ export const players = [
         color: '#f85149', // Red (Player 2)
         territoryColor: '#da3633',
         energy: 100,
-        homePlanet: { x: 0, y: 0, radius: 30, health: 1000, maxHealth: 1000 },
+        homePlanet: { x: 0, y: 0, radius: 30, health: 1000, maxHealth: 1000, damageTime: 0 },
         units: { scouts: [], fighters: [], miners: [] },
         isCPU: false,
         aiTimer: 0,
@@ -109,16 +109,16 @@ export function initGameState(width, height) {
 
         let sx1 = p.homePlanet.x + (120 * dirX);
         let sy1 = p.homePlanet.y;
-        p.units.scouts.push({ x: sx1, y: sy1, targetX: sx1, targetY: sy1, health: 200, maxHealth: 200, cooldown: 0 });
+        p.units.scouts.push({ x: sx1, y: sy1, targetX: sx1, targetY: sy1, health: 200, maxHealth: 200, cooldown: 0, damageTime: 0 });
 
         let sx2 = p.homePlanet.x + (60 * dirX);
         let sy2 = Math.max(20, p.homePlanet.y - 100);
-        p.units.scouts.push({ x: sx2, y: sy2, targetX: sx2, targetY: sy2, health: 200, maxHealth: 200, cooldown: 0 });
+        p.units.scouts.push({ x: sx2, y: sy2, targetX: sx2, targetY: sy2, health: 200, maxHealth: 200, cooldown: 0, damageTime: 0 });
 
         let sx3 = p.homePlanet.x + (60 * dirX);
         let sy3 = Math.min(height - 20, p.homePlanet.y + 100);
-        p.units.scouts.push({ x: sx3, y: sy3, targetX: sx3, targetY: sy3, health: 200, maxHealth: 200, cooldown: 0 });
+        p.units.scouts.push({ x: sx3, y: sy3, targetX: sx3, targetY: sy3, health: 200, maxHealth: 200, cooldown: 0, damageTime: 0 });
 
-        p.units.miners.push({ x: p.homePlanet.x, y: p.homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20 });
+        p.units.miners.push({ x: p.homePlanet.x, y: p.homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20, damageTime: 0 });
     });
 }

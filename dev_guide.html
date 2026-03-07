@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neutral Zone - Developer Guide</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --text-color: #c9d1d9;
+            --accent-purple: #8957e5;
+            --accent-teal: #2b7489;
+            --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --font-code: 'Courier New', Courier, monospace;
+            --surface: #161b22;
+            --border: #30363d;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-main);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            animation: fadeIn 1s ease-in-out;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 3rem;
+            background: -webkit-linear-gradient(45deg, var(--accent-purple), var(--accent-teal));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            color: #ffffff;
+            margin-top: 40px;
+            border-left: 4px solid var(--accent-purple);
+            padding-left: 10px;
+        }
+
+        h3 {
+            color: #a5d6ff;
+            margin-top: 30px;
+        }
+
+        p {
+            font-size: 1.1rem;
+            color: #8b949e;
+        }
+
+        .code-block {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 15px;
+            font-family: var(--font-code);
+            overflow-x: auto;
+            color: #e6edf3;
+            margin: 20px 0;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .architect-diagram {
+            display: flex;
+            justify-content: space-between;
+            margin: 30px 0;
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .module {
+            background: rgba(137, 87, 229, 0.1);
+            border: 1px solid var(--accent-purple);
+            padding: 15px 25px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            color: #d2a8ff;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 30px;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Developer Guide</h1>
+            <p>Technical Architecture and Systems Overview for Neutral Zone</p>
+        </header>
+
+        <div class="card">
+            <h2>Architecture Overview</h2>
+            <p>Neutral Zone is a vanilla JavaScript web game rendering directly to an HTML5 Canvas using a 2D context.
+                The architecture is driven by a main Game Loop and highly decoupled modular files.</p>
+
+            <div class="architect-diagram">
+                <div class="module">main.js<br><small>Game Loop</small></div>
+                <div class="module"
+                    style="border-color: var(--accent-teal); color: #79c0ff; background: rgba(43, 116, 137, 0.1);">
+                    state.js<br><small>Data Model</small></div>
+                <div class="module">units.js<br><small>Physics & AI</small></div>
+                <div class="module"
+                    style="border-color: var(--accent-teal); color: #79c0ff; background: rgba(43, 116, 137, 0.1);">
+                    renderer.js<br><small>Visuals</small></div>
+            </div>
+
+            <h3>State Management (state.js)</h3>
+            <p>The entire game state is stored in simple, exportable JavaScript objects and arrays. This allows the
+                simulation to act deterministically and to be injected flawlessly into testing frameworks.</p>
+            <div class="code-block">
+                export const state = {
+                activeScout: null,
+                selectedFighters: [],
+                gameStarted: false,
+                gameOver: false,
+                lastTime: 0
+                };
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Core Systems</h2>
+
+            <h3>Territory Hull Simulation</h3>
+            <p>Territory is mapped dynamically using a Convex Hull algorithm (found in <code>utils.js</code>). The
+                points of the hull are generated dynamically every frame based on the coordinates of the <strong>Home
+                    Planet</strong> and all living <strong>Scouts</strong>.</p>
+            <p>The total area formed by this hull calculates player domination percentages. Functions like
+                <code>pointInPolygon</code> and <code>doPolygonsIntersect</code> guarantee units are repelled safely and
+                miners stop harvesting if an asteroid exits the hull boundary.</p>
+
+            <h3>Unit Steering and Collision</h3>
+            <p>Unit movement in <code>units.js</code> relies on autonomous steering behaviors mapped with a slight
+                physics layer. Units execute custom avoidance logic to prevent intersecting the Home Planet or Asteroids
+                during travel.</p>
+            <p>A soft-body collision system repels overlapping entities using dynamic force vectors based on whether the
+                unit is actively moving or idle (parking push logic).</p>
+
+            <h3>The CPU AI (ai.js)</h3>
+            <p>The CPU uses a deterministic state machine balancing economy, expansion, and offense within its logic
+                ticks. By evaluating its current resource throughput and distance mapping against enemy scouts, the CPU
+                makes localized decisions without cheating the game state.</p>
+        </div>
+
+        <div class="card">
+            <h2>Testing & Telemetry</h2>
+            <p>Neutral Zone employs an offline headless testing framework utilizing <strong>Jest</strong>
+                (<code>test_runner.js</code>). By bypassing the graphical renderer layer entirely, the game logic runs
+                simulation iterations thousands of times faster than real-time to locate edge cases in unit navigation
+                or combat balancing.</p>
+            <p>Simulation outputs are dumped directly to JSON JSON logs where properties like economy-to-military build
+                ratios can be evaluated cleanly over epochs.</p>
+        </div>
+    </div>
+
+</body>
+
+</html>

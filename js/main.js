@@ -53,27 +53,36 @@ function update(time) {
 
     // Update Players
     players.forEach(p => {
-        if (p.buildCooldowns.miner > 0) {
-            p.buildCooldowns.miner -= dt;
-            if (p.buildCooldowns.miner <= 0) {
-                let qi = p.buildQueue.findIndex(b => b.type === 'miners');
-                if (qi !== -1) { p.units.miners.push(p.buildQueue[qi].unitData); p.buildQueue.splice(qi, 1); }
+        // Handle Build Queue and Cooldowns
+        const buildTypes = [
+            { key: 'miner', type: 'miners', time: 5 },
+            { key: 'scout', type: 'scouts', time: 10 },
+            { key: 'fighter', type: 'fighters', time: 15 }
+        ];
+
+        buildTypes.forEach(bt => {
+            if (p.buildCooldowns[bt.key] > 0) {
+                p.buildCooldowns[bt.key] -= dt;
+                if (p.buildCooldowns[bt.key] <= 0) {
+                    p.buildCooldowns[bt.key] = 0;
+                    // Finish the one that was building
+                    let qi = p.buildQueue.findIndex(b => b.type === bt.type);
+                    if (qi !== -1) {
+                        p.units[bt.type].push(p.buildQueue[qi].unitData);
+                        p.buildQueue.splice(qi, 1);
+                    }
+                    // Start next if available
+                    if (p.buildQueue.some(b => b.type === bt.type)) {
+                        p.buildCooldowns[bt.key] = bt.time;
+                    }
+                }
+            } else {
+                // Not building, but something in queue? Start it.
+                if (p.buildQueue.some(b => b.type === bt.type)) {
+                    p.buildCooldowns[bt.key] = bt.time;
+                }
             }
-        }
-        if (p.buildCooldowns.scout > 0) {
-            p.buildCooldowns.scout -= dt;
-            if (p.buildCooldowns.scout <= 0) {
-                let qi = p.buildQueue.findIndex(b => b.type === 'scouts');
-                if (qi !== -1) { p.units.scouts.push(p.buildQueue[qi].unitData); p.buildQueue.splice(qi, 1); }
-            }
-        }
-        if (p.buildCooldowns.fighter > 0) {
-            p.buildCooldowns.fighter -= dt;
-            if (p.buildCooldowns.fighter <= 0) {
-                let qi = p.buildQueue.findIndex(b => b.type === 'fighters');
-                if (qi !== -1) { p.units.fighters.push(p.buildQueue[qi].unitData); p.buildQueue.splice(qi, 1); }
-            }
-        }
+        });
 
         if (p.isCPU) updateAI(p, dt, canvas.width, canvas.height);
 
@@ -103,6 +112,14 @@ function update(time) {
         }
 
         updateUnits(p, dt, currentHull, state.selectedFighters, state.drawingPath);
+
+        // Update Damage Timers for all units/planets
+        p.homePlanet.damageTime = Math.max(0, (p.homePlanet.damageTime || 0) - dt);
+        ['scouts', 'fighters', 'miners'].forEach(type => {
+            p.units[type].forEach(u => {
+                u.damageTime = Math.max(0, (u.damageTime || 0) - dt);
+            });
+        });
     });
 
     updateProjectiles(dt);

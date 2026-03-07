@@ -355,6 +355,7 @@ export function updateProjectiles(dt) {
 
         if (dist < 10) {
             proj.target.ref.health -= proj.damage;
+            proj.target.ref.damageTime = 0.5; // Red pulse duration
             projectiles.splice(i, 1);
         } else {
             proj.x += (dx / dist) * proj.speed * dt;

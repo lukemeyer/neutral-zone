@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neutral Zone - Player Guide</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --text-color: #c9d1d9;
+            --accent-blue: #1f6feb;
+            --accent-red: #f85149;
+            --accent-green: #2ea043;
+            --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --surface: #161b22;
+            --border: #30363d;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-main);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            animation: fadeIn 1s ease-in-out;
+        }
+
+        h1 {
+            font-size: 3rem;
+            background: -webkit-linear-gradient(45deg, var(--accent-blue), var(--accent-red));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        h2,
+        h3 {
+            color: #ffffff;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+            margin-top: 40px;
+        }
+
+        p {
+            font-size: 1.1rem;
+            color: #8b949e;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .unit-type {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #21262d;
+            border-radius: 8px;
+        }
+
+        .unit-icon {
+            width: 40px;
+            height: 40px;
+            margin-right: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            background: rgba(31, 111, 235, 0.1);
+        }
+
+        .media-container {
+            width: 100%;
+            margin: 30px 0;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            text-align: center;
+            background: #000;
+        }
+
+        .media-container img,
+        .media-container video {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .media-caption {
+            padding: 10px;
+            background: var(--surface);
+            font-size: 0.9rem;
+            color: #8b949e;
+        }
+
+        ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+
+        li {
+            margin-bottom: 10px;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        li::before {
+            content: '👉';
+            position: absolute;
+            left: 0;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Neutral Zone</h1>
+            <p>The Ultimate Strategic Territory Domination Game</p>
+        </header>
+
+        <div class="media-container">
+            <img src="assets/gameplay_capture.webp" alt="Neutral Zone Gameplay Video">
+            <div class="media-caption">Gameplay in action: Expanding territory and managing units.</div>
+        </div>
+
+        <div class="card">
+            <h2>Objective</h2>
+            <p>Welcome Commander. Your objective in <strong>Neutral Zone</strong> is simple: eradicate the enemy or
+                dominate the sector.</p>
+            <ul>
+                <li><strong>Domination:</strong> Expand your territory polygon by moving Scouts to capture 70% of the
+                    map area.</li>
+                <li><strong>Destruction:</strong> Destroy the enemy's Home Planet using Fighters and offensive pushes.
+                </li>
+                <li><strong>Bankruptcy:</strong> Attrite the enemy until they have 0 units and less than 25 Energy
+                    remaining.</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>The Fleet</h2>
+            <p>You have three types of units at your disposal. Build them using <strong>Energy (E)</strong> from the
+                left/right UI panels.</p>
+
+            <div class="unit-type">
+                <div class="unit-icon" style="color: var(--accent-blue);">
+                    <svg viewBox="0 0 24 24" width="24" height="24">
+                        <rect x="4" y="4" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" />
+                    </svg>
+                </div>
+                <div>
+                    <h3 style="margin: 0; border: none; padding: 0;">Miner (25 Energy)</h3>
+                    <p style="margin: 5px 0 0 0;">Automatically searches for Asteroids located within your territory
+                        hull. Mines resources and returns them to the Home Planet. Highly vulnerable.</p>
+                </div>
+            </div>
+
+            <div class="unit-type">
+                <div class="unit-icon" style="color: var(--accent-blue);">
+                    <svg viewBox="0 0 24 24" width="24" height="24">
+                        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2" />
+                    </svg>
+                </div>
+                <div>
+                    <h3 style="margin: 0; border: none; padding: 0;">Scout (50 Energy)</h3>
+                    <p style="margin: 5px 0 0 0;">The cornerstone of your expansion. Drag them across the map to
+                        aggressively expand your territory border. They fire defensively at enemy Fighters.</p>
+                </div>
+            </div>
+
+            <div class="unit-type">
+                <div class="unit-icon" style="color: var(--accent-blue);">
+                    <svg viewBox="0 0 24 24" width="24" height="24">
+                        <polygon points="12,3 21,19 3,19" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linejoin="round" />
+                    </svg>
+                </div>
+                <div>
+                    <h3 style="margin: 0; border: none; padding: 0;">Fighter (100 Energy)</h3>
+                    <p style="margin: 5px 0 0 0;">Your offensive muscle. Drag from a Fighter (or use the "Select All"
+                        tool) to draw a custom flight path. They actively engage enemy units and the enemy Home Planet.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="media-container">
+            <img src="assets/screenshot_1.png" alt="Start Screen and Setup">
+            <div class="media-caption">Taking action on the field. You can play as Human vs CPU, or CPU vs CPU to test
+                strategies!</div>
+        </div>
+
+        <div class="card">
+            <h2>Mechanics & Stategy</h2>
+            <p>Mastering Neutral Zone involves managing both economy and space.</p>
+            <ul>
+                <li><strong>Territory Physics:</strong> Your territory is defined as a convex hull drawn around your
+                    Home Planet and all your living Scouts. Push Scouts outwards to envelop Asteroids so Miners can
+                    reach them safely.</li>
+                <li><strong>Energy Pipeline:</strong> Without Miners, you will quickly run out of Energy. Protect your
+                    Asteroids! If an Asteroid falls outside your territory, the Miners will abort and fly home.</li>
+                <li><strong>Drawing Paths:</strong> Selecting Fighters allows you to draw intricate intercept paths. Use
+                    this to flank the enemy's defensive lines or target vulnerable miners.</li>
+            </ul>
+        </div>
+    </div>
+
+</body>
+
+</html>
