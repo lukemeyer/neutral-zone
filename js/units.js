@@ -100,7 +100,23 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
         const isDrawingForThisFighter = drawingPath && selectedFighters && selectedFighters.includes(f);
 
         if (f.path && f.path.length > 0 && !isDrawingForThisFighter) {
-            let targetPoint = f.path[f.pathIndex];
+            let targetPoint = null;
+
+            // Check pursuit target
+            if (f.pursuitTarget && f.pursuitTarget.health > 0) {
+                // If the target has outrun the fighter's firing range (50), drop the pursuit
+                let dtgt = Math.hypot(f.pursuitTarget.x - f.x, f.pursuitTarget.y - f.y);
+                if (dtgt > 55) { // Add a tiny buffer above 50 so they don't instantly drop it while chasing
+                    f.pursuitTarget = null;
+                    targetPoint = f.path[f.pathIndex];
+                } else {
+                    targetPoint = { x: f.pursuitTarget.x, y: f.pursuitTarget.y };
+                }
+            } else {
+                f.pursuitTarget = null; // Clear if destroyed
+                targetPoint = f.path[f.pathIndex];
+            }
+
             if (!targetPoint) return; // safety check
 
             let dx = targetPoint.x - f.x;
@@ -122,8 +138,15 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
                 }
             }
 
+            // If pursuing, stop at half firing range (25)
+            if (f.pursuitTarget && Math.hypot(f.pursuitTarget.x - f.x, f.pursuitTarget.y - f.y) <= 25) {
+                stopDist = 25;
+            }
+
             if (dist < stopDist) {
-                if (f.path.length > 1) {
+                if (f.pursuitTarget) {
+                    // Do nothing, just stay at range from the target
+                } else if (f.path.length > 1) {
                     f.pathIndex += f.pathDir;
                     if (f.pathIndex >= f.path.length || f.pathIndex < 0) {
                         if (f.isLoop) {
@@ -226,7 +249,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             return Math.hypot(targetPoint.x - u.x, targetPoint.y - u.y) > stopDist;
         } else if (u.maxHealth === 200) { // Scout
             return Math.hypot(u.targetX - u.x, u.targetY - u.y) > 5;
-        } else if (u.maxHealth === 20) { // Miner
+        } else if (u.maxHealth === 60) { // Miner
             if (u.returning) return Math.hypot(ownerPlayer.homePlanet.x - u.x, ownerPlayer.homePlanet.y - u.y) > ownerPlayer.homePlanet.radius + 5;
             if (u.targetAsteroid) return Math.hypot(u.targetAsteroid.x - u.x, u.targetAsteroid.y - u.y) > 20;
             return false;
@@ -262,7 +285,9 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
                 } else if (!u._moving && other._moving) {
                     force = 200; // parked units yield heavily to moving units
                 } else if (!u._moving && !other._moving) {
-                    force = 20; // parked units gently clump without violent vibration
+                    // Both arrived at their respective destinations.
+                    // Only apply a tiny drift to prevent exact overlaps, avoiding violent jittering.
+                    force = 5;
                 }
 
                 u.x += (dx / dist) * force * dt;
@@ -313,8 +338,18 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
             });
 
             if (target) {
+                // Always pursue fighters if no active pursuit target
+                if (!f.pursuitTarget && target.type === 'unit' && target.ref.maxHealth === 150) { // Only pursue fighters for now
+                    f.pursuitTarget = target.ref;
+                }
+
                 projectiles.push({ x: f.x, y: f.y, target: target, damage: 10, speed: 300, ownerId: p.id, color: p.color });
                 f.cooldown = 0.5; // Firerate
+
+                // Track angle to face ANY target fired upon
+                let targetY = target.type === 'planet' ? target.ref.y : target.ref.y;
+                let targetX = target.type === 'planet' ? target.ref.x : target.ref.x;
+                f.lastTargetAngle = Math.atan2(targetY - f.y, targetX - f.x) + Math.PI / 2;
             }
         }
     });

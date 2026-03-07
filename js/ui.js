@@ -1,4 +1,5 @@
 import { players, state } from './state.js';
+import { getPlayerTerritoryHull } from './utils.js';
 console.log('ui.js loaded');
 
 export function updateUI() {
@@ -8,6 +9,28 @@ export function updateUI() {
         document.getElementById(`p${id}-fighters`).innerText = p.units.fighters.length;
         document.getElementById(`p${id}-scouts`).innerText = p.units.scouts.length;
         document.getElementById(`p${id}-miners`).innerText = p.units.miners.length;
+
+        // Border Power calculation
+        const hull = getPlayerTerritoryHull(p, players, false);
+        let perimeter = 0;
+        for (let i = 0; i < hull.length; i++) {
+            let p1 = hull[i];
+            let p2 = hull[(i + 1) % hull.length];
+            perimeter += Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        }
+        const maxPerimeter = (p.units.scouts.length + 1) * 175;
+
+        // Update UI Text
+        document.getElementById(`p${id}-border`).innerText = Math.floor(perimeter);
+        document.getElementById(`p${id}-mborder`).innerText = Math.floor(maxPerimeter);
+
+        // Change color based on ratio?
+        const borderEl = document.getElementById(`p${id}-border`);
+        if (perimeter > maxPerimeter) {
+            borderEl.style.color = '#f85149'; // red if overloaded
+        } else {
+            borderEl.style.color = ''; // default
+        }
 
         const buildTypes = [
             { key: 'miner', type: 'miners', time: 5 },
@@ -69,7 +92,7 @@ export function setupUIBindings() {
     document.getElementById('p1-btn-miner').addEventListener('click', () => {
         if (players[0].energy >= 25) {
             players[0].energy -= 25;
-            players[0].buildQueue.push({ type: 'miners', unitData: { x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20, damageTime: 0 } });
+            players[0].buildQueue.push({ type: 'miners', unitData: { x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 60, maxHealth: 60, damageTime: 0 } });
         }
     });
     document.getElementById('p1-btn-scout').addEventListener('click', () => {
@@ -99,7 +122,7 @@ export function setupUIBindings() {
     document.getElementById('p2-btn-miner').addEventListener('click', () => {
         if (players[1].energy >= 25) {
             players[1].energy -= 25;
-            players[1].buildQueue.push({ type: 'miners', unitData: { x: players[1].homePlanet.x, y: players[1].homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20, damageTime: 0 } });
+            players[1].buildQueue.push({ type: 'miners', unitData: { x: players[1].homePlanet.x, y: players[1].homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 60, maxHealth: 60, damageTime: 0 } });
         }
     });
     document.getElementById('p2-btn-scout').addEventListener('click', () => {

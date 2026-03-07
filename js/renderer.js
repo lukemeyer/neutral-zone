@@ -148,6 +148,12 @@ export function draw() {
             ctx.fillStyle = p.color;
             ctx.fill();
         }
+        if (p.homePlanet.damageTime > 0) {
+            ctx.beginPath();
+            ctx.arc(p.homePlanet.x, p.homePlanet.y, p.homePlanet.radius + 10, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(218, 54, 51, ${p.homePlanet.damageTime * 2})`;
+            ctx.fill();
+        }
         drawHealthBar(p.homePlanet.x, p.homePlanet.y + p.homePlanet.radius + 10, p.homePlanet.health, p.homePlanet.maxHealth, 40);
 
         // Scouts
@@ -170,6 +176,13 @@ export function draw() {
             let angle = Math.atan2(s.targetY - s.y, s.targetX - s.x) + Math.PI / 2;
             if (!isMoving) angle = 0; // Upright if stationary
 
+            if (s.damageTime > 0) {
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, 16, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(218, 54, 51, ${s.damageTime * 2})`;
+                ctx.fill();
+            }
+
             drawRotatedImage(cache.scout, s.x, s.y, 26, angle);
             drawHealthBar(s.x, s.y - 20, s.health, s.maxHealth);
         });
@@ -179,7 +192,13 @@ export function draw() {
             // Determine direction. If they have a path, point towards next node. 
             // If they are colliding/repelling, we don't have a rigid velocity vector so we use path if available
             let angle = 0;
-            if (f.path && f.path.length > 0) {
+            if (f.cooldown > 0 && f.lastTargetAngle !== undefined) {
+                // Face the target we just fired at
+                angle = f.lastTargetAngle;
+            } else if (f.pursuitTarget) {
+                // Face the pursuit target if actively engaging but not firing yet
+                angle = Math.atan2(f.pursuitTarget.y - f.y, f.pursuitTarget.x - f.x) + Math.PI / 2;
+            } else if (f.path && f.path.length > 0) {
                 const targetPoint = f.path[f.pathIndex];
                 if (targetPoint) {
                     angle = Math.atan2(targetPoint.y - f.y, targetPoint.x - f.x) + Math.PI / 2;
@@ -188,7 +207,6 @@ export function draw() {
 
             drawRotatedImage(cache.fighter, f.x, f.y, 24, angle);
 
-            // Highlight if selected
             if (state.selectedFighters && state.selectedFighters.includes(f)) {
                 ctx.beginPath();
                 ctx.arc(f.x, f.y, 16, 0, Math.PI * 2);
@@ -196,6 +214,40 @@ export function draw() {
                 ctx.lineWidth = 2;
                 ctx.stroke();
             }
+
+            if (f.damageTime > 0) {
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, 16, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(218, 54, 51, ${f.damageTime * 2})`;
+                ctx.fill();
+            }
+
+            if (f.cooldown > 0.4) {
+                // Draw a symmetric firing starburst (4-point cross)
+                ctx.save();
+                ctx.translate(f.x, f.y);
+                ctx.rotate(angle);
+
+                ctx.beginPath();
+                ctx.moveTo(0, -22); // Top point
+                ctx.lineTo(-4, -14); // Left inner
+                ctx.lineTo(-12, -14); // Left outer
+                ctx.lineTo(-4, -10); // Bottom left inner
+                ctx.lineTo(0, -2); // Bottom outer
+                ctx.lineTo(4, -10); // Bottom right inner
+                ctx.lineTo(12, -14); // Right outer
+                ctx.lineTo(4, -14); // Right inner
+                ctx.closePath();
+
+                ctx.fillStyle = 'rgba(255, 255, 100, 0.9)';
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
             drawHealthBar(f.x, f.y - 20, f.health, f.maxHealth);
         });
 
@@ -209,6 +261,13 @@ export function draw() {
             }
 
             const isMining = m.targetAsteroid && Math.hypot(m.targetAsteroid.x - m.x, m.targetAsteroid.y - m.y) <= 20;
+
+            if (m.damageTime > 0) {
+                ctx.beginPath();
+                ctx.arc(m.x, m.y, 16, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(218, 54, 51, ${m.damageTime * 2})`;
+                ctx.fill();
+            }
 
             drawRotatedImage(isMining ? cache.minerActive : cache.miner, m.x, m.y, 24, angle);
 

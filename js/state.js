@@ -119,6 +119,6 @@ export function initGameState(width, height) {
         let sy3 = Math.min(height - 20, p.homePlanet.y + 100);
         p.units.scouts.push({ x: sx3, y: sy3, targetX: sx3, targetY: sy3, health: 200, maxHealth: 200, cooldown: 0, damageTime: 0 });
 
-        p.units.miners.push({ x: p.homePlanet.x, y: p.homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 20, maxHealth: 20, damageTime: 0 });
+        p.units.miners.push({ x: p.homePlanet.x, y: p.homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 60, maxHealth: 60, damageTime: 0 });
     });
 }
