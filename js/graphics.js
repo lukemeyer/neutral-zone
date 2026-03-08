@@ -68,7 +68,16 @@ export const rawGraphics = {
             <circle cx="12" cy="2" r="1.5" fill="#ff7b72" />
         </svg>`,
 
-    planet: (color, isBase = true) => `
+    planet: (color, isBase = true, variant = 0) => {
+        const rings = variant === 1 ? `<ellipse cx="32" cy="32" rx="30" ry="8" fill="none" stroke="${color}" stroke-width="2" opacity="0.6" transform="rotate(20 32 32)" />` : '';
+        const clouds = variant === 2 ? `<path d="M 12 28 Q 20 20 30 24 T 52 28" stroke="#ffffff" stroke-width="2" fill="none" opacity="0.4" /><path d="M 16 40 Q 28 32 38 38 T 48 36" stroke="#ffffff" stroke-width="2" fill="none" opacity="0.3" />` : '';
+        const moons = variant === 3 ? `<circle cx="12" cy="20" r="3" fill="#8b949e" /><circle cx="50" cy="40" r="2" fill="#8b949e" />` : '';
+        const cracks = variant === 4 ? `<path d="M 28 16 L 32 24 L 26 30 L 34 38 L 30 46" stroke="${color}" stroke-width="1.5" fill="none" opacity="0.8" />` : '';
+        const continents = variant === 0 || variant === 3 ? `<path d="M 16 28 Q 24 16 34 24 T 46 22 Q 40 40 30 46 T 16 38 Z" fill="${color}" opacity="0.6" /><circle cx="44" cy="38" r="4" fill="${color}" opacity="0.4" /><circle cx="20" cy="44" r="3" fill="${color}" opacity="0.5" />` : '';
+        const craters = variant === 1 || variant === 4 ? `<circle cx="24" cy="24" r="4" fill="#000000" opacity="0.2" /><circle cx="40" cy="36" r="6" fill="#000000" opacity="0.2" /><circle cx="34" cy="46" r="3" fill="#000000" opacity="0.2" />` : '';
+        const ocean = variant === 2 ? `<circle cx="32" cy="32" r="22" fill="${color}" opacity="0.4" />` : '';
+
+        return `
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
             <!-- Glow -->
             <circle cx="32" cy="32" r="30" fill="${color}" opacity="0.1" />
@@ -76,10 +85,13 @@ export const rawGraphics = {
             <circle cx="32" cy="32" r="24" fill="${color}" opacity="0.3" />
             <!-- Surface -->
             <circle cx="32" cy="32" r="22" fill="#21262d" />
-            <!-- Continents/Craters -->
-            <path d="M 16 28 Q 24 16 34 24 T 46 22 Q 40 40 30 46 T 16 38 Z" fill="${color}" opacity="0.6" />
-            <circle cx="44" cy="38" r="4" fill="${color}" opacity="0.4" />
-            <circle cx="20" cy="44" r="3" fill="${color}" opacity="0.5" />
+            ${ocean}
+            ${continents}
+            ${craters}
+            ${cracks}
+            ${clouds}
+            ${rings}
+            ${moons}
             <!-- Shadow (Bottom Right) -->
             <path d="M 16 46 A 22 22 0 0 0 46 16 A 22 22 0 0 1 16 46 Z" fill="#000000" opacity="0.5" />
             <!-- Central Base Structure -->
@@ -88,7 +100,8 @@ export const rawGraphics = {
             <line x1="32" y1="20" x2="32" y2="10" stroke="#eceff1" stroke-width="2" />
             <circle cx="32" cy="10" r="2" fill="#ff7b72" />
             ` : ''}
-        </svg>`,
+        </svg>`;
+    },
 
     // 48x48 Irregular Asteroids
     asteroid: [
@@ -122,21 +135,26 @@ export const rawGraphics = {
 export async function pregenerateGraphics() {
     console.log("Pre-generating SVG graphics...");
 
-    // Player 1 (Blueish #1f6feb or custom defined)
+    // Ensure players get two uniquely customized distinct planets 
+    let p1Variant = Math.floor(Math.random() * 5);
+    let p2Variant = Math.floor(Math.random() * 4);
+    if (p2Variant >= p1Variant) p2Variant++;
+
+    // Player 1 (Blueish #1f6feb)
     const p1Color = '#1f6feb';
     graphicsCache.p1.fighter = await svgToImage(rawGraphics.fighter(p1Color));
     graphicsCache.p1.miner = await svgToImage(rawGraphics.miner(p1Color, false));
     graphicsCache.p1.minerActive = await svgToImage(rawGraphics.miner(p1Color, true));
     graphicsCache.p1.station = await svgToImage(rawGraphics.station(p1Color));
-    graphicsCache.planet1 = await svgToImage(rawGraphics.planet(p1Color));
+    graphicsCache.planet1 = await svgToImage(rawGraphics.planet(p1Color, true, p1Variant));
 
-    // Player 2 (Reddish #f85149 or custom defined)
+    // Player 2 (Reddish #f85149)
     const p2Color = '#f85149';
     graphicsCache.p2.fighter = await svgToImage(rawGraphics.fighter(p2Color));
     graphicsCache.p2.miner = await svgToImage(rawGraphics.miner(p2Color, false));
     graphicsCache.p2.minerActive = await svgToImage(rawGraphics.miner(p2Color, true));
     graphicsCache.p2.station = await svgToImage(rawGraphics.station(p2Color));
-    graphicsCache.planet2 = await svgToImage(rawGraphics.planet(p2Color));
+    graphicsCache.planet2 = await svgToImage(rawGraphics.planet(p2Color, true, p2Variant));
 
     // Asteroids
     for (let i = 0; i < 3; i++) {

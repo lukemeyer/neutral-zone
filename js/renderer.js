@@ -58,7 +58,7 @@ export function draw() {
                 terrLayer.height = canvas.height;
             }
             tCtx.clearRect(0, 0, terrLayer.width, terrLayer.height);
-            const fillStyle = p.id === 0 ? 'rgba(46, 160, 67, 1)' : 'rgba(218, 54, 51, 1)';
+            const fillStyle = p.id === 0 ? 'rgba(31, 111, 235, 1)' : 'rgba(218, 54, 51, 1)';
             tCtx.fillStyle = fillStyle;
             tCtx.strokeStyle = fillStyle;
             tCtx.lineCap = 'round';
@@ -87,7 +87,7 @@ export function draw() {
         };
 
         const drawGraphLines = (g, isProj) => {
-            const colorValid = p.id === 0 ? 'rgba(46, 160, 67, 0.8)' : 'rgba(218, 54, 51, 0.8)';
+            const colorValid = p.id === 0 ? 'rgba(31, 111, 235, 0.8)' : 'rgba(218, 54, 51, 0.8)';
 
             g.validEdges.forEach(e => {
                 ctx.beginPath();
@@ -206,12 +206,12 @@ export function draw() {
             if (isMoving) {
                 ctx.beginPath();
                 ctx.arc(s.targetX, s.targetY, 10, 0, Math.PI * 2);
-                ctx.fillStyle = p.id === 0 ? 'rgba(46, 160, 67, 0.4)' : 'rgba(218, 54, 51, 0.4)';
+                ctx.fillStyle = p.id === 0 ? 'rgba(31, 111, 235, 0.4)' : 'rgba(218, 54, 51, 0.4)';
                 ctx.fill();
             } else {
                 ctx.beginPath();
                 ctx.arc(s.x, s.y, 50, 0, Math.PI * 2);
-                ctx.strokeStyle = p.id === 0 ? 'rgba(46, 160, 67, 0.15)' : 'rgba(218, 54, 51, 0.15)';
+                ctx.strokeStyle = p.id === 0 ? 'rgba(31, 111, 235, 0.15)' : 'rgba(218, 54, 51, 0.15)';
                 ctx.lineWidth = 1;
                 ctx.stroke();
             }

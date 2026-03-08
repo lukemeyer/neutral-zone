@@ -109,7 +109,7 @@ function update(time) {
         const totalArea = canvas.width * canvas.height;
         const pct = (area / totalArea) * 100;
 
-        if (pct >= 70.0 && !state.gameOver) {
+        if (pct >= 55.0 && !state.gameOver) {
             endGame(p.id, 'Domination');
         }
 
@@ -162,8 +162,10 @@ function update(time) {
 }
 
 function gameLoop(t) {
-    update(t);
-    draw();
+    if (!state.gameOver) {
+        update(t);
+        draw();
+    }
     requestAnimationFrame(gameLoop);
 }
 

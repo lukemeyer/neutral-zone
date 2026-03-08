@@ -10,7 +10,7 @@ const MAX_TICKS = 60 * 60 * 10; // Allow tests to run for max 10 minutes (600 se
 
 export function resetGameState() {
     players.forEach(p => {
-        p.energy = 100;
+        p.energy = 150;
         p.homePlanet.health = p.homePlanet.maxHealth;
         p.units.stations = [];
         p.units.fighters = [];

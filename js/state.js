@@ -4,7 +4,7 @@ export const players = [
         id: 0,
         color: '#1f6feb', // Blue (Player 1)
         territoryColor: '#2ea043',
-        energy: 100,
+        energy: 150,
         homePlanet: { x: 0, y: 0, radius: 30, health: 1000, maxHealth: 1000, damageTime: 0 },
         units: { stations: [], fighters: [], miners: [] },
         isCPU: false,
@@ -17,7 +17,7 @@ export const players = [
         id: 1,
         color: '#f85149', // Red (Player 2)
         territoryColor: '#da3633',
-        energy: 100,
+        energy: 150,
         homePlanet: { x: 0, y: 0, radius: 30, health: 1000, maxHealth: 1000, damageTime: 0 },
         units: { stations: [], fighters: [], miners: [] },
         isCPU: false,

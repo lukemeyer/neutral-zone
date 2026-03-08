@@ -114,7 +114,7 @@ export function isPointInTerritory(pt, player, useTarget = false, extraRadius = 
     return false;
 }
 
-export const MAX_CONNECTION_LENGTH = 175;
+export const MAX_CONNECTION_LENGTH = 250;
 
 export function getStationGraph(player, useTarget = false) {
     const nodes = [player.homePlanet, ...player.units.stations];
@@ -205,19 +205,76 @@ export function getStationGraph(player, useTarget = false) {
 
 export function getPlayerTerritoryHulls(player, allPlayers, useTarget = false) {
     const graph = getStationGraph(player, useTarget);
-
-    // Create a hull for each connected component!
     const hulls = [];
+    const getPos = (n) => useTarget ? { x: n.targetX, y: n.targetY } : { x: n.x, y: n.y };
+
     for (let comp of graph.components) {
-        if (comp.length >= 3) {
-            const basePoints = comp.map(n => {
-                if (n === player.homePlanet) return n;
-                return useTarget ? { x: n.targetX, y: n.targetY } : { x: n.x, y: n.y };
+        if (comp.length < 3) continue;
+
+        const adj = new Map();
+        comp.forEach(n => adj.set(n, []));
+
+        for (let e of graph.validEdges) {
+            if (adj.has(e.nodeA) && adj.has(e.nodeB)) {
+                adj.get(e.nodeA).push(e.nodeB);
+                adj.get(e.nodeB).push(e.nodeA);
+            }
+        }
+
+        for (let [u, neighbors] of adj.entries()) {
+            let p1 = getPos(u);
+            neighbors.sort((a, b) => {
+                let pa = getPos(a);
+                let pb = getPos(b);
+                return Math.atan2(pa.y - p1.y, pa.x - p1.x) - Math.atan2(pb.y - p1.y, pb.x - p1.x);
             });
-            hulls.push(getConvexHull(basePoints));
+        }
+
+        const seen = new Set();
+        let nodeId = new Map();
+        comp.forEach((n, i) => nodeId.set(n, i));
+
+        for (let u of adj.keys()) {
+            for (let v of adj.get(u)) {
+                let edgeKey = nodeId.get(u) + '-' + nodeId.get(v);
+                if (seen.has(edgeKey)) continue;
+
+                let curr = u, next = v;
+                let faceNodes = [];
+                let isCycle = false;
+
+                while (true) {
+                    seen.add(nodeId.get(curr) + '-' + nodeId.get(next));
+                    faceNodes.push(getPos(curr));
+
+                    let nextNeighbors = adj.get(next);
+                    let idx = nextNeighbors.indexOf(curr);
+                    let nextNext = nextNeighbors[(idx + 1) % nextNeighbors.length];
+
+                    curr = next;
+                    next = nextNext;
+
+                    if (curr === u && next === v) {
+                        isCycle = true;
+                        break;
+                    }
+                    if (faceNodes.length > comp.length * 5) break;
+                }
+
+                if (isCycle && faceNodes.length >= 3) {
+                    let area = 0;
+                    for (let i = 0; i < faceNodes.length; i++) {
+                        let p1 = faceNodes[i];
+                        let p2 = faceNodes[(i + 1) % faceNodes.length];
+                        area += (p2.x - p1.x) * (p2.y + p1.y);
+                    }
+                    if (area > 0.1) {
+                        hulls.push(faceNodes);
+                    }
+                }
+            }
         }
     }
-
     return hulls;
 }
 

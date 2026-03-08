@@ -3,6 +3,35 @@ import { isValidStationPlacement, isAsteroidInPolygon, getStationGraph, MAX_CONN
 console.log('ai.js loaded');
 
 export function updateAI(p, dt, mapWidth, mapHeight) {
+    p.aiTime = (p.aiTime || 0) + dt;
+
+    let currentStationCount = p.units.stations.length;
+    let enemy = players.find(ep => ep.id !== p.id);
+    let currentEnemyStationCount = enemy ? enemy.units.stations.length : 0;
+    let currentAsteroidCount = asteroids.filter(a => a.resources > 0).length;
+
+    let forceReplan = false;
+    if (p._aiLastStationCount !== currentStationCount ||
+        p._aiLastAsteroidCount !== currentAsteroidCount ||
+        p._aiLastEnemyStationCount !== currentEnemyStationCount) {
+        forceReplan = true;
+        p._aiLastStationCount = currentStationCount;
+        p._aiLastAsteroidCount = currentAsteroidCount;
+        p._aiLastEnemyStationCount = currentEnemyStationCount;
+    }
+
+    function assignTarget(s, tx, ty) {
+        let currentTargetX = s.desiredTargetX !== undefined ? s.desiredTargetX : s.targetX;
+        let currentTargetY = s.desiredTargetY !== undefined ? s.desiredTargetY : s.targetY;
+        if (Math.hypot(currentTargetX - tx, currentTargetY - ty) > 5) {
+            if (forceReplan || !s.aiLastMoveTime || (p.aiTime - s.aiLastMoveTime) > 10) {
+                s.desiredTargetX = tx;
+                s.desiredTargetY = ty;
+                s.aiLastMoveTime = p.aiTime;
+            }
+        }
+    }
+
     // Process "dragging" of station targets to simulate human players and intersect borders precisely
     p.units.stations.forEach(s => {
         if (s.desiredTargetX !== undefined && s.desiredTargetY !== undefined) {
@@ -30,8 +59,6 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
         }
     });
 
-    const enemy = players.find(ep => ep.id !== p.id);
-
     // We use a flag to track if we spent energy this frame. We can only queue one build per frame.
     let buildActionTaken = false;
 
@@ -39,301 +66,175 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
     function isAstCaptured(a) {
         return isAsteroidInPolygon(a, p);
     }
-
     function isAstEnemyControlled(a) {
         return isAsteroidInPolygon(a, enemy);
     }
 
-    // 1. Maintain Station AI States
-    p.units.stations.forEach(s => {
-        if (!s.aiState) s.aiState = 'IDLE';
-
-        if (s.aiState === 'CONNECTING') {
-            // Re-evaluate if it's still needed or has arrived
-            if (Math.hypot(s.targetX - s.x, s.targetY - s.y) <= 5) {
-                // Done moving to bridge position, could stay CONNECTING or just HOLDING
-                s.desiredTargetX = s.targetX;
-                s.desiredTargetY = s.targetY;
-            }
-        } else if (s.aiTargetAst) {
-            if (s.aiTargetAst.resources <= 0) {
-                // Asteroid depleted
-                s.aiState = 'IDLE';
-                s.aiTargetAst = null;
-                s.desiredTargetX = s.targetX; // Stop moving
-                s.desiredTargetY = s.targetY;
-            } else if (s.aiState === 'ENVELOPING' && isAstCaptured(s.aiTargetAst)) {
-                // Successfully captured
-                s.aiState = 'HOLDING';
-                s.desiredTargetX = s.targetX; // Lock target where it is
-                s.desiredTargetY = s.targetY;
-            } else if (s.aiState === 'HOLDING' && !isAstCaptured(s.aiTargetAst)) {
-                // Lost capture, need to envelop again
-                s.aiState = 'ENVELOPING';
-            }
-        }
-    });
-
-    // 1.5 Evaluate Graph for Disconnected Territories
-    const graph = getStationGraph(p, false); // useTarget = false for current positions
-
-    // Clear CONNECTING states to re-evaluate what's strictly necessary each frame
-    p.units.stations.filter(s => s.aiState === 'CONNECTING').forEach(s => s.aiState = 'IDLE');
-
-    // Find all disconnected components (components that do NOT contain the home planet)
-    let detachedComponents = graph.components.filter(c => !c.includes(p.homePlanet));
-
-    // Sort components by size (prioritize connecting largest components)
-    detachedComponents.sort((a, b) => b.length - a.length);
-
-    let connectingAssignments = 0;
-
-    for (let comp of detachedComponents) {
-        // Find the absolute closest point between this component and the main connected network
-        let minGap = Infinity;
-        let bestDetachedNode = null;
-        let bestMainNode = null;
-
-        for (let dtNode of comp) {
-            for (let mtNode of graph.connectedNodes) {
-                let dist = Math.hypot(dtNode.x - mtNode.x, dtNode.y - mtNode.y);
-                if (dist < minGap) {
-                    minGap = dist;
-                    bestDetachedNode = dtNode;
-                    bestMainNode = mtNode;
-                }
-            }
-        }
-
-        if (bestDetachedNode && bestMainNode && minGap > MAX_CONNECTION_LENGTH) {
-            // Need a bridge. How many stations do we need?
-            let bridgesNeeded = Math.ceil(minGap / MAX_CONNECTION_LENGTH) - 1;
-
-            for (let i = 1; i <= bridgesNeeded; i++) {
-                // Grab an IDLE or SCOUTING station
-                let available = p.units.stations.filter(s => s.aiState === 'IDLE' || s.aiState === 'SCOUTING');
-
-                // Position fractionally along the gap
-                let fraction = i / (bridgesNeeded + 1);
-                let bridgeX = bestMainNode.x + (bestDetachedNode.x - bestMainNode.x) * fraction;
-                let bridgeY = bestMainNode.y + (bestDetachedNode.y - bestMainNode.y) * fraction;
-
-                available.sort((s1, s2) => Math.hypot(s1.x - bridgeX, s1.y - bridgeY) - Math.hypot(s2.x - bridgeX, s2.y - bridgeY));
-
-                if (available.length > 0) {
-                    let station = available[0];
-                    station.aiState = 'CONNECTING';
-                    station.aiTargetAst = null; // Clear asteroid tracking
-                    connectingAssignments++;
-
-                    if (Math.hypot((station.desiredTargetX || station.targetX) - bridgeX, (station.desiredTargetY || station.targetY) - bridgeY) > 5) {
-                        station.desiredTargetX = bridgeX;
-                        station.desiredTargetY = bridgeY;
-                    }
-                }
-            }
-        }
-    }
-
-    // 2. Identify uncaptured asteroids
     let uncaptured = asteroids.filter(a => a.resources > 0 && !isAstCaptured(a) && !isAstEnemyControlled(a));
     uncaptured.sort((a, b) => Math.hypot(p.homePlanet.x - a.x, p.homePlanet.y - a.y) - Math.hypot(p.homePlanet.x - b.x, p.homePlanet.y - b.y));
-    uncaptured = uncaptured.slice(0, 3); // Limit CPU focus to the closest 3 asteroids to prevent over-extension
+    let targetAsteroids = uncaptured.slice(0, 3); // CPU focus
 
-    const MAX_LINK = 150;
-    function getClampedTarget(targetX, targetY, currentStation) {
-        let bestNode = null;
-        let minDistToTarget = Infinity;
+    // "Creeping Sludge" Lattice Generation
+    // We want to form a connected lattice of stations starting from the home planet.
+    const SPACING = 190;
 
-        // ALLNODES is used for repulsion, but for LINKING we only want to build off the connected graph to force organic expansion
-        let allNodes = [p.homePlanet, ...p.units.stations];
-
-        let linkableNodes = graph.connectedNodes;
-        if (!linkableNodes || linkableNodes.length === 0) {
-            linkableNodes = [p.homePlanet];
-        }
-
-        for (let node of linkableNodes) {
-            if (node === currentStation || node.aiState === 'IDLE') continue;
-            let nx = node.desiredTargetX !== undefined ? node.desiredTargetX : (node.targetX !== undefined ? node.targetX : node.x);
-            let ny = node.desiredTargetY !== undefined ? node.desiredTargetY : (node.targetY !== undefined ? node.targetY : node.y);
-
-            let dist = Math.hypot(targetX - nx, targetY - ny);
-            if (dist < minDistToTarget) {
-                minDistToTarget = dist;
-                bestNode = { x: nx, y: ny };
-            }
-        }
-
-        if (!bestNode) bestNode = { x: p.homePlanet.x, y: p.homePlanet.y };
-
-        let clampedX = targetX;
-        let clampedY = targetY;
-
-        let distFromBest = Math.hypot(targetX - bestNode.x, targetY - bestNode.y);
-        if (distFromBest > MAX_LINK) {
-            let dirX = targetX - bestNode.x;
-            let dirY = targetY - bestNode.y;
-            let len = distFromBest || 1;
-            clampedX = bestNode.x + (dirX / len) * MAX_LINK;
-            clampedY = bestNode.y + (dirY / len) * MAX_LINK;
-        }
-
-        // Apply stronger repulsion from other nodes to prevent exact overlap/clustering
-        const MIN_NODE_DIST = 90; // Increased required spacing
-        for (let i = 0; i < 5; i++) { // More relaxation passes for better solving
-            for (let node of allNodes) {
-                if (node === currentStation || node.aiState === 'IDLE') continue;
-                let nx = node.desiredTargetX !== undefined ? node.desiredTargetX : (node.targetX !== undefined ? node.targetX : node.x);
-                let ny = node.desiredTargetY !== undefined ? node.desiredTargetY : (node.targetY !== undefined ? node.targetY : node.y);
-
-                let d = Math.hypot(clampedX - nx, clampedY - ny);
-                if (d < MIN_NODE_DIST && d > 0) {
-                    let push = MIN_NODE_DIST - d; // Stronger push (full overlap correction)
-                    clampedX += (clampedX - nx) / d * push;
-                    clampedY += (clampedY - ny) / d * push;
-                }
-            }
-        }
-
-        return { x: clampedX, y: clampedY };
+    // Convert a grid coordinate (q, r) to flat-topped hex world coordinates
+    function hexToPixel(q, r) {
+        let x = SPACING * (3 / 2) * q;
+        let y = SPACING * Math.sqrt(3) * (r + q / 2);
+        return { x: x + p.homePlanet.x, y: y + p.homePlanet.y }; // Anchored at home planet
     }
 
-    // 3. Assign ENVELOPING stations
-    for (let ast of uncaptured) {
-        let closestDist = Infinity;
-        for (let n of [p.homePlanet, ...p.units.stations]) {
-            if (n.aiState === 'IDLE') continue;
-            let nx = n.desiredTargetX !== undefined ? n.desiredTargetX : n.x;
-            let ny = n.desiredTargetY !== undefined ? n.desiredTargetY : n.y;
-            let pd = Math.hypot(nx - ast.x, ny - ast.y);
-            if (pd < closestDist) closestDist = pd;
-        }
+    let N = p.units.stations.length;
+    let selectedNodes = [];
+    let selectedSet = new Set();
 
-        let distToCover = closestDist - (ast.radius + 30);
-        let chainNeeded = distToCover > 0 ? Math.ceil(distToCover / MAX_LINK) : 0;
-        let totalNeeded = 2 + chainNeeded;
+    function getDist(p1, p2) { return Math.hypot(p1.x - p2.x, p1.y - p2.y); }
 
-        let assigned = p.units.stations.filter(s => s.aiTargetAst === ast);
-        let needed = totalNeeded - assigned.length;
+    let homeId = "0,0";
+    let candidates = new Map();
 
-        if (needed > 0) {
-            // Grab IDLE or re-task SCOUTING stations
-            let available = p.units.stations.filter(s => s.aiState === 'IDLE' || s.aiState === 'SCOUTING');
-            available.sort((s1, s2) => Math.hypot(s1.x - ast.x, s1.y - ast.y) - Math.hypot(s2.x - ast.x, s2.y - ast.y));
+    // Neighbors of a hex(q,r)
+    const hexDirs = [
+        { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },
+        { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 }
+    ];
 
-            for (let i = 0; i < Math.min(needed, available.length); i++) {
-                let station = available[i];
-                station.aiState = 'ENVELOPING';
-                station.aiTargetAst = ast;
-                assigned.push(station);
-            }
-        }
-
-        // Move enveloping stations to surround the asteroid
-        for (let i = 0; i < assigned.length; i++) {
-            let station = assigned[i];
-            if (station.aiState === 'ENVELOPING') {
-                let offsetSign = i % 2 === 0 ? 1 : -1;
-                // Approach from the direction of the home planet for simplicity
-                let dirX = ast.x - p.homePlanet.x;
-                let dirY = ast.y - p.homePlanet.y;
-                let len = Math.hypot(dirX, dirY) || 1;
-
-                let perpX = -dirY / len * 40;
-                let perpY = dirX / len * 40;
-
-                // Position slightly behind and to the side of the asteroid
-                let trueTargetX = ast.x + (dirX / len) * (ast.radius + 30) + (perpX * offsetSign);
-                let trueTargetY = ast.y + (dirY / len) * (ast.radius + 30) + (perpY * offsetSign);
-
-                let clamped = getClampedTarget(trueTargetX, trueTargetY, station);
-
-                if (Math.hypot((station.desiredTargetX || station.targetX) - clamped.x, (station.desiredTargetY || station.targetY) - clamped.y) > 5) {
-                    station.desiredTargetX = clamped.x;
-                    station.desiredTargetY = clamped.y;
-                }
+    function addNeighbors(q, r) {
+        for (let dir of hexDirs) {
+            let nq = q + dir.q;
+            let nr = r + dir.r;
+            let nid = nq + "," + nr;
+            if (nid !== homeId && !selectedSet.has(nid) && !candidates.has(nid)) {
+                candidates.set(nid, { q: nq, r: nr, ...hexToPixel(nq, nr) });
             }
         }
     }
 
-    // Try to build stations if we have uncaptured asteroids but no stations IDLE or ENVELOPING (or we desperately need CONNECTING stations)
-    let stationsActing = p.units.stations.filter(s => s.aiState === 'ENVELOPING' || s.aiState === 'HOLDING').length;
-    let needBuildersForConnections = detachedComponents.length > 0 && connectingAssignments === 0 && p.units.stations.filter(s => s.aiState === 'IDLE').length === 0;
+    addNeighbors(0, 0); // Open neighbors around home planet
 
-    if (!buildActionTaken && p.energy >= 50 && p.buildCooldowns.station <= 0 &&
-        (p.energy > 100 || p.units.stations.length < 2 || stationsActing < uncaptured.length * 2 || needBuildersForConnections)) {
+    for (let i = 0; i < N; i++) {
+        if (candidates.size === 0) break;
+
+        let bestCandidateId = null;
+        let bestScore = -Infinity;
+
+        for (let [cid, cand] of candidates.entries()) {
+            if (cand.x < 0 || cand.x > mapWidth || cand.y < 0 || cand.y > mapHeight) {
+                continue;
+            }
+
+            let minDistToTarget = Infinity;
+            if (targetAsteroids.length > 0) {
+                for (let ast of targetAsteroids) {
+                    let d = getDist(cand, ast);
+                    if (d < minDistToTarget) minDistToTarget = d;
+                }
+            } else {
+                // If no targets, expand outward slowly
+                minDistToTarget = -getDist(cand, p.homePlanet);
+            }
+
+            // Count neighbors already in the cluster (including home)
+            let neighbors = 0;
+            for (let dir of hexDirs) {
+                let nid = (cand.q + dir.q) + "," + (cand.r + dir.r);
+                if (selectedSet.has(nid) || nid === homeId) {
+                    neighbors++;
+                }
+            }
+
+            // Strongly reward sharing multiple edges (forming triangles/cycles) 
+            let score = (neighbors * 800) - minDistToTarget;
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestCandidateId = cid;
+            }
+        }
+
+        if (bestCandidateId) {
+            let chosen = candidates.get(bestCandidateId);
+            selectedNodes.push(chosen);
+            selectedSet.add(bestCandidateId);
+            candidates.delete(bestCandidateId);
+            addNeighbors(chosen.q, chosen.r);
+        } else {
+            break; // No valid candidates left
+        }
+    }
+
+    // Greedy assignment: nearest stations to nearest lattice nodes
+    let sortedNodes = selectedNodes.slice().sort((a, b) => getDist(a, p.homePlanet) - getDist(b, p.homePlanet));
+    let sortedStations = p.units.stations.slice().sort((a, b) => getDist(a, p.homePlanet) - getDist(b, p.homePlanet));
+
+    // To prevent stations from breaking off and jumping 1000px across the map, we must clamp their
+    // targets to the ACTUAL, currently connected graph. They will act like a tethered chain.
+    let currentGraph = getStationGraph(p, false);
+    let connectedAnchors = currentGraph.connectedNodes;
+    if (!connectedAnchors || connectedAnchors.length === 0) connectedAnchors = [p.homePlanet];
+
+    for (let i = 0; i < sortedStations.length; i++) {
+        let s = sortedStations[i];
+        let tx = p.homePlanet.x;
+        let ty = p.homePlanet.y;
+
+        if (i < sortedNodes.length) {
+            tx = sortedNodes[i].x;
+            ty = sortedNodes[i].y;
+        }
+
+        // Check distance to the closest connected anchor
+        let closestAnchor = null;
+        let minDistToAnchor = Infinity;
+        for (let anchor of connectedAnchors) {
+            if (anchor === s) continue; // Don't anchor to yourself
+            let d = getDist({ x: tx, y: ty }, anchor);
+            if (d < minDistToAnchor) {
+                minDistToAnchor = d;
+                closestAnchor = anchor;
+            }
+        }
+
+        // If the target is further than 220px from our solid network, clamp it!
+        // This ensures the station waits at the border for other stations to catch up, organically growing the slime.
+        if (closestAnchor && minDistToAnchor > 220) {
+            let dirX = tx - closestAnchor.x;
+            let dirY = ty - closestAnchor.y;
+            let len = Math.hypot(dirX, dirY) || 1;
+            tx = closestAnchor.x + (dirX / len) * 220;
+            ty = closestAnchor.y + (dirY / len) * 220;
+        }
+
+        assignTarget(s, tx, ty);
+        s.aiState = 'LATTICE';
+    }
+
+    let globalMinDistToTarget = Infinity;
+    for (let node of selectedNodes) {
+        for (let ast of targetAsteroids) {
+            let d = getDist(node, ast);
+            if (d < globalMinDistToTarget) globalMinDistToTarget = d;
+        }
+    }
+
+    let activeCaptured = asteroids.filter(a => a.resources > 0 && isAstCaptured(a));
+
+    // Explicit Highway Building Logic
+    let needsMoreStations = false;
+    if (uncaptured.length > 0) {
+        if (p.units.stations.length < 3) needsMoreStations = true; // Minimum to form any 3-cycle territory
+        else if (globalMinDistToTarget > 120) needsMoreStations = true; // Our lattice hasn't reached the asteroid! Build a highway.
+        else if (p.energy > 150) needsMoreStations = true; // Excess energy, expand aggressively
+    }
+
+    if (!buildActionTaken && p.energy >= 50 && p.buildCooldowns.station <= 0 && needsMoreStations) {
         p.energy -= 50;
         p.buildCooldowns.station = 10;
         let tx = p.homePlanet.x;
         let ty = p.homePlanet.y - 100;
-        p.buildQueue.push({ type: 'stations', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, targetX: p.homePlanet.x, targetY: p.homePlanet.y, desiredTargetX: tx, desiredTargetY: ty, health: 100, maxHealth: 100, cooldown: 0, aiState: 'IDLE' } });
+        p.buildQueue.push({ type: 'stations', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, targetX: p.homePlanet.x, targetY: p.homePlanet.y, desiredTargetX: tx, desiredTargetY: ty, health: 100, maxHealth: 100, cooldown: 0, aiState: 'LATTICE' } });
         buildActionTaken = true;
-    }
-
-    // 4. Ensure captured asteroids are HELD
-    let activeCaptured = asteroids.filter(a => a.resources > 0 && isAstCaptured(a));
-    for (let ast of activeCaptured) {
-        let assigned = p.units.stations.filter(s => s.aiTargetAst === ast && s.aiState === 'HOLDING');
-        if (assigned.length === 0) {
-            let available = p.units.stations.filter(s => s.aiState === 'IDLE' || s.aiState === 'SCOUTING');
-            available.sort((s1, s2) => Math.hypot(s1.x - ast.x, s1.y - ast.y) - Math.hypot(s2.x - ast.x, s2.y - ast.y));
-            if (available.length > 0) {
-                let station = available[0];
-                station.aiState = 'HOLDING';
-                station.aiTargetAst = ast;
-                assigned.push(station);
-
-                let dirX = ast.x - p.homePlanet.x;
-                let dirY = ast.y - p.homePlanet.y;
-                let len = Math.hypot(dirX, dirY) || 1;
-                let targetX = ast.x + (dirX / len) * (ast.radius + 30);
-                let targetY = ast.y + (dirY / len) * (ast.radius + 30);
-
-                if (Math.hypot((station.desiredTargetX || station.targetX) - targetX, (station.desiredTargetY || station.targetY) - targetY) > 5) {
-                    station.desiredTargetX = targetX;
-                    station.desiredTargetY = targetY;
-                }
-            }
-        }
-        // HOLDING stations just stay where they are (target is locked in state transition)
-    }
-
-    // 5. Assign SCOUTING to idle stations
-    let idleStations = p.units.stations.filter(s => s.aiState === 'IDLE');
-    if (idleStations.length > 0) {
-        let scouters = p.units.stations.filter(s => s.aiState === 'SCOUTING');
-        const corners = [
-            { x: p.id === 0 ? mapWidth : 0, y: 0 },
-            { x: p.id === 0 ? mapWidth : 0, y: mapHeight },
-            { x: p.id === 0 ? mapWidth : 0, y: mapHeight / 2 },
-            { x: mapWidth / 2, y: mapHeight / 2 } // push towards actual center first
-        ];
-
-        for (let s of idleStations) {
-            s.aiState = 'SCOUTING';
-            scouters.push(s);
-        }
-
-        for (let i = 0; i < scouters.length; i++) {
-            let s = scouters[i];
-            let targetCorner = corners[i % corners.length];
-            let dirX = targetCorner.x - p.homePlanet.x;
-            let dirY = targetCorner.y - p.homePlanet.y;
-            let len = Math.hypot(dirX, dirY) || 1;
-
-            // Push out progressively further
-            let pushDist = 200 + (scouters.length * 50);
-            let trueTargetX = p.homePlanet.x + (dirX / len) * pushDist;
-            let trueTargetY = p.homePlanet.y + (dirY / len) * pushDist;
-
-            let clamped = getClampedTarget(trueTargetX, trueTargetY, s);
-
-            if (Math.hypot((s.desiredTargetX || s.targetX) - clamped.x, (s.desiredTargetY || s.targetY) - clamped.y) > 5) {
-                s.desiredTargetX = clamped.x;
-                s.desiredTargetY = clamped.y;
-            }
-        }
     }
 
     // Calculate target miners early to determine if economy is critical
@@ -343,11 +244,11 @@ export function updateAI(p, dt, mapWidth, mapHeight) {
     let economyCritical = p.units.miners.length < Math.min(2, targetMiners);
 
     // AI Priority 2: DEFENSE & OFFENSE (Fighters)
-    let minFighters = Math.max(1, enemy.units.fighters.length + 1); // Always want an edge
-    let savingEnergy = false;
+    let minFighters = Math.max(1, enemy && enemy.units.fighters ? enemy.units.fighters.length + 1 : 1); // Always want an edge
+    let savingEnergy = p.units.stations.length < 2 && p.energy < 100;
 
     if (!buildActionTaken && !economyCritical && p.units.fighters.length < minFighters && p.buildCooldowns.fighter <= 0) {
-        if (p.energy >= 100) {
+        if (p.energy >= 100 && !savingEnergy) {
             // Defensive/Matching: Build fighters to keep up or retake control
             p.energy -= 100;
             p.buildCooldowns.fighter = 15;
