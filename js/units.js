@@ -83,7 +83,11 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
     }
 
     p.units.stations.forEach(s => {
-        applySteering(s, s.targetX, s.targetY, 40, p);
+        let currentSpeed = 40;
+        if (!isPointInTerritory({ x: s.x, y: s.y }, p)) {
+            currentSpeed = 20; // 50% slower outside territory
+        }
+        applySteering(s, s.targetX, s.targetY, currentSpeed, p);
     });
 
     p.units.fighters.forEach(f => {

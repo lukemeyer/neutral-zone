@@ -82,55 +82,25 @@ export function initInput(gameCanvas) {
             const proposedX = mouseX;
             const proposedY = mouseY;
 
-            const initialGraph = getStationGraph(state.activeStationPlayer, true);
-            const edgesToEnforce = initialGraph.validEdges.filter(e =>
-                initialGraph.components.some(comp => comp.includes(e.nodeA))
-            );
-
-            const backupTargets = state.activeStationPlayer.units.stations.map(s => ({ s, tx: s.targetX, ty: s.targetY }));
-            const origActX = backupTargets.find(b => b.s === state.activeStation).tx;
-            const origActY = backupTargets.find(b => b.s === state.activeStation).ty;
-
-            const applyIK = (propX, propY) => {
-                backupTargets.forEach(b => { b.s.targetX = b.tx; b.s.targetY = b.ty; });
-                state.activeStation.targetX = propX;
-                state.activeStation.targetY = propY;
-                for (let i = 0; i < 5; i++) {
-                    for (let edge of edgesToEnforce) {
-                        let A = edge.nodeA;
-                        let B = edge.nodeB;
-                        let dx = B.targetX - A.targetX;
-                        let dy = B.targetY - A.targetY;
-                        let dist = Math.hypot(dx, dy);
-                        if (dist > MAX_CONNECTION_LENGTH) {
-                            let diff = dist - MAX_CONNECTION_LENGTH;
-                            let nx = dx / dist;
-                            let ny = dy / dist;
-                            let movA = (A === state.activeStation || A === state.activeStationPlayer.homePlanet) ? 0 : 1;
-                            let movB = (B === state.activeStation || B === state.activeStationPlayer.homePlanet) ? 0 : 1;
-                            if (movA + movB > 0) {
-                                let totalW = movA + movB;
-                                if (movA > 0) { A.targetX += nx * (diff * (movA / totalW)); A.targetY += ny * (diff * (movA / totalW)); }
-                                if (movB > 0) { B.targetX -= nx * (diff * (movB / totalW)); B.targetY -= ny * (diff * (movB / totalW)); }
-                            }
-                        }
-                    }
-                }
-            };
+            const origTargetX = state.activeStation.targetX;
+            const origTargetY = state.activeStation.targetY;
 
             const checkValid = () => isValidStationPlacement(state.activeStation.targetX, state.activeStation.targetY, state.activeStation, state.activeStationPlayer, players, canvas.width, canvas.height);
 
-            applyIK(proposedX, proposedY);
+            state.activeStation.targetX = proposedX;
+            state.activeStation.targetY = proposedY;
 
             if (!checkValid()) {
                 let low = 0; let high = 1; let bestT = 0;
                 for (let step = 0; step < 10; step++) {
                     let mid = (low + high) / 2;
-                    applyIK(origActX + (proposedX - origActX) * mid, origActY + (proposedY - origActY) * mid);
+                    state.activeStation.targetX = origTargetX + (proposedX - origTargetX) * mid;
+                    state.activeStation.targetY = origTargetY + (proposedY - origTargetY) * mid;
                     if (checkValid()) { bestT = mid; low = mid; }
                     else { high = mid; }
                 }
-                applyIK(origActX + (proposedX - origActX) * bestT, origActY + (proposedY - origActY) * bestT);
+                state.activeStation.targetX = origTargetX + (proposedX - origTargetX) * bestT;
+                state.activeStation.targetY = origTargetY + (proposedY - origTargetY) * bestT;
             }
         }
 

@@ -88,18 +88,6 @@ export function draw() {
 
         const drawGraphLines = (g, isProj) => {
             const colorValid = p.id === 0 ? 'rgba(46, 160, 67, 0.8)' : 'rgba(218, 54, 51, 0.8)';
-            const colorBroken = 'rgba(139, 148, 158, 0.4)';
-
-            g.brokenEdges.forEach(e => {
-                ctx.beginPath();
-                ctx.moveTo(e.posA.x, e.posA.y);
-                ctx.lineTo(e.posB.x, e.posB.y);
-                ctx.strokeStyle = colorBroken;
-                if (isProj) ctx.setLineDash([5, 5]);
-                ctx.lineWidth = 1;
-                ctx.stroke();
-                ctx.setLineDash([]);
-            });
 
             g.validEdges.forEach(e => {
                 ctx.beginPath();

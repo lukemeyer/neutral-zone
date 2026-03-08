@@ -209,11 +209,13 @@ export function getPlayerTerritoryHulls(player, allPlayers, useTarget = false) {
     // Create a hull for each connected component!
     const hulls = [];
     for (let comp of graph.components) {
-        const basePoints = comp.map(n => {
-            if (n === player.homePlanet) return n;
-            return useTarget ? { x: n.targetX, y: n.targetY } : { x: n.x, y: n.y };
-        });
-        hulls.push(getConvexHull(basePoints));
+        if (comp.length >= 3) {
+            const basePoints = comp.map(n => {
+                if (n === player.homePlanet) return n;
+                return useTarget ? { x: n.targetX, y: n.targetY } : { x: n.x, y: n.y };
+            });
+            hulls.push(getConvexHull(basePoints));
+        }
     }
 
     return hulls;
