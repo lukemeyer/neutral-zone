@@ -1,4 +1,4 @@
-import { players, asteroids, projectiles, state, stars } from './state.js';
+import { players, asteroids, projectiles, state, stars, GRID_W, GRID_H } from './state.js';
 import { getStationGraph, TERRITORY_RADIUS, getPlayerTerritoryHulls } from './utils.js';
 console.log('renderer.js loaded');
 
@@ -35,6 +35,8 @@ function drawRotatedImage(img, x, y, size, angle) {
 }
 
 export function draw() {
+    const scX = canvas.width / GRID_W;
+    const scY = canvas.height / GRID_H;
     ctx.fillStyle = '#0d1117';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -42,7 +44,7 @@ export function draw() {
     stars.forEach(star => {
         ctx.globalAlpha = star.opacity;
         ctx.beginPath();
-        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.arc(star.x * scX, star.y * scY, star.size, 0, Math.PI * 2);
         ctx.fill();
     });
     ctx.globalAlpha = 1.0;
@@ -66,8 +68,8 @@ export function draw() {
 
             if (hull.length > 2) {
                 tCtx.beginPath();
-                tCtx.moveTo(hull[0].x, hull[0].y);
-                for (let i = 1; i < hull.length; i++) tCtx.lineTo(hull[i].x, hull[i].y);
+                tCtx.moveTo(hull[0].x * scX, hull[0].y * scY);
+                for (let i = 1; i < hull.length; i++) tCtx.lineTo(hull[i].x * scX, hull[i].y * scY);
                 tCtx.closePath();
                 tCtx.fill();
             }
@@ -75,8 +77,8 @@ export function draw() {
             if (hull.length > 1) {
                 tCtx.lineWidth = 2; // Thin explicit sharp boundary lines
                 tCtx.beginPath();
-                tCtx.moveTo(hull[0].x, hull[0].y);
-                for (let i = 1; i < hull.length; i++) tCtx.lineTo(hull[i].x, hull[i].y);
+                tCtx.moveTo(hull[0].x * scX, hull[0].y * scY);
+                for (let i = 1; i < hull.length; i++) tCtx.lineTo(hull[i].x * scX, hull[i].y * scY);
                 tCtx.closePath();
                 tCtx.stroke();
             }
@@ -91,8 +93,8 @@ export function draw() {
 
             g.validEdges.forEach(e => {
                 ctx.beginPath();
-                ctx.moveTo(e.posA.x, e.posA.y);
-                ctx.lineTo(e.posB.x, e.posB.y);
+                ctx.moveTo(e.posA.x * scX, e.posA.y * scY);
+                ctx.lineTo(e.posB.x * scX, e.posB.y * scY);
                 ctx.strokeStyle = colorValid;
                 if (isProj) ctx.setLineDash([5, 5]);
                 ctx.lineWidth = 2;
@@ -123,8 +125,8 @@ export function draw() {
             const isDrawingForThisFighter = state.drawingPath && state.selectedFighters && state.selectedFighters.includes(f);
             if (f.path && f.path.length > 0 && !isDrawingForThisFighter) {
                 ctx.beginPath();
-                ctx.moveTo(f.path[0].x, f.path[0].y);
-                for (let i = 1; i < f.path.length; i++) ctx.lineTo(f.path[i].x, f.path[i].y);
+                ctx.moveTo(f.path[0].x * scX, f.path[0].y * scY);
+                for (let i = 1; i < f.path.length; i++) ctx.lineTo(f.path[i].x * scX, f.path[i].y * scY);
                 ctx.strokeStyle = p.id === 0 ? 'rgba(88, 166, 255, 0.4)' : 'rgba(248, 81, 73, 0.4)';
                 ctx.lineWidth = 2;
                 ctx.stroke();
@@ -135,8 +137,8 @@ export function draw() {
     // Draw active drawing path
     if (state.drawingPath && state.currentPath.length > 0) {
         ctx.beginPath();
-        ctx.moveTo(state.currentPath[0].x, state.currentPath[0].y);
-        for (let i = 1; i < state.currentPath.length; i++) ctx.lineTo(state.currentPath[i].x, state.currentPath[i].y);
+        ctx.moveTo(state.currentPath[0].x * scX, state.currentPath[0].y * scY);
+        for (let i = 1; i < state.currentPath.length; i++) ctx.lineTo(state.currentPath[i].x * scX, state.currentPath[i].y * scY);
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; // White temporary path
         ctx.lineWidth = 2;
         ctx.stroke();
@@ -144,10 +146,10 @@ export function draw() {
 
     // Draw Selection Box
     if (state.selectionBox) {
-        const minX = Math.min(state.selectionBox.startX, state.selectionBox.endX);
-        const maxX = Math.max(state.selectionBox.startX, state.selectionBox.endX);
-        const minY = Math.min(state.selectionBox.startY, state.selectionBox.endY);
-        const maxY = Math.max(state.selectionBox.startY, state.selectionBox.endY);
+        const minX = Math.min((state.selectionBox.startX * scX), (state.selectionBox.endX * scX));
+        const maxX = Math.max((state.selectionBox.startX * scX), (state.selectionBox.endX * scX));
+        const minY = Math.min((state.selectionBox.startY * scY), (state.selectionBox.endY * scY));
+        const maxY = Math.max((state.selectionBox.startY * scY), (state.selectionBox.endY * scY));
 
         ctx.fillStyle = 'rgba(88, 166, 255, 0.2)';
         ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
@@ -164,10 +166,10 @@ export function draw() {
 
         const img = graphicsCache.asteroids[a.variant] || graphicsCache.asteroids[0];
         if (img) {
-            ctx.drawImage(img, a.x - a.radius, a.y - a.radius, a.radius * 2, a.radius * 2);
+            ctx.drawImage(img, a.x * scX - a.radius * scX, a.y * scY - a.radius * scX, a.radius * scX * 2, a.radius * scX * 2);
         } else {
             ctx.beginPath();
-            ctx.arc(a.x, a.y, a.radius, 0, Math.PI * 2);
+            ctx.arc(a.x * scX, a.y * scY, a.radius * scX, 0, Math.PI * 2);
             ctx.fillStyle = '#8b949e';
             ctx.fill();
         }
@@ -175,7 +177,7 @@ export function draw() {
         ctx.fillStyle = 'white';
         ctx.font = '12px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(Math.ceil(a.resources), a.x, a.y - a.radius - 5);
+        ctx.fillText(Math.ceil(a.resources), a.x * scX, a.y * scY - a.radius * scX - 5);
     });
 
     // Draw Units & Planets
@@ -185,16 +187,16 @@ export function draw() {
         // Home Planet
         const planetImg = p.id === 0 ? graphicsCache.planet1 : graphicsCache.planet2;
         if (planetImg) {
-            ctx.drawImage(planetImg, p.homePlanet.x - p.homePlanet.radius, p.homePlanet.y - p.homePlanet.radius, p.homePlanet.radius * 2, p.homePlanet.radius * 2);
+            ctx.drawImage(planetImg, p.homePlanet.x * scX - p.homePlanet.radius * ((scX+scY)/2), p.homePlanet.y * scY - p.homePlanet.radius * ((scX+scY)/2), p.homePlanet.radius * ((scX+scY)/2) * 2, p.homePlanet.radius * ((scX+scY)/2) * 2);
         } else {
             ctx.beginPath();
-            ctx.arc(p.homePlanet.x, p.homePlanet.y, p.homePlanet.radius, 0, Math.PI * 2);
+            ctx.arc(p.homePlanet.x * scX, p.homePlanet.y * scY, p.homePlanet.radius * ((scX+scY)/2), 0, Math.PI * 2);
             ctx.fillStyle = p.color;
             ctx.fill();
         }
         if (p.homePlanet.damageTime > 0) {
             ctx.beginPath();
-            ctx.arc(p.homePlanet.x, p.homePlanet.y, p.homePlanet.radius + 10, 0, Math.PI * 2);
+            ctx.arc(p.homePlanet.x * scX, p.homePlanet.y * scY, p.homePlanet.radius * ((scX+scY)/2) + 10, 0, Math.PI * 2);
             ctx.fillStyle = `rgba(218, 54, 51, ${p.homePlanet.damageTime * 2})`;
             ctx.fill();
         }
@@ -202,33 +204,33 @@ export function draw() {
 
         // Stations
         p.units.stations.forEach(s => {
-            const isMoving = Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5;
+            const isMoving = Math.hypot((s.targetX * scX) - (s.x * scX), (s.targetY * scY) - (s.y * scY)) > 5;
             if (isMoving) {
                 ctx.beginPath();
-                ctx.arc(s.targetX, s.targetY, 10, 0, Math.PI * 2);
+                ctx.arc((s.targetX * scX), (s.targetY * scY), 10, 0, Math.PI * 2);
                 ctx.fillStyle = p.id === 0 ? 'rgba(31, 111, 235, 0.4)' : 'rgba(218, 54, 51, 0.4)';
                 ctx.fill();
             } else {
                 ctx.beginPath();
-                ctx.arc(s.x, s.y, 50, 0, Math.PI * 2);
+                ctx.arc((s.x * scX), (s.y * scY), 50, 0, Math.PI * 2);
                 ctx.strokeStyle = p.id === 0 ? 'rgba(31, 111, 235, 0.15)' : 'rgba(218, 54, 51, 0.15)';
                 ctx.lineWidth = 1;
                 ctx.stroke();
             }
 
             // Calculate angle matching desired movement
-            let angle = Math.atan2(s.targetY - s.y, s.targetX - s.x) + Math.PI / 2;
+            let angle = Math.atan2((s.targetY * scY) - (s.y * scY), (s.targetX * scX) - (s.x * scX)) + Math.PI / 2;
             if (!isMoving) angle = 0; // Upright if stationary
 
             if (s.damageTime > 0) {
                 ctx.beginPath();
-                ctx.arc(s.x, s.y, 16, 0, Math.PI * 2);
+                ctx.arc((s.x * scX), (s.y * scY), 16, 0, Math.PI * 2);
                 ctx.fillStyle = `rgba(218, 54, 51, ${s.damageTime * 2})`;
                 ctx.fill();
             }
 
-            drawRotatedImage(cache.station, s.x, s.y, 26, angle);
-            drawHealthBar(s.x, s.y - 20, s.health, s.maxHealth);
+            drawRotatedImage(cache.station, (s.x * scX), (s.y * scY), 26, angle);
+            drawHealthBar((s.x * scX), (s.y * scY) - 20, s.health, s.maxHealth);
         });
 
         // Fighters
@@ -241,19 +243,19 @@ export function draw() {
                 angle = f.lastTargetAngle;
             } else if (f.pursuitTarget) {
                 // Face the pursuit target if actively engaging but not firing yet
-                angle = Math.atan2(f.pursuitTarget.y - f.y, f.pursuitTarget.x - f.x) + Math.PI / 2;
+                angle = Math.atan2((f.pursuitTarget.y * scY) - (f.y * scY), (f.pursuitTarget.x * scX) - (f.x * scX)) + Math.PI / 2;
             } else if (f.path && f.path.length > 0) {
                 const targetPoint = f.path[f.pathIndex];
                 if (targetPoint) {
-                    angle = Math.atan2(targetPoint.y - f.y, targetPoint.x - f.x) + Math.PI / 2;
+                    angle = Math.atan2(targetPoint.y - (f.y * scY), targetPoint.x - (f.x * scX)) + Math.PI / 2;
                 }
             }
 
-            drawRotatedImage(cache.fighter, f.x, f.y, 24, angle);
+            drawRotatedImage(cache.fighter, (f.x * scX), (f.y * scY), 24, angle);
 
             if (state.selectedFighters && state.selectedFighters.includes(f)) {
                 ctx.beginPath();
-                ctx.arc(f.x, f.y, 16, 0, Math.PI * 2);
+                ctx.arc((f.x * scX), (f.y * scY), 16, 0, Math.PI * 2);
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
                 ctx.lineWidth = 2;
                 ctx.stroke();
@@ -261,7 +263,7 @@ export function draw() {
 
             if (f.damageTime > 0) {
                 ctx.beginPath();
-                ctx.arc(f.x, f.y, 16, 0, Math.PI * 2);
+                ctx.arc((f.x * scX), (f.y * scY), 16, 0, Math.PI * 2);
                 ctx.fillStyle = `rgba(218, 54, 51, ${f.damageTime * 2})`;
                 ctx.fill();
             }
@@ -269,7 +271,7 @@ export function draw() {
             if (f.cooldown > 0.4) {
                 // Draw a symmetric firing starburst (4-point cross)
                 ctx.save();
-                ctx.translate(f.x, f.y);
+                ctx.translate((f.x * scX), (f.y * scY));
                 ctx.rotate(angle);
 
                 ctx.beginPath();
@@ -292,43 +294,43 @@ export function draw() {
                 ctx.restore();
             }
 
-            drawHealthBar(f.x, f.y - 20, f.health, f.maxHealth);
+            drawHealthBar((f.x * scX), (f.y * scY) - 20, f.health, f.maxHealth);
         });
 
         // Miners
         p.units.miners.forEach(m => {
             let angle = 0;
             if (m.returning) {
-                angle = Math.atan2(p.homePlanet.y - m.y, p.homePlanet.x - m.x) + Math.PI / 2;
+                angle = Math.atan2((p.homePlanet.y * scY) - (m.y * scY), (p.homePlanet.x * scX) - (m.x * scX)) + Math.PI / 2;
             } else if (m.targetAsteroid) {
-                angle = Math.atan2(m.targetAsteroid.y - m.y, m.targetAsteroid.x - m.x) + Math.PI / 2;
+                angle = Math.atan2((m.targetAsteroid.y * scY) - (m.y * scY), (m.targetAsteroid.x * scX) - (m.x * scX)) + Math.PI / 2;
             }
 
-            const isMining = m.targetAsteroid && Math.hypot(m.targetAsteroid.x - m.x, m.targetAsteroid.y - m.y) <= 20;
+            const isMining = m.targetAsteroid && Math.hypot((m.targetAsteroid.x * scX) - (m.x * scX), (m.targetAsteroid.y * scY) - (m.y * scY)) <= 20;
 
             if (m.damageTime > 0) {
                 ctx.beginPath();
-                ctx.arc(m.x, m.y, 16, 0, Math.PI * 2);
+                ctx.arc((m.x * scX), (m.y * scY), 16, 0, Math.PI * 2);
                 ctx.fillStyle = `rgba(218, 54, 51, ${m.damageTime * 2})`;
                 ctx.fill();
             }
 
-            drawRotatedImage(isMining ? cache.minerActive : cache.miner, m.x, m.y, 24, angle);
+            drawRotatedImage(isMining ? cache.minerActive : cache.miner, (m.x * scX), (m.y * scY), 24, angle);
 
             if (m.payload > 0) {
                 const ratio = m.payload / 25;
                 ctx.fillStyle = '#2ea043';
-                ctx.fillRect(m.x - 4, (m.y + 12) - (8 * ratio), 8, 8 * ratio);
+                ctx.fillRect((m.x * scX) - 4, (m.y * scY + 12) - (8 * ratio), 8, 8 * ratio);
             }
-            drawHealthBar(m.x, m.y - 20, m.health, m.maxHealth);
+            drawHealthBar((m.x * scX), (m.y * scY) - 20, m.health, m.maxHealth);
         });
     });
 
     // Draw Projectiles
     projectiles.forEach(proj => {
         ctx.beginPath();
-        ctx.moveTo(proj.x, proj.y);
-        ctx.lineTo(proj.x - (proj.target.ref.x - proj.x > 0 ? 5 : -5), proj.y - (proj.target.ref.y - proj.y > 0 ? 5 : -5)); // Simple trail
+        ctx.moveTo((proj.x * scX), (proj.y * scY));
+        ctx.lineTo((proj.x * scX) - ((proj.target.ref.x * scX) - (proj.x * scX) > 0 ? 5 : -5), (proj.y * scY) - ((proj.target.ref.y * scY) - (proj.y * scY) > 0 ? 5 : -5)); // Simple trail
         ctx.strokeStyle = proj.color;
         ctx.lineWidth = 2;
         ctx.stroke();

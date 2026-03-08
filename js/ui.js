@@ -15,7 +15,7 @@ export function updateUI() {
         let usedBorder = 0;
         graph.validEdges.forEach(e => usedBorder += e.dist);
 
-        const maxPerimeter = (p.units.stations.length + 1) * 175;
+        const maxPerimeter = (p.units.stations.length + 1) * 3.5;
 
         // Update UI Text
         document.getElementById(`p${id}-border`).innerText = Math.floor(usedBorder);
@@ -96,14 +96,14 @@ export function setupUIBindings() {
         if (players[0].energy >= 50) {
             players[0].energy -= 50;
             let tx = players[0].homePlanet.x;
-            let ty = players[0].homePlanet.y - 100;
+            let ty = Math.max(0.4, players[0].homePlanet.y - 2.0);
             players[0].buildQueue.push({ type: 'stations', unitData: { x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetX: tx, targetY: ty, health: 100, maxHealth: 100, cooldown: 0, damageTime: 0 } });
         }
     });
     document.getElementById('p1-btn-fighter').addEventListener('click', () => {
         if (players[0].energy >= 100) {
             players[0].energy -= 100;
-            let tx = players[0].homePlanet.x + 100;
+            let tx = players[0].homePlanet.x + 2.0;
             let ty = players[0].homePlanet.y;
             const newFighter = { x: players[0].homePlanet.x, y: players[0].homePlanet.y, path: [{ x: tx, y: ty }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0, damageTime: 0 };
             players[0].buildQueue.push({ type: 'fighters', unitData: newFighter });
@@ -126,14 +126,14 @@ export function setupUIBindings() {
         if (players[1].energy >= 50) {
             players[1].energy -= 50;
             let tx = players[1].homePlanet.x;
-            let ty = players[1].homePlanet.y - 100;
+            let ty = Math.max(0.4, players[1].homePlanet.y - 2.0);
             players[1].buildQueue.push({ type: 'stations', unitData: { x: players[1].homePlanet.x, y: players[1].homePlanet.y, targetX: tx, targetY: ty, health: 100, maxHealth: 100, cooldown: 0, damageTime: 0 } });
         }
     });
     document.getElementById('p2-btn-fighter').addEventListener('click', () => {
         if (players[1].energy >= 100) {
             players[1].energy -= 100;
-            let tx = players[1].homePlanet.x - 100;
+            let tx = players[1].homePlanet.x - 2.0;
             let ty = players[1].homePlanet.y;
             const newFighter = { x: players[1].homePlanet.x, y: players[1].homePlanet.y, path: [{ x: tx, y: ty }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0, damageTime: 0 };
             players[1].buildQueue.push({ type: 'fighters', unitData: newFighter });

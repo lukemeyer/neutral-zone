@@ -20,7 +20,7 @@ export function getConvexHull(points) {
     const uniquePoints = [];
     const seen = new Set();
     for (let p of points) {
-        let key = `${Math.round(p.x)},${Math.round(p.y)}`;
+        let key = `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
         if (!seen.has(key)) { seen.add(key); uniquePoints.push(p); }
     }
     if (uniquePoints.length <= 2) return uniquePoints;
@@ -114,7 +114,7 @@ export function isPointInTerritory(pt, player, useTarget = false, extraRadius = 
     return false;
 }
 
-export const MAX_CONNECTION_LENGTH = 250;
+export const MAX_CONNECTION_LENGTH = 5;
 
 export function getStationGraph(player, useTarget = false) {
     const nodes = [player.homePlanet, ...player.units.stations];

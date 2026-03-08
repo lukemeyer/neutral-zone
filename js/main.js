@@ -1,5 +1,5 @@
 console.log('main.js loaded');
-import { players, state, initGameState } from './state.js';
+import { players, state, initGameState, GRID_W, GRID_H } from './state.js';
 import { getStationGraph, getPlayerTerritoryHulls } from './utils.js';
 import { initInput } from './input.js';
 import { updateAI } from './ai.js';
@@ -90,7 +90,7 @@ function update(time) {
             }
         });
 
-        if (p.isCPU) updateAI(p, dt, canvas.width, canvas.height);
+        if (p.isCPU) updateAI(p, dt, GRID_W, GRID_H);
 
         const hulls = getPlayerTerritoryHulls(p, players, false);
 
@@ -106,7 +106,7 @@ function update(time) {
             area += Math.abs(subArea / 2);
         }
 
-        const totalArea = canvas.width * canvas.height;
+        const totalArea = GRID_W * GRID_H;
         const pct = (area / totalArea) * 100;
 
         if (pct >= 55.0 && !state.gameOver) {

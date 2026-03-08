@@ -9,7 +9,7 @@ export function updateExpansioneerAI(p, dt, mapWidth, mapHeight) {
     function assignTarget(s, tx, ty) {
         let currentTargetX = s.desiredTargetX !== undefined ? s.desiredTargetX : s.targetX;
         let currentTargetY = s.desiredTargetY !== undefined ? s.desiredTargetY : s.targetY;
-        if (Math.hypot(currentTargetX - tx, currentTargetY - ty) > 5) {
+        if (Math.hypot(currentTargetX - tx, currentTargetY - ty) > 0.1) {
             if (!s.aiLastMoveTime || (p.aiTime - s.aiLastMoveTime) > 10) {
                 s.desiredTargetX = tx;
                 s.desiredTargetY = ty;
@@ -24,8 +24,8 @@ export function updateExpansioneerAI(p, dt, mapWidth, mapHeight) {
             let dx = s.desiredTargetX - s.targetX;
             let dy = s.desiredTargetY - s.targetY;
             let dist = Math.hypot(dx, dy);
-            if (dist > 1) {
-                let dragSpeed = 250 * dt; // Deliberate speed
+            if (dist > 0.02) {
+                let dragSpeed = 5.0 * dt; // Deliberate speed
                 let moveDist = Math.min(dragSpeed, dist);
                 let proposedX = s.targetX + (dx / dist) * moveDist;
                 let proposedY = s.targetY + (dy / dist) * moveDist;
@@ -63,7 +63,7 @@ export function updateExpansioneerAI(p, dt, mapWidth, mapHeight) {
     }
 
     // --- Hexagonal "Creeping Sludge" Territory Generator ---
-    const SPACING = 190;
+    const SPACING = 3.8;
 
     function hexToPixel(q, r) {
         let x = SPACING * (3 / 2) * q;
@@ -121,7 +121,8 @@ export function updateExpansioneerAI(p, dt, mapWidth, mapHeight) {
             }
 
             // Expansioneer strongly rewards mesh stability over reaching targets
-            let score = (neighbors * 2000) - minDistToTarget;
+            // 8 units of distance is worth 1 neighbor. Ensures expansion is thick but continues moving.
+            let score = (neighbors * 8.0) - minDistToTarget;
 
             if (score > bestScore) {
                 bestScore = score;
@@ -139,7 +140,8 @@ export function updateExpansioneerAI(p, dt, mapWidth, mapHeight) {
     }
 
     let sortedNodes = selectedNodes.slice().sort((a, b) => getDist(a, p.homePlanet) - getDist(b, p.homePlanet));
-    let sortedStations = p.units.stations.slice().sort((a, b) => getDist(a, p.homePlanet) - getDist(b, p.homePlanet));
+    p.units.stations.forEach(s => { if (s.createdAt === undefined) s.createdAt = p.aiTime; });
+    let sortedStations = p.units.stations.slice().sort((a, b) => a.createdAt - b.createdAt);
 
     for (let i = 0; i < sortedStations.length; i++) {
         let s = sortedStations[i];
@@ -151,24 +153,84 @@ export function updateExpansioneerAI(p, dt, mapWidth, mapHeight) {
             ty = sortedNodes[i].y;
         }
 
-        // Clamping to connected anchors
-        let closestAnchor = null;
-        let minDistToAnchor = Infinity;
-        for (let anchor of connectedAnchors) {
-            if (anchor === s) continue;
-            let d = getDist({ x: tx, y: ty }, anchor);
-            if (d < minDistToAnchor) {
-                minDistToAnchor = d;
-                closestAnchor = anchor;
+        // Ensure strictly connected to 2 valid anchors
+        let maxDist = 4.4;
+        let bestPair = null;
+        let bestPairDist = Infinity;
+
+        if (connectedAnchors.length >= 2) {
+            for (let j = 0; j < connectedAnchors.length; j++) {
+                for (let k = j + 1; k < connectedAnchors.length; k++) {
+                    let a1 = connectedAnchors[j];
+                    let a2 = connectedAnchors[k];
+                    if (a1 === s || a2 === s) continue;
+                    let ax1 = a1.targetX !== undefined ? a1.targetX : a1.x; let ay1 = a1.targetY !== undefined ? a1.targetY : a1.y;
+                    let ax2 = a2.targetX !== undefined ? a2.targetX : a2.x; let ay2 = a2.targetY !== undefined ? a2.targetY : a2.y;
+                    if (getDist({ x: ax1, y: ay1 }, { x: ax2, y: ay2 }) <= maxDist * 2) {
+                        let mx = (ax1 + ax2) / 2;
+                        let my = (ay1 + ay2) / 2;
+                        let pairDist = getDist({ x: tx, y: ty }, { x: mx, y: my });
+                        if (pairDist < bestPairDist) {
+                            bestPairDist = pairDist;
+                            bestPair = { A: { ax: ax1, ay: ay1 }, B: { ax: ax2, ay: ay2 } };
+                        }
+                    }
+                }
             }
         }
 
-        if (closestAnchor && minDistToAnchor > 220) {
-            let dirX = tx - closestAnchor.x;
-            let dirY = ty - closestAnchor.y;
+        let A = null, B = null;
+        if (bestPair) {
+            A = bestPair.A;
+            B = bestPair.B;
+        } else {
+            // fallback if < 2 anchors
+            let closestAnchor = null;
+            let minDistToAnchor = Infinity;
+            for (let anchor of connectedAnchors) {
+                if (anchor === s) continue;
+                let ax = anchor.targetX !== undefined ? anchor.targetX : anchor.x;
+                let ay = anchor.targetY !== undefined ? anchor.targetY : anchor.y;
+                let d = getDist({ x: tx, y: ty }, { x: ax, y: ay });
+                if (d < minDistToAnchor) {
+                    minDistToAnchor = d;
+                    closestAnchor = { ax, ay };
+                }
+            }
+            A = closestAnchor;
+        }
+
+        if (A && B) {
+            let mx = (A.ax + B.ax) / 2;
+            let my = (A.ay + B.ay) / 2;
+            let dirX = tx - mx;
+            let dirY = ty - my;
             let len = Math.hypot(dirX, dirY) || 1;
-            tx = closestAnchor.x + (dirX / len) * 220;
-            ty = closestAnchor.y + (dirY / len) * 220;
+            dirX /= len;
+            dirY /= len;
+
+            let validLen = 0;
+            for (let testLen = 0; testLen <= len; testLen += 0.2) {
+                let testX = mx + dirX * testLen;
+                let testY = my + dirY * testLen;
+                if (getDist({ x: testX, y: testY }, { x: A.ax, y: A.ay }) <= maxDist &&
+                    getDist({ x: testX, y: testY }, { x: B.ax, y: B.ay }) <= maxDist) {
+                    validLen = testLen;
+                } else {
+                    break;
+                }
+            }
+            tx = mx + dirX * validLen;
+            ty = my + dirY * validLen;
+        } else if (A) {
+            let d = getDist({ x: tx, y: ty }, { x: A.ax, y: A.ay });
+            if (d > maxDist) {
+                let dirX = tx - A.ax;
+                let dirY = ty - A.ay;
+                let len = Math.hypot(dirX, dirY) || 1;
+                tx = A.ax + (dirX / len) * maxDist;
+                ty = A.ay + (dirY / len) * maxDist;
+            }
         }
 
         assignTarget(s, tx, ty);
@@ -206,7 +268,7 @@ export function updateExpansioneerAI(p, dt, mapWidth, mapHeight) {
         p.energy -= 100;
         p.buildCooldowns.fighter = 15;
         let pDir = p.homePlanet.x < mapWidth / 2 ? 1 : -1;
-        p.buildQueue.push({ type: 'fighters', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, path: [{ x: p.homePlanet.x + 100 * pDir, y: p.homePlanet.y }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0 } });
+        p.buildQueue.push({ type: 'fighters', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, path: [{ x: p.homePlanet.x + 2.0 * pDir, y: p.homePlanet.y }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0 } });
         buildActionTaken = true;
     }
 
@@ -216,12 +278,12 @@ export function updateExpansioneerAI(p, dt, mapWidth, mapHeight) {
         p.energy -= 50;
         p.buildCooldowns.station = 10;
         let pDir = p.homePlanet.x < mapWidth / 2 ? 1 : -1;
-        p.buildQueue.push({ type: 'stations', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, targetX: p.homePlanet.x, targetY: p.homePlanet.y, desiredTargetX: p.homePlanet.x + 100 * pDir, desiredTargetY: p.homePlanet.y, health: 100, maxHealth: 100, cooldown: 0 } });
+        p.buildQueue.push({ type: 'stations', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, targetX: p.homePlanet.x, targetY: p.homePlanet.y, desiredTargetX: p.homePlanet.x + 2.0 * pDir, desiredTargetY: p.homePlanet.y, health: 100, maxHealth: 100, cooldown: 0 } });
         buildActionTaken = true;
     }
 
     // Always have fighters patrolling or attacking
-    let defenseRadius = 350;
+    let defenseRadius = 7.0;
     p.units.fighters.forEach((f, i) => {
         let isIdle = !f.path || f.path.length === 0 || (f.pathIndex >= f.path.length && !f.isLoop);
 

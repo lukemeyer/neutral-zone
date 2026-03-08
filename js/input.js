@@ -1,4 +1,4 @@
-import { players, state } from './state.js';
+import { players, state, GRID_W, GRID_H } from './state.js';
 import { isValidStationPlacement, getStationGraph, MAX_CONNECTION_LENGTH } from './utils.js';
 console.log('input.js loaded');
 
@@ -13,14 +13,14 @@ export function initInput(gameCanvas) {
         if (!state.gameStarted) return;
         e.preventDefault();
         const pos = getMousePos(e);
-        const mouseX = pos.x;
-        const mouseY = pos.y;
+        const mouseX = pos.x / (canvas.width / GRID_W);
+        const mouseY = pos.y / (canvas.height / GRID_H);
 
         // Check Stations first (for dragging target)
         for (let p of players) {
             if (p.isCPU) continue;
             for (let s of p.units.stations) {
-                if (Math.hypot(s.x - mouseX, s.y - mouseY) < 40 || Math.hypot(s.targetX - mouseX, s.targetY - mouseY) < 40) {
+                if (Math.hypot(s.x - mouseX, s.y - mouseY) < 1.0 || Math.hypot(s.targetX - mouseX, s.targetY - mouseY) < 1.0) {
                     state.activeStation = s;
                     state.activeStationPlayer = p;
                     return; // drag station
@@ -33,7 +33,7 @@ export function initInput(gameCanvas) {
         for (let p of players) {
             if (p.isCPU) continue;
             for (let f of p.units.fighters) {
-                if (Math.hypot(f.x - mouseX, f.y - mouseY) < 40) {
+                if (Math.hypot(f.x - mouseX, f.y - mouseY) < 1.0) {
                     clickedFighter = f;
                     break;
                 }
@@ -70,8 +70,8 @@ export function initInput(gameCanvas) {
         if (!state.gameStarted) return;
         e.preventDefault();
         const pos = getMousePos(e);
-        const mouseX = pos.x;
-        const mouseY = pos.y;
+        const mouseX = pos.x / (canvas.width / GRID_W);
+        const mouseY = pos.y / (canvas.height / GRID_H);
 
         if (state.selectionBox) {
             state.selectionBox.endX = mouseX;
@@ -85,7 +85,7 @@ export function initInput(gameCanvas) {
             const origTargetX = state.activeStation.targetX;
             const origTargetY = state.activeStation.targetY;
 
-            const checkValid = () => isValidStationPlacement(state.activeStation.targetX, state.activeStation.targetY, state.activeStation, state.activeStationPlayer, players, canvas.width, canvas.height);
+            const checkValid = () => isValidStationPlacement(state.activeStation.targetX, state.activeStation.targetY, state.activeStation, state.activeStationPlayer, players, GRID_W, GRID_H);
 
             state.activeStation.targetX = proposedX;
             state.activeStation.targetY = proposedY;
@@ -106,7 +106,7 @@ export function initInput(gameCanvas) {
 
         if (state.drawingPath && state.selectedFighters.length > 0) {
             const lastPoint = state.currentPath[state.currentPath.length - 1];
-            if (Math.hypot(lastPoint.x - mouseX, lastPoint.y - mouseY) > 15) {
+            if (Math.hypot(lastPoint.x - mouseX, lastPoint.y - mouseY) > 0.5) {
                 state.currentPath.push({ x: mouseX, y: mouseY });
             }
         }
@@ -122,7 +122,7 @@ export function initInput(gameCanvas) {
             const maxY = Math.max(state.selectionBox.startY, state.selectionBox.endY);
 
             // If it was just a click (or tiny drag), we stay with empty selection
-            if (maxX - minX > 5 || maxY - minY > 5) {
+            if (maxX - minX > 0.1 || maxY - minY > 0.1) {
                 for (let p of players) {
                     if (p.isCPU) continue;
                     for (let f of p.units.fighters) {
@@ -145,7 +145,7 @@ export function initInput(gameCanvas) {
                 const lastP = state.currentPath[state.currentPath.length - 1];
                 let isLoop = false;
 
-                if (state.currentPath.length > 5 && Math.hypot(firstP.x - lastP.x, firstP.y - lastP.y) < 30) {
+                if (state.currentPath.length > 5 && Math.hypot(firstP.x - lastP.x, firstP.y - lastP.y) < 1.0) {
                     isLoop = true;
                     state.currentPath.push({ x: firstP.x, y: firstP.y });
                 }

@@ -32,7 +32,7 @@ export function updateLegacyAI(p, dt, mapWidth, mapHeight) {
     function assignTarget(s, tx, ty) {
         let currentTargetX = s.desiredTargetX !== undefined ? s.desiredTargetX : s.targetX;
         let currentTargetY = s.desiredTargetY !== undefined ? s.desiredTargetY : s.targetY;
-        if (Math.hypot(currentTargetX - tx, currentTargetY - ty) > 5) {
+        if (Math.hypot(currentTargetX - tx, currentTargetY - ty) > 0.1) {
             if (forceReplan || !s.aiLastMoveTime || (p.aiTime - s.aiLastMoveTime) > 10) {
                 s.desiredTargetX = tx;
                 s.desiredTargetY = ty;
@@ -47,8 +47,8 @@ export function updateLegacyAI(p, dt, mapWidth, mapHeight) {
             let dx = s.desiredTargetX - s.targetX;
             let dy = s.desiredTargetY - s.targetY;
             let dist = Math.hypot(dx, dy);
-            if (dist > 1) {
-                let dragSpeed = 800 * dt; // simulated rapid mouse drag
+            if (dist > 0.02) {
+                let dragSpeed = 16.0 * dt; // simulated rapid mouse drag
                 let moveDist = Math.min(dragSpeed, dist);
                 let proposedX = s.targetX + (dx / dist) * moveDist;
                 let proposedY = s.targetY + (dy / dist) * moveDist;
@@ -85,7 +85,7 @@ export function updateLegacyAI(p, dt, mapWidth, mapHeight) {
 
     // "Creeping Sludge" Lattice Generation
     // We want to form a connected lattice of stations starting from the home planet.
-    const SPACING = 190;
+    const SPACING = 3.8;
 
     // Convert a grid coordinate (q, r) to flat-topped hex world coordinates
     function hexToPixel(q, r) {
@@ -154,7 +154,8 @@ export function updateLegacyAI(p, dt, mapWidth, mapHeight) {
             }
 
             // Strongly reward sharing multiple edges (forming triangles/cycles) 
-            let score = (neighbors * 800) - minDistToTarget;
+            // 6 units of distance is worth 1 neighbor. This creates thick tentacles.
+            let score = (neighbors * 6.0) - minDistToTarget;
 
             if (score > bestScore) {
                 bestScore = score;
@@ -173,9 +174,10 @@ export function updateLegacyAI(p, dt, mapWidth, mapHeight) {
         }
     }
 
-    // Greedy assignment: nearest stations to nearest lattice nodes
+    // Greedy assignment: nearest nodes to oldest stations
     let sortedNodes = selectedNodes.slice().sort((a, b) => getDist(a, p.homePlanet) - getDist(b, p.homePlanet));
-    let sortedStations = p.units.stations.slice().sort((a, b) => getDist(a, p.homePlanet) - getDist(b, p.homePlanet));
+    p.units.stations.forEach(s => { if (s.createdAt === undefined) s.createdAt = p.aiTime; });
+    let sortedStations = p.units.stations.slice().sort((a, b) => a.createdAt - b.createdAt);
 
     // To prevent stations from breaking off and jumping 1000px across the map, we must clamp their
     // targets to the ACTUAL, currently connected graph. They will act like a tethered chain.
@@ -193,26 +195,84 @@ export function updateLegacyAI(p, dt, mapWidth, mapHeight) {
             ty = sortedNodes[i].y;
         }
 
-        // Check distance to the closest connected anchor
-        let closestAnchor = null;
-        let minDistToAnchor = Infinity;
-        for (let anchor of connectedAnchors) {
-            if (anchor === s) continue; // Don't anchor to yourself
-            let d = getDist({ x: tx, y: ty }, anchor);
-            if (d < minDistToAnchor) {
-                minDistToAnchor = d;
-                closestAnchor = anchor;
+        // Ensure strictly connected to 2 valid anchors
+        let maxDist = 4.4;
+        let bestPair = null;
+        let bestPairDist = Infinity;
+
+        if (connectedAnchors.length >= 2) {
+            for (let j = 0; j < connectedAnchors.length; j++) {
+                for (let k = j + 1; k < connectedAnchors.length; k++) {
+                    let a1 = connectedAnchors[j];
+                    let a2 = connectedAnchors[k];
+                    if (a1 === s || a2 === s) continue;
+                    let ax1 = a1.targetX !== undefined ? a1.targetX : a1.x; let ay1 = a1.targetY !== undefined ? a1.targetY : a1.y;
+                    let ax2 = a2.targetX !== undefined ? a2.targetX : a2.x; let ay2 = a2.targetY !== undefined ? a2.targetY : a2.y;
+                    if (getDist({ x: ax1, y: ay1 }, { x: ax2, y: ay2 }) <= maxDist * 2) {
+                        let mx = (ax1 + ax2) / 2;
+                        let my = (ay1 + ay2) / 2;
+                        let pairDist = getDist({ x: tx, y: ty }, { x: mx, y: my });
+                        if (pairDist < bestPairDist) {
+                            bestPairDist = pairDist;
+                            bestPair = { A: { ax: ax1, ay: ay1 }, B: { ax: ax2, ay: ay2 } };
+                        }
+                    }
+                }
             }
         }
 
-        // If the target is further than 220px from our solid network, clamp it!
-        // This ensures the station waits at the border for other stations to catch up, organically growing the slime.
-        if (closestAnchor && minDistToAnchor > 220) {
-            let dirX = tx - closestAnchor.x;
-            let dirY = ty - closestAnchor.y;
+        let A = null, B = null;
+        if (bestPair) {
+            A = bestPair.A;
+            B = bestPair.B;
+        } else {
+            // fallback if < 2 anchors
+            let closestAnchor = null;
+            let minDistToAnchor = Infinity;
+            for (let anchor of connectedAnchors) {
+                if (anchor === s) continue;
+                let ax = anchor.targetX !== undefined ? anchor.targetX : anchor.x;
+                let ay = anchor.targetY !== undefined ? anchor.targetY : anchor.y;
+                let d = getDist({ x: tx, y: ty }, { x: ax, y: ay });
+                if (d < minDistToAnchor) {
+                    minDistToAnchor = d;
+                    closestAnchor = { ax, ay };
+                }
+            }
+            A = closestAnchor;
+        }
+
+        if (A && B) {
+            let mx = (A.ax + B.ax) / 2;
+            let my = (A.ay + B.ay) / 2;
+            let dirX = tx - mx;
+            let dirY = ty - my;
             let len = Math.hypot(dirX, dirY) || 1;
-            tx = closestAnchor.x + (dirX / len) * 220;
-            ty = closestAnchor.y + (dirY / len) * 220;
+            dirX /= len;
+            dirY /= len;
+
+            let validLen = 0;
+            for (let testLen = 0; testLen <= len; testLen += 0.2) {
+                let testX = mx + dirX * testLen;
+                let testY = my + dirY * testLen;
+                if (getDist({ x: testX, y: testY }, { x: A.ax, y: A.ay }) <= maxDist &&
+                    getDist({ x: testX, y: testY }, { x: B.ax, y: B.ay }) <= maxDist) {
+                    validLen = testLen;
+                } else {
+                    break;
+                }
+            }
+            tx = mx + dirX * validLen;
+            ty = my + dirY * validLen;
+        } else if (A) {
+            let d = getDist({ x: tx, y: ty }, { x: A.ax, y: A.ay });
+            if (d > maxDist) {
+                let dirX = tx - A.ax;
+                let dirY = ty - A.ay;
+                let len = Math.hypot(dirX, dirY) || 1;
+                tx = A.ax + (dirX / len) * maxDist;
+                ty = A.ay + (dirY / len) * maxDist;
+            }
         }
 
         assignTarget(s, tx, ty);
@@ -233,7 +293,7 @@ export function updateLegacyAI(p, dt, mapWidth, mapHeight) {
     let needsMoreStations = false;
     if (uncaptured.length > 0) {
         if (p.units.stations.length < 3) needsMoreStations = true; // Minimum to form any 3-cycle territory
-        else if (globalMinDistToTarget > 120) needsMoreStations = true; // Our lattice hasn't reached the asteroid! Build a highway.
+        else if (globalMinDistToTarget > 2.4) needsMoreStations = true; // Our lattice hasn't reached the asteroid! Build a highway.
         else if (p.energy > 150) needsMoreStations = true; // Excess energy, expand aggressively
     }
 
@@ -241,7 +301,7 @@ export function updateLegacyAI(p, dt, mapWidth, mapHeight) {
         p.energy -= 50;
         p.buildCooldowns.station = 10;
         let tx = p.homePlanet.x;
-        let ty = p.homePlanet.y - 100;
+        let ty = p.homePlanet.y - 2.0;
         p.buildQueue.push({ type: 'stations', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, targetX: p.homePlanet.x, targetY: p.homePlanet.y, desiredTargetX: tx, desiredTargetY: ty, health: 100, maxHealth: 100, cooldown: 0, aiState: 'LATTICE' } });
         buildActionTaken = true;
     }
@@ -261,7 +321,7 @@ export function updateLegacyAI(p, dt, mapWidth, mapHeight) {
             // Defensive/Matching: Build fighters to keep up or retake control
             p.energy -= 100;
             p.buildCooldowns.fighter = 15;
-            let tx = p.id === 0 ? p.homePlanet.x + 100 : p.homePlanet.x - 100;
+            let tx = p.id === 0 ? p.homePlanet.x + 2.0 : p.homePlanet.x - 2.0;
             let ty = p.homePlanet.y;
             p.buildQueue.push({ type: 'fighters', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, path: [{ x: tx, y: ty }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0 } });
             buildActionTaken = true;
