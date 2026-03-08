@@ -295,6 +295,44 @@ function testCPUvsCPU() {
     });
 }
 
+function testCPUvsCPU_Expansioneer() {
+    resetGameState();
+    const p1 = createDummyPlayer(0, 100, 400); // Expansioneer
+    const p2 = createDummyPlayer(1, 900, 400); // Legacy
+
+    asteroids.push({ x: 200, y: 300, radius: 15, miners: 0, resources: 400, variant: 0 });
+    asteroids.push({ x: 200, y: 500, radius: 15, miners: 0, resources: 400, variant: 1 });
+    asteroids.push({ x: 800, y: 300, radius: 15, miners: 0, resources: 400, variant: 2 });
+    asteroids.push({ x: 800, y: 500, radius: 15, miners: 0, resources: 400, variant: 0 });
+    asteroids.push({ x: 500, y: 400, radius: 15, miners: 0, resources: 800, variant: 1 });
+
+    p1.isCPU = true;
+    p1.type = 'cpu_expansioneer';
+    p2.isCPU = true;
+    p2.type = 'cpu_legacy';
+
+    p1.units.stations.push({ x: 150, y: 400, targetX: 150, targetY: 400, health: 200, maxHealth: 200, cooldown: 0 });
+    p2.units.stations.push({ x: 850, y: 400, targetX: 850, targetY: 400, health: 200, maxHealth: 200, cooldown: 0 });
+
+    const stopCondition = () => p1.homePlanet.health <= 0 || p2.homePlanet.health <= 0 ||
+        (p1.units.stations.length + p1.units.fighters.length + p1.units.miners.length === 0 && p1.energy < 25) ||
+        (p2.units.stations.length + p2.units.fighters.length + p2.units.miners.length === 0 && p2.energy < 25);
+
+    const res = runSimulation(stopCondition, (ticks) => {
+        if (p1.isCPU) updateAI(p1, 1 / 60, 1000, 800);
+        if (p2.isCPU) updateAI(p2, 1 / 60, 1000, 800);
+    });
+
+    recordResult("Expansioneer vs Legacy (CPU vs CPU)", "Full Game", {
+        timeSeconds: res.timeSeconds,
+        winner: p1.homePlanet.health > 0 && p2.homePlanet.health <= 0 ? "Player 1 (Expansioneer)" : "Player 2 (Legacy)",
+        p1RemainingPlanetHP: p1.homePlanet.health,
+        p2RemainingPlanetHP: p2.homePlanet.health,
+        p1TotalUnitsLeft: p1.units.stations.length + p1.units.fighters.length + p1.units.miners.length,
+        p2TotalUnitsLeft: p2.units.stations.length + p2.units.fighters.length + p2.units.miners.length,
+    });
+}
+
 // --- Bug Fix Scenarios ---
 
 function testStationMovementWhenTerritoriesIntersect() {
@@ -335,6 +373,7 @@ testEconomyToMilitaryPipeline();
 testThreeFightersVsCombo();
 testFullMapResourceDrain();
 testCPUvsCPU();
+testCPUvsCPU_Expansioneer();
 
 // --- Save Results ---
 

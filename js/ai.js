@@ -1,8 +1,17 @@
 import { players, asteroids } from './state.js';
 import { isValidStationPlacement, isAsteroidInPolygon, getStationGraph, MAX_CONNECTION_LENGTH } from './utils.js';
+import { updateExpansioneerAI } from './ai_expansioneer.js';
 console.log('ai.js loaded');
 
 export function updateAI(p, dt, mapWidth, mapHeight) {
+    if (p.type === 'cpu_expansioneer') {
+        updateExpansioneerAI(p, dt, mapWidth, mapHeight);
+    } else {
+        updateLegacyAI(p, dt, mapWidth, mapHeight);
+    }
+}
+
+export function updateLegacyAI(p, dt, mapWidth, mapHeight) {
     p.aiTime = (p.aiTime || 0) + dt;
 
     let currentStationCount = p.units.stations.length;

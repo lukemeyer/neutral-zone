@@ -27,13 +27,15 @@
                     <h2 style="color:#1f6feb">Player 1 (Left)</h2>
                     <select id="p1-type">
                         <option value="human">Human</option>
-                        <option value="cpu">CPU (Auto)</option>
+                        <option value="cpu_legacy">CPU (Legacy)</option>
+                        <option value="cpu_expansioneer">CPU (Expansioneer)</option>
                     </select>
                 </div>
                 <div class="player-setup">
                     <h2 style="color:#f85149">Player 2 (Right)</h2>
                     <select id="p2-type">
-                        <option value="cpu">CPU (Auto)</option>
+                        <option value="cpu_expansioneer">CPU (Expansioneer)</option>
+                        <option value="cpu_legacy">CPU (Legacy)</option>
                         <option value="human">Human</option>
                     </select>
                 </div>
@@ -64,11 +66,12 @@
                 <div class="energy-display" style="color:#1f6feb"><span id="p1-energy">50</span> E</div>
                 <div class="territory-display"
                     style="color:#2ea043; font-size: 14px; font-weight: bold; margin-bottom: 5px;">Territory: <span
-                        id="p1-control">0.0</span>% | Border: <span id="p1-border">0</span>/<span id="p1-mborder">0</span>
+                        id="p1-control">0.0</span>% | Border: <span id="p1-border">0</span>/<span
+                        id="p1-mborder">0</span>
                 </div>
                 <div class="stats-display" style="font-size: 14px; margin-bottom: 10px; color: #8b949e;">
-                    Fighters: <span id="p1-fighters">0</span> | Stations: <span id="p1-stations">0</span> | Miners: <span
-                        id="p1-miners">0</span>
+                    Fighters: <span id="p1-fighters">0</span> | Stations: <span id="p1-stations">0</span> | Miners:
+                    <span id="p1-miners">0</span>
                 </div>
 
                 <div class="ui-group">
@@ -162,11 +165,12 @@
                 <div class="energy-display" style="color:#f85149"><span id="p2-energy">50</span> E</div>
                 <div class="territory-display"
                     style="color:#da3633; font-size: 14px; font-weight: bold; margin-bottom: 5px;">Territory: <span
-                        id="p2-control">0.0</span>% | Border: <span id="p2-border">0</span>/<span id="p2-mborder">0</span>
+                        id="p2-control">0.0</span>% | Border: <span id="p2-border">0</span>/<span
+                        id="p2-mborder">0</span>
                 </div>
                 <div class="stats-display" style="font-size: 14px; margin-bottom: 10px; color: #8b949e;">
-                    Fighters: <span id="p2-fighters">0</span> | Stations: <span id="p2-stations">0</span> | Miners: <span
-                        id="p2-miners">0</span>
+                    Fighters: <span id="p2-fighters">0</span> | Stations: <span id="p2-stations">0</span> | Miners:
+                    <span id="p2-miners">0</span>
                 </div>
 
                 <div class="ui-group">

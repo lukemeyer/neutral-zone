@@ -151,8 +151,11 @@ export function setupUIBindings() {
     });
 
     document.getElementById('btn-start-game').addEventListener('click', () => {
-        players[0].isCPU = document.getElementById('p1-type').value === 'cpu';
-        players[1].isCPU = document.getElementById('p2-type').value === 'cpu';
+        players[0].type = document.getElementById('p1-type').value;
+        players[1].type = document.getElementById('p2-type').value;
+
+        players[0].isCPU = players[0].type !== 'human';
+        players[1].isCPU = players[1].type !== 'human';
 
         if (players[0].isCPU) {
             document.querySelectorAll('#ui-p1 .ui-group').forEach(el => el.style.display = 'none');
