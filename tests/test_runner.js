@@ -1,7 +1,6 @@
 import { players, asteroids, projectiles, state } from '../js/state.js';
 import { updateUnits, updateProjectiles } from '../js/units.js';
-
-
+import { getPlayerTerritoryHulls } from '../js/utils.js';
 // Configuration
 const MAP_WIDTH = 1000;
 const MAP_HEIGHT = 800;
@@ -59,9 +58,22 @@ export function runSimulation(conditionToStop, onTick = () => { }) {
                     if (qi !== -1) { p.units.fighters.push(p.buildQueue[qi].unitData); p.buildQueue.splice(qi, 1); }
                 }
             }
-
             // No selected fighters or drawing paths during headless mode
+            const hulls = getPlayerTerritoryHulls(p, [], false);
+            if (p.id === 0 && ticks % 60 === 0 && ticks < 1000) {
+                console.log(`[DEBUG] p1 ticks=${ticks} hulls=${hulls.length} | currentGraph=${p.units.stations.length} | firstHullSize=${hulls.length > 0 ? hulls[0].length : 0}`);
+            }
             updateUnits(p, TICK_RATE, null, [], false);
+
+            if (p.homePlanet.damageTime === undefined) p.homePlanet.damageTime = 0;
+            p.homePlanet.damageTime = Math.max(0, p.homePlanet.damageTime - TICK_RATE);
+
+            ['stations', 'fighters', 'miners'].forEach(type => {
+                p.units[type].forEach(u => {
+                    if (u.damageTime === undefined) u.damageTime = 0;
+                    u.damageTime = Math.max(0, u.damageTime - TICK_RATE);
+                });
+            });
         });
 
         updateProjectiles(TICK_RATE);

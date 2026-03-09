@@ -54,7 +54,7 @@ export function draw() {
     players.forEach(p => {
         let isProjecting = p.units.stations.some(s => Math.hypot(s.targetX - s.x, s.targetY - s.y) > 5);
 
-        const drawTerritoryArea = (g, alpha, isProj, hull) => {
+        const drawTerritoryArea = (g, alpha, isProj, hullArray) => {
             if (terrLayer.width !== canvas.width || terrLayer.height !== canvas.height) {
                 terrLayer.width = canvas.width;
                 terrLayer.height = canvas.height;
@@ -66,22 +66,26 @@ export function draw() {
             tCtx.lineCap = 'round';
             tCtx.lineJoin = 'round';
 
-            if (hull.length > 2) {
-                tCtx.beginPath();
-                tCtx.moveTo(hull[0].x * scX, hull[0].y * scY);
-                for (let i = 1; i < hull.length; i++) tCtx.lineTo(hull[i].x * scX, hull[i].y * scY);
-                tCtx.closePath();
-                tCtx.fill();
+            tCtx.beginPath();
+            for (let hull of hullArray) {
+                if (hull.length > 2) {
+                    tCtx.moveTo(hull[0].x * scX, hull[0].y * scY);
+                    for (let i = 1; i < hull.length; i++) tCtx.lineTo(hull[i].x * scX, hull[i].y * scY);
+                    tCtx.closePath();
+                }
             }
+            tCtx.fill();
 
-            if (hull.length > 1) {
-                tCtx.lineWidth = 2; // Thin explicit sharp boundary lines
-                tCtx.beginPath();
-                tCtx.moveTo(hull[0].x * scX, hull[0].y * scY);
-                for (let i = 1; i < hull.length; i++) tCtx.lineTo(hull[i].x * scX, hull[i].y * scY);
-                tCtx.closePath();
-                tCtx.stroke();
+            tCtx.lineWidth = 2; // Thin explicit sharp boundary lines
+            tCtx.beginPath();
+            for (let hull of hullArray) {
+                if (hull.length > 1) {
+                    tCtx.moveTo(hull[0].x * scX, hull[0].y * scY);
+                    for (let i = 1; i < hull.length; i++) tCtx.lineTo(hull[i].x * scX, hull[i].y * scY);
+                    tCtx.closePath();
+                }
             }
+            tCtx.stroke();
 
             ctx.globalAlpha = alpha;
             ctx.drawImage(terrLayer, 0, 0);
@@ -106,17 +110,13 @@ export function draw() {
         if (isProjecting) {
             const projectedGraph = getStationGraph(p, true);
             const hulls = getPlayerTerritoryHulls(p, players, true);
-            for (let hull of hulls) {
-                drawTerritoryArea(projectedGraph, 0.1, true, hull);
-            }
+            drawTerritoryArea(projectedGraph, 0.1, true, hulls);
             drawGraphLines(projectedGraph, true);
         }
 
         const graph = getStationGraph(p, false);
         const hulls = getPlayerTerritoryHulls(p, players, false);
-        for (let hull of hulls) {
-            drawTerritoryArea(graph, 0.25, false, hull);
-        }
+        drawTerritoryArea(graph, 0.25, false, hulls);
         drawGraphLines(graph, false);
 
         // Fighter Paths
@@ -187,16 +187,16 @@ export function draw() {
         // Home Planet
         const planetImg = p.id === 0 ? graphicsCache.planet1 : graphicsCache.planet2;
         if (planetImg) {
-            ctx.drawImage(planetImg, p.homePlanet.x * scX - p.homePlanet.radius * ((scX+scY)/2), p.homePlanet.y * scY - p.homePlanet.radius * ((scX+scY)/2), p.homePlanet.radius * ((scX+scY)/2) * 2, p.homePlanet.radius * ((scX+scY)/2) * 2);
+            ctx.drawImage(planetImg, p.homePlanet.x * scX - p.homePlanet.radius * ((scX + scY) / 2), p.homePlanet.y * scY - p.homePlanet.radius * ((scX + scY) / 2), p.homePlanet.radius * ((scX + scY) / 2) * 2, p.homePlanet.radius * ((scX + scY) / 2) * 2);
         } else {
             ctx.beginPath();
-            ctx.arc(p.homePlanet.x * scX, p.homePlanet.y * scY, p.homePlanet.radius * ((scX+scY)/2), 0, Math.PI * 2);
+            ctx.arc(p.homePlanet.x * scX, p.homePlanet.y * scY, p.homePlanet.radius * ((scX + scY) / 2), 0, Math.PI * 2);
             ctx.fillStyle = p.color;
             ctx.fill();
         }
         if (p.homePlanet.damageTime > 0) {
             ctx.beginPath();
-            ctx.arc(p.homePlanet.x * scX, p.homePlanet.y * scY, p.homePlanet.radius * ((scX+scY)/2) + 10, 0, Math.PI * 2);
+            ctx.arc(p.homePlanet.x * scX, p.homePlanet.y * scY, p.homePlanet.radius * ((scX + scY) / 2) + 10, 0, Math.PI * 2);
             ctx.fillStyle = `rgba(218, 54, 51, ${p.homePlanet.damageTime * 2})`;
             ctx.fill();
         }

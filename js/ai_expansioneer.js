@@ -247,14 +247,23 @@ export function updateExpansioneerAI(p, dt, mapWidth, mapHeight) {
         desiredFighters += 3;
     }
 
-    let needsFighters = p.units.fighters.length < desiredFighters;
-    let energyReservedForFighters = needsFighters ? 100 : 0;
+    // Very important: Never buy a fighter before the first station, or else we deadlock the economy!
+    if (p.units.stations.length === 0) {
+        desiredFighters = 0;
+    }
 
     // Build Miners (Highest Priority if starved)
     let desiredMiners = Math.max(1, activeCaptured.length * 2);
-    if (activeCaptured.length === 0 && uncaptured.length > 0) desiredMiners = 1;
+    if (activeCaptured.length === 0 && uncaptured.length > 0) {
+        // Cap initial miners at 2, so the AI has 50 energy left for a station instead of blowing 75 energy on 3 miners
+        desiredMiners = Math.min(2, Math.max(1, p.units.miners.length + 1));
+    }
 
     let economyCritical = p.units.miners.length < desiredMiners;
+
+    // Do NOT reserve energy for fighters if we critically need miners.
+    let needsFighters = p.units.fighters.length < desiredFighters;
+    let energyReservedForFighters = (needsFighters && !economyCritical) ? 100 : 0;
 
     if (economyCritical && p.energy >= 25 && p.buildCooldowns.miner <= 0 && !buildActionTaken) {
         p.energy -= 25;
@@ -274,6 +283,8 @@ export function updateExpansioneerAI(p, dt, mapWidth, mapHeight) {
 
     // Build Stations (Priority 3, uses remaining unreserved energy)
     let maxStations = needsExpansion ? activeCaptured.length * 2 + 4 : Math.max(3, activeCaptured.length + 2);
+    if (p.energy > 140) maxStations = 999; // If floating energy, keep expanding territory
+
     if (p.units.stations.length < maxStations && p.energy >= (50 + energyReservedForFighters) && p.buildCooldowns.station <= 0 && !buildActionTaken) {
         p.energy -= 50;
         p.buildCooldowns.station = 10;

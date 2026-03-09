@@ -150,7 +150,10 @@ export function getStationGraph(player, useTarget = false) {
 
             if (!edgeSet.has(edgeHash)) {
                 edgeSet.add(edgeHash);
-                if (dist <= MAX_CONNECTION_LENGTH) {
+                // When useTarget is false, stations are in transit and could theoretically be 2 * 4.4 dist apart 
+                // between their starting and ending anchors before completing the move. Use 9.0 to maintain the connection.
+                let maxLen = useTarget ? MAX_CONNECTION_LENGTH : 9.0;
+                if (dist <= maxLen) {
                     validEdges.push({ nodeA: s, nodeB: c, posA: pos1, posB: pos2, dist });
                 } else {
                     brokenEdges.push({ nodeA: s, nodeB: c, posA: pos1, posB: pos2, dist });
@@ -226,7 +229,12 @@ export function getPlayerTerritoryHulls(player, allPlayers, useTarget = false) {
             neighbors.sort((a, b) => {
                 let pa = getPos(a);
                 let pb = getPos(b);
-                return Math.atan2(pa.y - p1.y, pa.x - p1.x) - Math.atan2(pb.y - p1.y, pb.x - p1.x);
+                let a1 = Math.atan2(pa.y - p1.y, pa.x - p1.x);
+                let a2 = Math.atan2(pb.y - p1.y, pb.x - p1.x);
+                if (Math.abs(a1 - a2) < 0.0001) {
+                    return Math.hypot(pa.x - p1.x, pa.y - p1.y) - Math.hypot(pb.x - p1.x, pb.y - p1.y);
+                }
+                return a1 - a2;
             });
         }
 
@@ -280,7 +288,8 @@ export function getPlayerTerritoryHulls(player, allPlayers, useTarget = false) {
 
 // Lenient check for asteroids on the edge of territories
 export function isAsteroidInPolygon(ast, player) {
-    return isPointInTerritory(ast, player, false, ast.radius - 2);
+    // Treat the asteroid as "in" if it's within 1.5 grid units of a polygon edge. This prevents boundary flickering.
+    return isPointInTerritory(ast, player, false, 1.5);
 }
 
 // Geometric intersection helpers

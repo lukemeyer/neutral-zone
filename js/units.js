@@ -31,7 +31,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
 
             for (let pl of players) {
                 if (targetX === pl.homePlanet.x && targetY === pl.homePlanet.y) continue;
-                if (Math.hypot(cx - pl.homePlanet.x, cy - pl.homePlanet.y) < pl.homePlanet.radius + 0.1) {
+                if (Math.hypot(cx - pl.homePlanet.x, cy - pl.homePlanet.y) < pl.homePlanet.radius + 0.05) {
                     blocked = true; break;
                 }
             }
@@ -39,7 +39,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
 
             for (let a of asteroids) {
                 if (targetX === a.x && targetY === a.y) continue;
-                if (Math.hypot(cx - a.x, cy - a.y) < a.radius + 0.1) {
+                if (Math.hypot(cx - a.x, cy - a.y) < a.radius + 0.05) {
                     blocked = true; break;
                 }
             }
@@ -238,7 +238,7 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
                 return; // skip the movement loop for this frame
             }
             let dist = Math.hypot(m.targetAsteroid.x - m.x, m.targetAsteroid.y - m.y);
-            if (dist > 0.4) {
+            if (dist > 0.42) {
                 applySteering(m, m.targetAsteroid.x, m.targetAsteroid.y, currentMinerSpeed);
             } else {
                 // Mining
