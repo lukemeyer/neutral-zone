@@ -109,6 +109,8 @@ export function initGameState() {
 
     // Setup Initial Units for both players
     players.forEach(p => {
+        delete p._aiStationTargets;
+        p.aiTime = 0;
         const dirX = p.homePlanet.x < (GRID_W / 2) ? 1 : -1;
 
         let sx1 = p.homePlanet.x + (2.4 * dirX); // ~120px

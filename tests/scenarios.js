@@ -1,7 +1,7 @@
 import { resetGameState, createDummyPlayer, runSimulation } from './test_runner.js';
 import { players, asteroids, GRID_W, GRID_H } from '../js/state.js';
 import { updateAI } from '../js/ai.js';
-import { isAsteroidInPolygon } from '../js/utils.js';
+import { isAsteroidInPolygon, getStationGraph } from '../js/utils.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -294,8 +294,64 @@ function testStationMovementWhenTerritoriesIntersect() {
     });
 }
 
+function testProceduralTerritoryEnvelopment() {
+    let splitCount = 0;
+    const trials = 10;
+    let totalCaptured = 0;
+    let totalAsteroids = 0;
+
+    for (let t = 0; t < trials; t++) {
+        resetGameState();
+        const p1 = createDummyPlayer(0, 2, 7.5);
+        p1.isCPU = true;
+        p1.type = 'cpu_expansioneer';
+
+        // 6 random asteroids on left half
+        for (let i = 0; i < 6; i++) {
+            asteroids.push({
+                x: Math.random() * (10 - 4) + 4,
+                y: Math.random() * (GRID_H - 2) + 1,
+                radius: 0.3, miners: 0, resources: 400, variant: 0
+            });
+        }
+
+        // Give 12 stations to build a mature network
+        while (p1.units.stations.length < 12) {
+            p1.units.stations.push({
+                x: 2, y: 7.5, targetX: 2, targetY: 7.5,
+                health: 200, maxHealth: 200, cooldown: 0
+            });
+        }
+
+        // Run simulation for 20 seconds of game-time (1200 ticks) so stations move to positions
+        runSimulation((ticks) => ticks >= 1200, () => {
+            if (p1.isCPU) updateAI(p1, 1 / 60, GRID_W, GRID_H);
+        });
+
+        const graph = getStationGraph(p1, false);
+        if (graph.components.length > 1) {
+            splitCount++;
+        }
+
+        const myAsteroids = asteroids.filter(a => a.x <= 10.5);
+        const captured = myAsteroids.filter(a => isAsteroidInPolygon(a, p1));
+        totalCaptured += captured.length;
+        totalAsteroids += myAsteroids.length;
+    }
+
+    recordResult("Procedural Random Map Territory Envelopment", "Territory", {
+        trials: trials,
+        splitNetworks: splitCount,
+        splitRatePercent: (splitCount / trials) * 100,
+        capturedAsteroids: totalCaptured,
+        totalAsteroids: totalAsteroids,
+        captureRatePercent: (totalCaptured / totalAsteroids) * 100
+    });
+}
+
 // Run scenarios
 console.log("Running scaled scenario tests...");
+testProceduralTerritoryEnvelopment();
 testStationMovementWhenTerritoriesIntersect();
 testFighterVsStation();
 testFighterVsTwoStations();

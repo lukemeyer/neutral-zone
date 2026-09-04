@@ -1,5 +1,5 @@
 import { players, asteroids } from './state.js';
-import { isValidStationPlacement, isAsteroidInPolygon, getStationGraph } from './utils.js';
+import { isValidStationPlacement, isAsteroidInPolygon, getStationGraph, isPointInTerritory } from './utils.js';
 
 console.log('ai_expansioneer.js loaded');
 
@@ -41,52 +41,86 @@ export function updateExpansioneerAI(p, dt, mapWidth, mapHeight) {
 
     const numStations = p.units.stations.length;
 
-    // Generate stable network targets for all stations
+    // Generate stable, graph-verified network targets for all stations
     function computeStationTargets(totalCount) {
         if (totalCount <= 0) return [];
 
-        const targets = [];
-        const baseY = p.homePlanet.y;
-        let minAstY = baseY - 2.4;
-        let maxAstY = baseY + 2.4;
-        asteroids.forEach(a => {
-            if (a.y < minAstY) minAstY = Math.max(1.8, a.y - 0.4);
-            if (a.y > maxAstY) maxAstY = Math.min(mapHeight - 1.8, a.y + 0.4);
-        });
+        const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+        const hx = p.homePlanet.x;
+        const hy = p.homePlanet.y;
 
-        const topY = Math.max(1.5, minAstY);
-        const botY = Math.min(mapHeight - 1.5, maxAstY);
-        const startX = p.homePlanet.x;
-
-        const isTopBias = p.id === 0;
-        const primaryY = isTopBias ? topY : botY;
-        const secondaryY = isTopBias ? botY : topY;
-
-        targets.push({ x: startX + 2.0 * pDir, y: baseY });
-        targets.push({ x: startX + 1.0 * pDir, y: primaryY });
-        targets.push({ x: startX + 1.0 * pDir, y: secondaryY });
-
-        let step = 1;
-        while (targets.length < totalCount) {
-            let xOffset = 1.0 + step * 2.4;
-            let targetX = startX + xOffset * pDir;
-            if (pDir > 0 && targetX > mapWidth - 2.0) targetX = mapWidth - 2.0;
-            if (pDir < 0 && targetX < 2.0) targetX = 2.0;
-
-            targets.push({ x: targetX, y: primaryY });
-            if (targets.length < totalCount) {
-                let midX = startX + (xOffset + 1.2) * pDir;
-                if (pDir > 0 && midX > mapWidth - 2.0) midX = mapWidth - 2.0;
-                if (pDir < 0 && midX < 2.0) midX = 2.0;
-                targets.push({ x: midX, y: baseY });
-            }
-            if (targets.length < totalCount) {
-                targets.push({ x: targetX, y: secondaryY });
-            }
-            step++;
+        if (!p._aiStationTargets) {
+            p._aiStationTargets = [
+                { x: clamp(hx + 2.2 * pDir, 1.5, mapWidth - 1.5), y: hy },
+                { x: clamp(hx + 1.2 * pDir, 1.5, mapWidth - 1.5), y: clamp(hy - 2.0, 1.5, mapHeight - 1.5) },
+                { x: clamp(hx + 1.2 * pDir, 1.5, mapWidth - 1.5), y: clamp(hy + 2.0, 1.5, mapHeight - 1.5) }
+            ];
         }
 
-        return targets.slice(0, totalCount);
+        const myAsteroids = asteroids
+            .filter(a => a.resources > 0 && (pDir > 0 ? a.x <= mapWidth / 2 + 1.5 : a.x >= mapWidth / 2 - 1.5))
+            .sort((a, b) => Math.hypot(a.x - hx, a.y - hy) - Math.hypot(b.x - hx, b.y - hy));
+
+        function isConnected(tList) {
+            const origStations = p.units.stations;
+            p.units.stations = tList.map(t => ({ x: t.x, y: t.y, targetX: t.x, targetY: t.y }));
+            const g = getStationGraph(p, false);
+            p.units.stations = origStations;
+            return g.components.length === 1 && g.connectedNodes.length === (tList.length + 1);
+        }
+
+        while (p._aiStationTargets.length < totalCount) {
+            const targets = p._aiStationTargets;
+            const origStations = p.units.stations;
+            p.units.stations = targets.map(t => ({ x: t.x, y: t.y, targetX: t.x, targetY: t.y }));
+            const uncapturedOnMySide = myAsteroids.filter(a => !isAsteroidInPolygon(a, p));
+            p.units.stations = origStations;
+
+            const targetAst = uncapturedOnMySide[0] || { x: mapWidth / 2, y: hy };
+
+            let bestCand = null;
+            let bestScore = -Infinity;
+
+            for (let existing of targets) {
+                for (let angleDeg = 0; angleDeg < 360; angleDeg += 30) {
+                    let rad = (angleDeg * Math.PI) / 180;
+                    for (let dist of [2.4, 3.2]) {
+                        let cx = clamp(existing.x + Math.cos(rad) * dist, 1.5, mapWidth - 1.5);
+                        let cy = clamp(existing.y + Math.sin(rad) * dist, 1.5, mapHeight - 1.5);
+
+                        if (targets.some(t => Math.hypot(t.x - cx, t.y - cy) < 1.7)) continue;
+                        if (enemy && isPointInTerritory({ x: cx, y: cy }, enemy)) continue;
+
+                        const testList = [...targets, { x: cx, y: cy }];
+                        if (!isConnected(testList)) continue;
+
+                        p.units.stations = testList.map(t => ({ x: t.x, y: t.y, targetX: t.x, targetY: t.y }));
+                        let capCount = myAsteroids.filter(a => isAsteroidInPolygon(a, p)).length;
+                        p.units.stations = origStations;
+
+                        let dAst = Math.hypot(cx - targetAst.x, cy - targetAst.y);
+                        let fwd = (cx - hx) * pDir;
+
+                        let score = capCount * 2000 - dAst * 15 + fwd * 2;
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestCand = { x: cx, y: cy };
+                        }
+                    }
+                }
+            }
+
+            if (bestCand) {
+                p._aiStationTargets.push(bestCand);
+            } else {
+                const sorted = [...p._aiStationTargets].sort((a, b) => (pDir > 0 ? b.x - a.x : a.x - b.x));
+                let cx = clamp(sorted[0].x + 2.0 * pDir, 1.5, mapWidth - 1.5);
+                let cy = clamp(sorted[0].y + (p._aiStationTargets.length % 2 === 0 ? 1.5 : -1.5), 1.5, mapHeight - 1.5);
+                p._aiStationTargets.push({ x: cx, y: cy });
+            }
+        }
+
+        return p._aiStationTargets.slice(0, totalCount);
     }
 
     const networkTargets = computeStationTargets(numStations);

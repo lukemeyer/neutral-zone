@@ -17,7 +17,9 @@ export function resetGameState() {
         p.buildCooldowns = { miner: 0, station: 0, fighter: 0 };
         p.buildQueue = [];
         p.aiTimer = 0;
+        p.aiTime = 0;
         p.stationSettleTimer = 0;
+        delete p._aiStationTargets;
     });
     asteroids.length = 0;
     projectiles.length = 0;
