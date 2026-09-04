@@ -10,10 +10,11 @@ export function updateUI() {
         document.getElementById(`p${id}-stations`).innerText = p.units.stations.length;
         document.getElementById(`p${id}-miners`).innerText = p.units.miners.length;
 
-        // Border Power calculation
+        // Border Power calculation (boundary perimeter edges, excluding internal chords)
         const graph = getStationGraph(p, false);
         let usedBorder = 0;
-        graph.validEdges.forEach(e => usedBorder += e.dist);
+        const borderEdges = graph.perimeterEdges || graph.validEdges;
+        borderEdges.forEach(e => usedBorder += e.dist);
 
         const maxPerimeter = (p.units.stations.length + 1) * 3.5;
 

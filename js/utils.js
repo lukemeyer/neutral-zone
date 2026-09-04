@@ -116,7 +116,7 @@ export function isPointInTerritory(pt, player, useTarget = false, extraRadius = 
 
 export const MAX_CONNECTION_LENGTH = 5;
 
-export function polygonArea(poly) {
+export function polygonSignedArea(poly) {
     if (!poly || poly.length < 3) return 0;
     let a = 0;
     for (let i = 0; i < poly.length; i++) {
@@ -124,158 +124,11 @@ export function polygonArea(poly) {
         let p2 = poly[(i + 1) % poly.length];
         a += (p1.x * p2.y - p2.x * p1.y);
     }
-    return Math.abs(a / 2);
+    return a / 2;
 }
 
-function prunePolygon(poly) {
-    let pts = [...poly];
-    let changed = true;
-    while (changed && pts.length >= 3) {
-        changed = false;
-        for (let i = 0; i < pts.length; i++) {
-            let next = pts[(i + 1) % pts.length];
-            if (Math.hypot(pts[i].x - next.x, pts[i].y - next.y) < 1e-4) {
-                pts.splice(i, 1);
-                changed = true;
-                break;
-            }
-        }
-        if (changed) continue;
-        for (let i = 0; i < pts.length; i++) {
-            let prev = pts[(i - 1 + pts.length) % pts.length];
-            let next = pts[(i + 1) % pts.length];
-            if (Math.hypot(prev.x - next.x, prev.y - next.y) < 1e-4) {
-                pts.splice(i, 1);
-                changed = true;
-                break;
-            }
-        }
-    }
-    return pts;
-}
-
-function splitAtPinchPoints(poly) {
-    const counts = new Map();
-    for (let p of poly) {
-        let k = p.x.toFixed(2) + ',' + p.y.toFixed(2);
-        counts.set(k, (counts.get(k) || 0) + 1);
-    }
-    let hasPinch = false;
-    for (let count of counts.values()) {
-        if (count > 1) { hasPinch = true; break; }
-    }
-    if (!hasPinch) return [poly];
-
-    const result = [];
-    let current = [];
-    const seenMap = new Map();
-
-    for (let i = 0; i < poly.length; i++) {
-        let p = poly[i];
-        let k = p.x.toFixed(2) + ',' + p.y.toFixed(2);
-        if (seenMap.has(k)) {
-            let prevIdx = seenMap.get(k);
-            let subLoop = current.slice(prevIdx);
-            if (subLoop.length >= 3) {
-                result.push(subLoop);
-            }
-            current = current.slice(0, prevIdx);
-            seenMap.clear();
-            current.forEach((pt, idx) => seenMap.set(pt.x.toFixed(2) + ',' + pt.y.toFixed(2), idx));
-        }
-        seenMap.set(k, current.length);
-        current.push(p);
-    }
-    if (current.length >= 3) result.push(current);
-    return result;
-}
-
-function getHullsForComponent(nodes, getPos) {
-    if (nodes.length < 3) return [];
-    const positions = nodes.map(getPos);
-    const unique = [];
-    const seen = new Set();
-    for (let p of positions) {
-        let k = p.x.toFixed(2) + ',' + p.y.toFixed(2);
-        if (!seen.has(k)) { seen.add(k); unique.push(p); }
-    }
-    if (unique.length < 3) return [];
-
-    const convex = getConvexHull(unique);
-    if (convex.length < 3) return [];
-
-    const innerNodes = unique.filter(n => !convex.some(c => Math.hypot(c.x - n.x, c.y - n.y) < 1e-4));
-
-    function findShortestBridge(start, end, available) {
-        const queue = [[start]];
-        const shortestPaths = [];
-        let minHops = Infinity;
-
-        while (queue.length > 0) {
-            let path = queue.shift();
-            if (path.length > minHops) break;
-            let curr = path[path.length - 1];
-
-            let d = Math.hypot(curr.x - end.x, curr.y - end.y);
-            if (d <= MAX_CONNECTION_LENGTH + 1e-4) {
-                shortestPaths.push([...path, end]);
-                minHops = path.length;
-                continue;
-            }
-
-            if (path.length >= minHops) continue;
-
-            for (let cand of available) {
-                if (!path.includes(cand)) {
-                    let dist = Math.hypot(curr.x - cand.x, curr.y - cand.y);
-                    if (dist <= MAX_CONNECTION_LENGTH + 1e-4) {
-                        queue.push([...path, cand]);
-                    }
-                }
-            }
-        }
-
-        if (shortestPaths.length === 0) return null;
-
-        shortestPaths.sort((p1, p2) => {
-            let a1 = 0, a2 = 0;
-            for (let k = 0; k < p1.length - 1; k++) a1 += p1[k].x * p1[k + 1].y - p1[k + 1].x * p1[k].y;
-            for (let k = 0; k < p2.length - 1; k++) a2 += p2[k].x * p2[k + 1].y - p2[k + 1].x * p2[k].y;
-            return Math.abs(a2) - Math.abs(a1);
-        });
-        return shortestPaths[0];
-    }
-
-    let poly = [];
-    for (let i = 0; i < convex.length; i++) {
-        let A = convex[i];
-        let B = convex[(i + 1) % convex.length];
-        let d = Math.hypot(A.x - B.x, A.y - B.y);
-        if (d <= MAX_CONNECTION_LENGTH + 1e-4) {
-            poly.push(A);
-        } else {
-            let best = findShortestBridge(A, B, innerNodes);
-            if (!best) {
-                return getHullsForComponent(unique.filter(n => n !== A), p => p);
-            }
-            for (let k = 0; k < best.length - 1; k++) {
-                poly.push(best[k]);
-            }
-        }
-    }
-
-    let cleaned = prunePolygon(poly);
-    let loops = splitAtPinchPoints(cleaned);
-    let validHulls = [];
-    for (let loop of loops) {
-        if (loop.length >= 3) {
-            let area = polygonArea(loop);
-            if (area > 0.1) {
-                validHulls.push(loop);
-            }
-        }
-    }
-    return validHulls;
+export function polygonArea(poly) {
+    return Math.abs(polygonSignedArea(poly));
 }
 
 export function getStationGraph(player, useTarget = false) {
@@ -288,114 +141,157 @@ export function getStationGraph(player, useTarget = false) {
         };
     };
 
-    // 1. Partition nodes into connected groups based on MAX_CONNECTION_LENGTH
-    const rawAdj = new Map();
-    nodes.forEach(n => rawAdj.set(n, []));
-    for (let i = 0; i < nodes.length; i++) {
-        let p1 = getPos(nodes[i]);
-        for (let j = i + 1; j < nodes.length; j++) {
-            let p2 = getPos(nodes[j]);
-            let d = Math.hypot(p1.x - p2.x, p1.y - p2.y);
-            if (d <= MAX_CONNECTION_LENGTH + 1e-4) {
-                rawAdj.get(nodes[i]).push(nodes[j]);
-                rawAdj.get(nodes[j]).push(nodes[i]);
-            }
-        }
+    const hpX = player.homePlanet ? player.homePlanet.x.toFixed(2) : '0';
+    const hpY = player.homePlanet ? player.homePlanet.y.toFixed(2) : '0';
+    const cacheKey = `${useTarget}:${hpX},${hpY}:${player.units.stations.map(s => {
+        let x = (useTarget && s.targetX !== undefined) ? s.targetX : s.x;
+        let y = (useTarget && s.targetY !== undefined) ? s.targetY : s.y;
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(';')}`;
+
+    if (player.__graphCache && player.__graphCache.key === cacheKey) {
+        return player.__graphCache.result;
     }
 
-    const rawComponents = [];
-    const visitedNodes = new Set();
-    for (let node of nodes) {
-        if (!visitedNodes.has(node)) {
-            let comp = [];
-            let q = [node];
-            visitedNodes.add(node);
-            while (q.length > 0) {
-                let curr = q.shift();
-                comp.push(curr);
-                for (let neighbor of rawAdj.get(curr)) {
-                    if (!visitedNodes.has(neighbor)) {
-                        visitedNodes.add(neighbor);
-                        q.push(neighbor);
-                    }
-                }
-            }
-            rawComponents.push(comp);
-        }
-    }
+    const n = nodes.length;
+    const positions = nodes.map(getPos);
 
-    // 2. Compute convex-prioritized territory hulls for each component
-    const allHulls = [];
-    for (let comp of rawComponents) {
-        if (comp.length >= 3) {
-            let compHulls = getHullsForComponent(comp, getPos);
-            allHulls.push(...compHulls);
-        }
-    }
-
-    // 3. Build validEdges
-    const validEdges = [];
-    const brokenEdges = [];
-    const edgeSet = new Set();
-
-    const addEdge = (u, v) => {
-        let posA = getPos(u);
-        let posB = getPos(v);
-        let dist = Math.hypot(posA.x - posB.x, posA.y - posB.y);
-        let uIdx = nodes.indexOf(u);
-        let vIdx = nodes.indexOf(v);
-        let key = Math.min(uIdx, vIdx) + '-' + Math.max(uIdx, vIdx);
-        if (!edgeSet.has(key)) {
-            edgeSet.add(key);
+    // 1. Find all candidate edges <= MAX_CONNECTION_LENGTH
+    const candidateEdges = [];
+    for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+            let dist = Math.hypot(positions[i].x - positions[j].x, positions[i].y - positions[j].y);
             if (dist <= MAX_CONNECTION_LENGTH + 1e-4) {
-                validEdges.push({ nodeA: u, nodeB: v, posA, posB, dist });
-            } else {
-                brokenEdges.push({ nodeA: u, nodeB: v, posA, posB, dist });
-            }
-        }
-    };
-
-    // Add edges along perimeter of all hulls
-    for (let hull of allHulls) {
-        for (let i = 0; i < hull.length; i++) {
-            let p1 = hull[i];
-            let p2 = hull[(i + 1) % hull.length];
-            let nodeA = nodes.find(n => {
-                let p = getPos(n);
-                return Math.hypot(p.x - p1.x, p.y - p1.y) < 1e-4;
-            });
-            let nodeB = nodes.find(n => {
-                let p = getPos(n);
-                return Math.hypot(p.x - p2.x, p.y - p2.y) < 1e-4;
-            });
-            if (nodeA && nodeB) {
-                addEdge(nodeA, nodeB);
+                candidateEdges.push({ u: i, v: j, dist });
             }
         }
     }
+    // Prioritize shorter edges to build compact Delaunay-like planar cells
+    candidateEdges.sort((a, b) => a.dist - b.dist);
 
-    // For any node with degree < 2, connect to closest neighbors within MAX_CONNECTION_LENGTH
-    for (let node of nodes) {
-        let currentDegree = validEdges.filter(e => e.nodeA === node || e.nodeB === node).length;
-        if (currentDegree < 2) {
-            let others = nodes.filter(n => n !== node);
-            others.sort((a, b) => {
-                let pa = getPos(a), pb = getPos(b), pn = getPos(node);
-                return Math.hypot(pa.x - pn.x, pa.y - pn.y) - Math.hypot(pb.x - pn.x, pb.y - pn.y);
-            });
-            for (let target of others) {
-                let pt = getPos(target), pn = getPos(node);
-                let d = Math.hypot(pt.x - pn.x, pt.y - pn.y);
-                if (d <= MAX_CONNECTION_LENGTH + 1e-4) {
-                    addEdge(node, target);
-                    currentDegree++;
-                    if (currentDegree >= 2) break;
+    // 2. Greedily add non-crossing edges that do not pass through intermediate stations
+    const planarEdges = [];
+    for (let cand of candidateEdges) {
+        let p1 = positions[cand.u];
+        let p2 = positions[cand.v];
+
+        let passesThroughOther = false;
+        for (let k = 0; k < n; k++) {
+            if (k === cand.u || k === cand.v) continue;
+            if (distToSegment(positions[k], p1, p2) < 0.05) {
+                passesThroughOther = true;
+                break;
+            }
+        }
+        if (passesThroughOther) continue;
+
+        let crosses = false;
+        for (let existing of planarEdges) {
+            if (cand.u === existing.u || cand.u === existing.v || cand.v === existing.u || cand.v === existing.v) {
+                continue;
+            }
+            let q1 = positions[existing.u];
+            let q2 = positions[existing.v];
+            if (doLineSegmentsIntersect(p1, p2, q1, q2)) {
+                crosses = true;
+                break;
+            }
+        }
+        if (!crosses) {
+            planarEdges.push(cand);
+        }
+    }
+
+    // 3. Build adjacency list of directed half-edges with angles
+    const adj = Array.from({ length: n }, () => []);
+    for (let edge of planarEdges) {
+        let pU = positions[edge.u];
+        let pV = positions[edge.v];
+        let angleUV = Math.atan2(pV.y - pU.y, pV.x - pU.x);
+        let angleVU = Math.atan2(pU.y - pV.y, pU.x - pV.x);
+
+        adj[edge.u].push({ to: edge.v, angle: angleUV, edgeRef: edge });
+        adj[edge.v].push({ to: edge.u, angle: angleVU, edgeRef: edge });
+    }
+
+    for (let i = 0; i < n; i++) {
+        adj[i].sort((a, b) => a.angle - b.angle);
+    }
+
+    // 4. Half-edge face traversal to extract all interior planar faces
+    const visitedHalfEdges = new Set();
+    const halfEdgeKey = (u, v) => `${u}->${v}`;
+
+    const faces = [];
+    for (let u = 0; u < n; u++) {
+        for (let out of adj[u]) {
+            let v = out.to;
+            let key = halfEdgeKey(u, v);
+            if (visitedHalfEdges.has(key)) continue;
+
+            const face = [];
+            let currU = u;
+            let currV = v;
+            let loopKey = halfEdgeKey(currU, currV);
+
+            while (!visitedHalfEdges.has(loopKey)) {
+                visitedHalfEdges.add(loopKey);
+                face.push(currU);
+
+                let vOutList = adj[currV];
+                let revIdx = vOutList.findIndex(e => e.to === currU);
+                if (revIdx === -1) break;
+
+                // Turn leftmost in cyclic angular order
+                let nextIdx = (revIdx - 1 + vOutList.length) % vOutList.length;
+                let nextOut = vOutList[nextIdx];
+
+                currU = currV;
+                currV = nextOut.to;
+                loopKey = halfEdgeKey(currU, currV);
+            }
+
+            if (face.length >= 3) {
+                let poly = face.map(idx => positions[idx]);
+                let sArea = polygonSignedArea(poly);
+                // Bounded interior faces have positive signedArea
+                if (sArea > 0.05) {
+                    faces.push({ nodeIndices: face, poly, area: sArea });
                 }
             }
         }
     }
 
-    // Connected components using validEdges
+    // 5. Track edge usage for perimeter calculation (boundary vs internal chords)
+    const edgeUsage = new Map();
+    for (let face of faces) {
+        let fNodes = face.nodeIndices;
+        for (let i = 0; i < fNodes.length; i++) {
+            let u = fNodes[i];
+            let v = fNodes[(i + 1) % fNodes.length];
+            let k = Math.min(u, v) + '-' + Math.max(u, v);
+            edgeUsage.set(k, (edgeUsage.get(k) || 0) + 1);
+        }
+    }
+
+    const validEdges = [];
+    const perimeterEdges = [];
+    for (let edge of planarEdges) {
+        let nodeA = nodes[edge.u];
+        let nodeB = nodes[edge.v];
+        let posA = positions[edge.u];
+        let posB = positions[edge.v];
+        let edgeObj = { nodeA, nodeB, posA, posB, dist: edge.dist };
+        validEdges.push(edgeObj);
+
+        let k = Math.min(edge.u, edge.v) + '-' + Math.max(edge.u, edge.v);
+        let count = edgeUsage.get(k) || 0;
+        if (count <= 1) {
+            perimeterEdges.push(edgeObj);
+        }
+    }
+
+    // 6. Connected components
     const components = [];
     const visited = new Set();
     nodes.forEach((n, i) => n.__tempId = i);
@@ -429,13 +325,19 @@ export function getStationGraph(player, useTarget = false) {
 
     const homeComponentNodes = components.find(comp => comp.includes(player.homePlanet)) || [];
 
-    return {
+    const allHulls = faces.map(f => f.poly);
+
+    const result = {
         validEdges,
-        brokenEdges,
+        perimeterEdges,
+        brokenEdges: [],
         connectedNodes: homeComponentNodes,
         components,
         hulls: allHulls
     };
+
+    player.__graphCache = { key: cacheKey, result };
+    return result;
 }
 
 export function getPlayerTerritoryHulls(player, allPlayers, useTarget = false) {
@@ -443,7 +345,13 @@ export function getPlayerTerritoryHulls(player, allPlayers, useTarget = false) {
 }
 
 // Lenient check for asteroids on the edge of territories
-export function isAsteroidInPolygon(ast, player) {
+export function isAsteroidInPolygon(ast, player, allPlayers = null) {
+    if (allPlayers && Array.isArray(allPlayers)) {
+        const enemy = allPlayers.find(op => op && op.id !== player.id);
+        if (enemy && isPointInTerritory(ast, enemy, false, 0)) {
+            return false;
+        }
+    }
     // Treat the asteroid as "in" if it's within 1.5 grid units of a polygon edge. This prevents boundary flickering.
     return isPointInTerritory(ast, player, false, 1.5);
 }
@@ -530,12 +438,16 @@ export function isValidStationPlacement(proposedX, proposedY, activeStation, act
 
     let isValid = true;
 
-    if (isValid) {
+    if (isValid && allPlayers) {
         // Restrict dragging into enemy territories to prevent overlap
-        const enemyPlayer = allPlayers.find(p => p.id !== activePlayer.id);
-
-        if (doTerritoriesIntersect(activePlayer, enemyPlayer, true, false)) isValid = false;
-        if (isValid && doTerritoriesIntersect(activePlayer, enemyPlayer, true, true)) isValid = false;
+        const enemyPlayer = allPlayers.find(p => p && p.id !== activePlayer.id);
+        if (enemyPlayer && isPointInTerritory({ x: proposedX, y: proposedY }, enemyPlayer, false, 0.2)) {
+            isValid = false;
+        }
+        if (isValid && enemyPlayer) {
+            if (doTerritoriesIntersect(activePlayer, enemyPlayer, true, false)) isValid = false;
+            if (isValid && doTerritoriesIntersect(activePlayer, enemyPlayer, true, true)) isValid = false;
+        }
     }
 
     // Restore the station's original target position so the input caller can decide whether to actually commit the move

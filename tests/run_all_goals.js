@@ -47,13 +47,47 @@ async function runGoal(file) {
     });
 }
 
+async function runScript(scriptPath, title) {
+    return new Promise((resolve) => {
+        const start = Date.now();
+        const child = spawn(process.execPath, [scriptPath], {
+            cwd: process.cwd(),
+            stdio: ['ignore', 'pipe', 'pipe']
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout.on('data', (d) => stdout += d.toString());
+        child.stderr.on('data', (d) => stderr += d.toString());
+
+        child.on('close', (code) => {
+            const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+            const passed = code === 0;
+            if (passed) {
+                passedCount++;
+                console.log(`  ✅ [PASS] ${title} (${elapsed}s)`);
+            } else {
+                failedCount++;
+                console.log(`  ❌ [FAIL] ${title} (${elapsed}s)`);
+                const lines = (stdout + stderr).split('\n').filter(Boolean);
+                const lastLines = lines.slice(-4).join('\n     ');
+                console.log(`     ${lastLines}`);
+            }
+            resolve(passed);
+        });
+    });
+}
+
 async function main() {
+    await runScript('tests/test_territory_and_mining.js', 'test_territory_and_mining.js');
     for (const file of goalFiles) {
         await runGoal(file);
     }
 
+    const totalTests = goalFiles.length + 1;
     console.log(`\n------------------------------------------------------`);
-    console.log(`  Summary: ${passedCount} Passed, ${failedCount} Failed out of ${goalFiles.length} Goals`);
+    console.log(`  Summary: ${passedCount} Passed, ${failedCount} Failed out of ${totalTests} Tests`);
     console.log(`------------------------------------------------------\n`);
 
     if (failedCount > 0) {

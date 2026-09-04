@@ -182,9 +182,11 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
         } else if (!m.targetAsteroid) {
             let closest = null;
             let minDist = Infinity;
+            const enemyP = players.find(ep => ep.id !== p.id);
 
             asteroids.forEach(a => {
-                if (a.resources > 0 && a.miners < 4 && isAsteroidInPolygon(a, p)) {
+                const inEnemyTerritory = enemyP && isPointInTerritory(a, enemyP, false, 0);
+                if (!inEnemyTerritory && a.resources > 0 && a.miners < 4 && isAsteroidInPolygon(a, p, players)) {
                     let dx = m.x - a.x;
                     let dy = m.y - a.y;
                     let d = Math.hypot(dx, dy);
@@ -203,8 +205,10 @@ export function updateUnits(p, dt, currentHull, selectedFighters, drawingPath) {
                 m.returning = true;
             }
         } else {
-            // Strictly enforce territory checking: if the asteroid is no longer captured OR depleted
-            if (!isAsteroidInPolygon(m.targetAsteroid, p) || m.targetAsteroid.resources <= 0) {
+            // Strictly enforce territory checking: forbidden if inside enemy territory, no longer captured, or depleted
+            const enemyP = players.find(ep => ep.id !== p.id);
+            const inEnemyTerritory = enemyP && (isPointInTerritory(m.targetAsteroid, enemyP, false, 0) || isPointInTerritory({ x: m.x, y: m.y }, enemyP, false, 0));
+            if (inEnemyTerritory || !isAsteroidInPolygon(m.targetAsteroid, p, players) || m.targetAsteroid.resources <= 0) {
                 // Drop the asteroid lock and recall home immediately
                 m.targetAsteroid.miners = Math.max(0, m.targetAsteroid.miners - 1);
                 m.targetAsteroid = null;
