@@ -127,12 +127,58 @@ export function draw() {
                 ctx.beginPath();
                 ctx.moveTo(f.path[0].x * scX, f.path[0].y * scY);
                 for (let i = 1; i < f.path.length; i++) ctx.lineTo(f.path[i].x * scX, f.path[i].y * scY);
-                ctx.strokeStyle = p.id === 0 ? 'rgba(88, 166, 255, 0.4)' : 'rgba(248, 81, 73, 0.4)';
+                ctx.strokeStyle = p.id === 0 ? 'rgba(88, 166, 255, 0.5)' : 'rgba(248, 81, 73, 0.5)';
                 ctx.lineWidth = 2;
                 ctx.stroke();
+
+                // Draw waypoint dots
+                f.path.forEach((pt, idx) => {
+                    ctx.beginPath();
+                    ctx.arc(pt.x * scX, pt.y * scY, idx === f.pathIndex ? 4 : 2.5, 0, Math.PI * 2);
+                    ctx.fillStyle = idx === f.pathIndex ? '#ffffff' : (p.id === 0 ? '#58a6ff' : '#f85149');
+                    ctx.fill();
+                });
             }
         });
     });
+
+    // Active Station Drag Feedback
+    if (state.activeStation && state.activeStationPlayer) {
+        const s = state.activeStation;
+        const p = state.activeStationPlayer;
+        const stX = s.targetX * scX;
+        const stY = s.targetY * scY;
+
+        // Draw connection radius boundary (5.0 grid units)
+        ctx.beginPath();
+        ctx.arc(stX, stY, 5 * ((scX + scY) / 2), 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Find candidate neighbors to connect to
+        const candidateNodes = [p.homePlanet, ...p.units.stations.filter(other => other !== s)];
+        candidateNodes.sort((a, b) => {
+            const da = Math.hypot(a.x - s.targetX, a.y - s.targetY);
+            const db = Math.hypot(b.x - s.targetX, b.y - s.targetY);
+            return da - db;
+        });
+        const closestCandidates = candidateNodes.slice(0, 2);
+        closestCandidates.forEach(cand => {
+            const dist = Math.hypot(cand.x - s.targetX, cand.y - s.targetY);
+            const isValid = dist <= 5.0;
+            ctx.beginPath();
+            ctx.moveTo(stX, stY);
+            ctx.lineTo(cand.x * scX, cand.y * scY);
+            ctx.strokeStyle = isValid ? 'rgba(46, 160, 67, 0.85)' : 'rgba(248, 81, 73, 0.85)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        });
+    }
 
     // Draw active drawing path
     if (state.drawingPath && state.currentPath.length > 0) {
@@ -200,7 +246,7 @@ export function draw() {
             ctx.fillStyle = `rgba(218, 54, 51, ${p.homePlanet.damageTime * 2})`;
             ctx.fill();
         }
-        drawHealthBar(p.homePlanet.x, p.homePlanet.y + p.homePlanet.radius + 10, p.homePlanet.health, p.homePlanet.maxHealth, 40);
+        drawHealthBar(p.homePlanet.x * scX, (p.homePlanet.y + p.homePlanet.radius) * scY + 10, p.homePlanet.health, p.homePlanet.maxHealth, 40);
 
         // Stations
         p.units.stations.forEach(s => {
@@ -212,7 +258,7 @@ export function draw() {
                 ctx.fill();
             } else {
                 ctx.beginPath();
-                ctx.arc((s.x * scX), (s.y * scY), 50, 0, Math.PI * 2);
+                ctx.arc((s.x * scX), (s.y * scY), 16, 0, Math.PI * 2);
                 ctx.strokeStyle = p.id === 0 ? 'rgba(31, 111, 235, 0.15)' : 'rgba(218, 54, 51, 0.15)';
                 ctx.lineWidth = 1;
                 ctx.stroke();
@@ -247,7 +293,7 @@ export function draw() {
             } else if (f.path && f.path.length > 0) {
                 const targetPoint = f.path[f.pathIndex];
                 if (targetPoint) {
-                    angle = Math.atan2(targetPoint.y - (f.y * scY), targetPoint.x - (f.x * scX)) + Math.PI / 2;
+                    angle = Math.atan2((targetPoint.y * scY) - (f.y * scY), (targetPoint.x * scX) - (f.x * scX)) + Math.PI / 2;
                 }
             }
 

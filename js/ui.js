@@ -97,7 +97,7 @@ export function setupUIBindings() {
             players[0].energy -= 50;
             let tx = players[0].homePlanet.x;
             let ty = Math.max(0.4, players[0].homePlanet.y - 2.0);
-            players[0].buildQueue.push({ type: 'stations', unitData: { x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetX: tx, targetY: ty, health: 100, maxHealth: 100, cooldown: 0, damageTime: 0 } });
+            players[0].buildQueue.push({ type: 'stations', unitData: { x: players[0].homePlanet.x, y: players[0].homePlanet.y, targetX: tx, targetY: ty, health: 200, maxHealth: 200, cooldown: 0, damageTime: 0 } });
         }
     });
     document.getElementById('p1-btn-fighter').addEventListener('click', () => {
@@ -127,7 +127,7 @@ export function setupUIBindings() {
             players[1].energy -= 50;
             let tx = players[1].homePlanet.x;
             let ty = Math.max(0.4, players[1].homePlanet.y - 2.0);
-            players[1].buildQueue.push({ type: 'stations', unitData: { x: players[1].homePlanet.x, y: players[1].homePlanet.y, targetX: tx, targetY: ty, health: 100, maxHealth: 100, cooldown: 0, damageTime: 0 } });
+            players[1].buildQueue.push({ type: 'stations', unitData: { x: players[1].homePlanet.x, y: players[1].homePlanet.y, targetX: tx, targetY: ty, health: 200, maxHealth: 200, cooldown: 0, damageTime: 0 } });
         }
     });
     document.getElementById('p2-btn-fighter').addEventListener('click', () => {

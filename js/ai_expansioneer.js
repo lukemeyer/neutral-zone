@@ -6,26 +6,17 @@ console.log('ai_expansioneer.js loaded');
 export function updateExpansioneerAI(p, dt, mapWidth, mapHeight) {
     p.aiTime = (p.aiTime || 0) + dt;
 
-    function assignTarget(s, tx, ty) {
-        let currentTargetX = s.desiredTargetX !== undefined ? s.desiredTargetX : s.targetX;
-        let currentTargetY = s.desiredTargetY !== undefined ? s.desiredTargetY : s.targetY;
-        if (Math.hypot(currentTargetX - tx, currentTargetY - ty) > 0.1) {
-            if (!s.aiLastMoveTime || (p.aiTime - s.aiLastMoveTime) > 10) {
-                s.desiredTargetX = tx;
-                s.desiredTargetY = ty;
-                s.aiLastMoveTime = p.aiTime;
-            }
-        }
-    }
+    const enemy = players.find(ep => ep.id !== p.id);
+    const pDir = p.homePlanet.x < mapWidth / 2 ? 1 : -1;
 
-    // Simulate drag speed for smooth, deliberate station movement
+    // --- Station Movement (Simulated Deliberate Drag) ---
     p.units.stations.forEach(s => {
         if (s.desiredTargetX !== undefined && s.desiredTargetY !== undefined) {
             let dx = s.desiredTargetX - s.targetX;
             let dy = s.desiredTargetY - s.targetY;
             let dist = Math.hypot(dx, dy);
             if (dist > 0.02) {
-                let dragSpeed = 5.0 * dt; // Deliberate speed
+                let dragSpeed = 6.0 * dt;
                 let moveDist = Math.min(dragSpeed, dist);
                 let proposedX = s.targetX + (dx / dist) * moveDist;
                 let proposedY = s.targetY + (dy / dist) * moveDist;
@@ -44,285 +35,331 @@ export function updateExpansioneerAI(p, dt, mapWidth, mapHeight) {
         }
     });
 
-    let enemy = players.find(ep => ep.id !== p.id);
-    let graph = getStationGraph(p, false);
-    let connectedAnchors = graph.connectedNodes;
-    if (!connectedAnchors || connectedAnchors.length === 0) connectedAnchors = [p.homePlanet];
+    // --- Territory & Station Target Generation ---
+    const activeCaptured = asteroids.filter(a => a.resources > 0 && isAsteroidInPolygon(a, p));
+    const uncaptured = asteroids.filter(a => a.resources > 0 && !isAsteroidInPolygon(a, p) && (!enemy || !isAsteroidInPolygon(a, enemy)));
 
-    let activeCaptured = asteroids.filter(a => a.resources > 0 && isAsteroidInPolygon(a, p));
-    let uncaptured = asteroids.filter(a => a.resources > 0 && !isAsteroidInPolygon(a, p) && !isAsteroidInPolygon(a, enemy));
+    const numStations = p.units.stations.length;
 
-    // 1 & 2: Maintain territory and expand only if < 3 asteroids are being mined
-    let needsExpansion = activeCaptured.length < 3 && uncaptured.length > 0;
+    // Generate stable network targets for all stations
+    function computeStationTargets(totalCount) {
+        if (totalCount <= 0) return [];
 
-    // Select targets based on closest uncaptured asteroid to the HOME PLANET, keeping focus centralized
-    let targetAsteroids = [];
-    if (needsExpansion) {
-        uncaptured.sort((a, b) => Math.hypot(a.x - p.homePlanet.x, a.y - p.homePlanet.y) - Math.hypot(b.x - p.homePlanet.x, b.y - p.homePlanet.y));
-        targetAsteroids = uncaptured.slice(0, 1); // Strictly single-minded
-    }
+        const targets = [];
+        const baseY = p.homePlanet.y;
+        let minAstY = baseY - 2.4;
+        let maxAstY = baseY + 2.4;
+        asteroids.forEach(a => {
+            if (a.y < minAstY) minAstY = Math.max(1.8, a.y - 0.4);
+            if (a.y > maxAstY) maxAstY = Math.min(mapHeight - 1.8, a.y + 0.4);
+        });
 
-    // --- Hexagonal "Creeping Sludge" Territory Generator ---
-    const SPACING = 3.8;
+        const topY = Math.max(1.5, minAstY);
+        const botY = Math.min(mapHeight - 1.5, maxAstY);
+        const startX = p.homePlanet.x;
 
-    function hexToPixel(q, r) {
-        let x = SPACING * (3 / 2) * q;
-        let y = SPACING * Math.sqrt(3) * (r + q / 2);
-        return { x: x + p.homePlanet.x, y: y + p.homePlanet.y };
-    }
+        const isTopBias = p.id === 0;
+        const primaryY = isTopBias ? topY : botY;
+        const secondaryY = isTopBias ? botY : topY;
 
-    let N = p.units.stations.length;
-    let selectedNodes = [];
-    let selectedSet = new Set();
-    function getDist(p1, p2) { return Math.hypot(p1.x - p2.x, p1.y - p2.y); }
-    let homeId = "0,0";
-    let candidates = new Map();
+        targets.push({ x: startX + 2.0 * pDir, y: baseY });
+        targets.push({ x: startX + 1.0 * pDir, y: primaryY });
+        targets.push({ x: startX + 1.0 * pDir, y: secondaryY });
 
-    const hexDirs = [
-        { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },
-        { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 }
-    ];
+        let step = 1;
+        while (targets.length < totalCount) {
+            let xOffset = 1.0 + step * 2.4;
+            let targetX = startX + xOffset * pDir;
+            if (pDir > 0 && targetX > mapWidth - 2.0) targetX = mapWidth - 2.0;
+            if (pDir < 0 && targetX < 2.0) targetX = 2.0;
 
-    function addNeighbors(q, r) {
-        for (let dir of hexDirs) {
-            let nq = q + dir.q;
-            let nr = r + dir.r;
-            let nid = nq + "," + nr;
-            if (nid !== homeId && !selectedSet.has(nid) && !candidates.has(nid)) {
-                candidates.set(nid, { q: nq, r: nr, ...hexToPixel(nq, nr) });
+            targets.push({ x: targetX, y: primaryY });
+            if (targets.length < totalCount) {
+                let midX = startX + (xOffset + 1.2) * pDir;
+                if (pDir > 0 && midX > mapWidth - 2.0) midX = mapWidth - 2.0;
+                if (pDir < 0 && midX < 2.0) midX = 2.0;
+                targets.push({ x: midX, y: baseY });
             }
-        }
-    }
-
-    addNeighbors(0, 0);
-
-    for (let i = 0; i < N; i++) {
-        if (candidates.size === 0) break;
-        let bestCandidateId = null;
-        let bestScore = -Infinity;
-
-        for (let [cid, cand] of candidates.entries()) {
-            if (cand.x < 0 || cand.x > mapWidth || cand.y < 0 || cand.y > mapHeight) continue;
-
-            let minDistToTarget = Infinity;
-            if (targetAsteroids.length > 0) {
-                for (let ast of targetAsteroids) {
-                    let d = getDist(cand, ast);
-                    if (d < minDistToTarget) minDistToTarget = d;
-                }
-            } else {
-                minDistToTarget = -getDist(cand, p.homePlanet); // Pull inward if no targets
+            if (targets.length < totalCount) {
+                targets.push({ x: targetX, y: secondaryY });
             }
-
-            let neighbors = 0;
-            for (let dir of hexDirs) {
-                let nid = (cand.q + dir.q) + "," + (cand.r + dir.r);
-                if (selectedSet.has(nid) || nid === homeId) neighbors++;
-            }
-
-            // Expansioneer strongly rewards mesh stability over reaching targets
-            // 8 units of distance is worth 1 neighbor. Ensures expansion is thick but continues moving.
-            let score = (neighbors * 8.0) - minDistToTarget;
-
-            if (score > bestScore) {
-                bestScore = score;
-                bestCandidateId = cid;
-            }
+            step++;
         }
 
-        if (bestCandidateId) {
-            let chosen = candidates.get(bestCandidateId);
-            selectedNodes.push(chosen);
-            selectedSet.add(bestCandidateId);
-            candidates.delete(bestCandidateId);
-            addNeighbors(chosen.q, chosen.r);
-        } else break;
+        return targets.slice(0, totalCount);
     }
 
-    let sortedNodes = selectedNodes.slice().sort((a, b) => getDist(a, p.homePlanet) - getDist(b, p.homePlanet));
-    p.units.stations.forEach(s => { if (s.createdAt === undefined) s.createdAt = p.aiTime; });
-    let sortedStations = p.units.stations.slice().sort((a, b) => a.createdAt - b.createdAt);
+    const networkTargets = computeStationTargets(numStations);
 
-    for (let i = 0; i < sortedStations.length; i++) {
-        let s = sortedStations[i];
-        let tx = p.homePlanet.x;
-        let ty = p.homePlanet.y;
-
-        if (i < sortedNodes.length) {
-            tx = sortedNodes[i].x;
-            ty = sortedNodes[i].y;
-        }
-
-        // Ensure strictly connected to 2 valid anchors
-        let maxDist = 4.4;
-        let bestPair = null;
-        let bestPairDist = Infinity;
-
-        if (connectedAnchors.length >= 2) {
-            for (let j = 0; j < connectedAnchors.length; j++) {
-                for (let k = j + 1; k < connectedAnchors.length; k++) {
-                    let a1 = connectedAnchors[j];
-                    let a2 = connectedAnchors[k];
-                    if (a1 === s || a2 === s) continue;
-                    let ax1 = a1.targetX !== undefined ? a1.targetX : a1.x; let ay1 = a1.targetY !== undefined ? a1.targetY : a1.y;
-                    let ax2 = a2.targetX !== undefined ? a2.targetX : a2.x; let ay2 = a2.targetY !== undefined ? a2.targetY : a2.y;
-                    if (getDist({ x: ax1, y: ay1 }, { x: ax2, y: ay2 }) <= maxDist * 2) {
-                        let mx = (ax1 + ax2) / 2;
-                        let my = (ay1 + ay2) / 2;
-                        let pairDist = getDist({ x: tx, y: ty }, { x: mx, y: my });
-                        if (pairDist < bestPairDist) {
-                            bestPairDist = pairDist;
-                            bestPair = { A: { ax: ax1, ay: ay1 }, B: { ax: ax2, ay: ay2 } };
-                        }
-                    }
+    // Stable 1-to-1 assignment: each station keeps its designated node to avoid criss-crossing
+    p.units.stations.forEach((s, idx) => {
+        if (idx < networkTargets.length) {
+            const target = networkTargets[idx];
+            let currentTargetX = s.desiredTargetX !== undefined ? s.desiredTargetX : s.targetX;
+            let currentTargetY = s.desiredTargetY !== undefined ? s.desiredTargetY : s.targetY;
+            if (Math.hypot(currentTargetX - target.x, currentTargetY - target.y) > 0.3) {
+                let hasArrived = Math.hypot(s.x - s.targetX, s.y - s.targetY) < 0.1;
+                if (hasArrived || !s.aiLastMoveTime || (p.aiTime - s.aiLastMoveTime) > 3.0) {
+                    s.desiredTargetX = target.x;
+                    s.desiredTargetY = target.y;
+                    s.aiLastMoveTime = p.aiTime;
                 }
             }
         }
-
-        let A = null, B = null;
-        if (bestPair) {
-            A = bestPair.A;
-            B = bestPair.B;
-        } else {
-            // fallback if < 2 anchors
-            let closestAnchor = null;
-            let minDistToAnchor = Infinity;
-            for (let anchor of connectedAnchors) {
-                if (anchor === s) continue;
-                let ax = anchor.targetX !== undefined ? anchor.targetX : anchor.x;
-                let ay = anchor.targetY !== undefined ? anchor.targetY : anchor.y;
-                let d = getDist({ x: tx, y: ty }, { x: ax, y: ay });
-                if (d < minDistToAnchor) {
-                    minDistToAnchor = d;
-                    closestAnchor = { ax, ay };
-                }
-            }
-            A = closestAnchor;
-        }
-
-        if (A && B) {
-            let mx = (A.ax + B.ax) / 2;
-            let my = (A.ay + B.ay) / 2;
-            let dirX = tx - mx;
-            let dirY = ty - my;
-            let len = Math.hypot(dirX, dirY) || 1;
-            dirX /= len;
-            dirY /= len;
-
-            let validLen = 0;
-            for (let testLen = 0; testLen <= len; testLen += 0.2) {
-                let testX = mx + dirX * testLen;
-                let testY = my + dirY * testLen;
-                if (getDist({ x: testX, y: testY }, { x: A.ax, y: A.ay }) <= maxDist &&
-                    getDist({ x: testX, y: testY }, { x: B.ax, y: B.ay }) <= maxDist) {
-                    validLen = testLen;
-                } else {
-                    break;
-                }
-            }
-            tx = mx + dirX * validLen;
-            ty = my + dirY * validLen;
-        } else if (A) {
-            let d = getDist({ x: tx, y: ty }, { x: A.ax, y: A.ay });
-            if (d > maxDist) {
-                let dirX = tx - A.ax;
-                let dirY = ty - A.ay;
-                let len = Math.hypot(dirX, dirY) || 1;
-                tx = A.ax + (dirX / len) * maxDist;
-                ty = A.ay + (dirY / len) * maxDist;
-            }
-        }
-
-        assignTarget(s, tx, ty);
-    }
+    });
 
     let buildActionTaken = false;
 
-    // 3. No idle workers: build miners/fighters only when needed
-    let enemyFighters = enemy ? enemy.units.fighters.length : 0;
-    let desiredFighters = Math.max(2, enemyFighters + 1); // Always have at least 2 for patrol, +1 edge on enemy
+    // --- Strategic Production Management ---
+    const queuedFighters = p.buildQueue.filter(b => b.type === 'fighters').length;
+    const totalFighters = p.units.fighters.length + queuedFighters;
+    const enemyFighters = enemy ? (enemy.units.fighters.length + enemy.buildQueue.filter(b => b.type === 'fighters').length) : 0;
+    let desiredFighters = enemyFighters > 0 ? Math.max(2, enemyFighters + 1) : 1;
 
-    // Aggressive push if base is extremely stable
-    if (!needsExpansion && p.energy >= 150) {
-        desiredFighters += 3;
+    // Scale fleet as economy matures
+    if (enemyFighters > 0 && p.units.stations.length >= 3 && p.units.miners.length >= 2) {
+        desiredFighters = Math.max(desiredFighters, 3);
+    }
+    if (activeCaptured.length >= 2 && enemyFighters > 0) {
+        desiredFighters = Math.max(desiredFighters, 4);
+    }
+    if (activeCaptured.length >= 3 || p.energy >= 140) {
+        desiredFighters = Math.max(desiredFighters, 5);
+    }
+    if (p.energy >= 190) {
+        desiredFighters = Math.max(desiredFighters, 8);
     }
 
-    // Very important: Never buy a fighter before the first station, or else we deadlock the economy!
-    if (p.units.stations.length === 0) {
+    // Never buy a fighter before having at least 1 station and at least 1 miner
+    if (p.units.stations.length === 0 || p.units.miners.length === 0) {
         desiredFighters = 0;
     }
 
-    // Build Miners (Highest Priority if starved)
-    let desiredMiners = Math.max(1, activeCaptured.length * 2);
+    // Build Miners (Capacity: 3 miners per active captured asteroid, min 2, up to 10-12 if economy supports)
+    let desiredMiners = Math.min(12, Math.max(2, activeCaptured.length * 3));
+    if (p.energy > 100 && activeCaptured.length > 0) {
+        desiredMiners = Math.min(12, Math.max(desiredMiners, 10));
+    }
     if (activeCaptured.length === 0 && uncaptured.length > 0) {
-        // Cap initial miners at 2, so the AI has 50 energy left for a station instead of blowing 75 energy on 3 miners
-        desiredMiners = Math.min(2, Math.max(1, p.units.miners.length + 1));
+        desiredMiners = 2; // Be ready for when first asteroid is enveloped
     }
 
-    let economyCritical = p.units.miners.length < desiredMiners;
+    // Build Stations (Limits)
+    let maxStations = Math.max(3, activeCaptured.length * 2 + 1);
+    if (uncaptured.length > 0) {
+        maxStations = Math.max(maxStations, 14);
+    }
+    if (p.energy > 120) {
+        maxStations = Math.max(maxStations, 16);
+    }
 
-    // Do NOT reserve energy for fighters if we critically need miners.
-    let needsFighters = p.units.fighters.length < desiredFighters;
-    let energyReservedForFighters = (needsFighters && !economyCritical) ? 100 : 0;
+    // Float Dump: If we have excess floating energy (>= 140) and an empty queue,
+    // keep producing! An RTS player never floats idle cash.
+    if (p.energy >= 140 && p.buildQueue.length === 0) {
+        if (p.units.miners.length < 12 && activeCaptured.length > 0) {
+            desiredMiners = Math.max(desiredMiners, p.units.miners.length + 1);
+        }
+        if (p.units.fighters.length < 15) {
+            desiredFighters = Math.max(desiredFighters, p.units.fighters.length + 1);
+        }
+        if (p.units.stations.length < 20) {
+            maxStations = Math.max(maxStations, p.units.stations.length + 1);
+        }
+    }
 
+    const economyCritical = p.units.miners.length < desiredMiners;
+    const needsFighters = totalFighters < desiredFighters;
+    const energyReservedForFighters = (needsFighters && !economyCritical && activeCaptured.length > 0) ? 100 : 0;
+
+    // 1. Build Miners (Top Priority if starved)
     if (economyCritical && p.energy >= 25 && p.buildCooldowns.miner <= 0 && !buildActionTaken) {
         p.energy -= 25;
         p.buildCooldowns.miner = 5;
-        p.buildQueue.push({ type: 'miners', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, targetAsteroid: null, payload: 0, returning: false, health: 60, maxHealth: 60 } });
+        p.buildQueue.push({
+            type: 'miners',
+            unitData: {
+                x: p.homePlanet.x,
+                y: p.homePlanet.y,
+                targetAsteroid: null,
+                payload: 0,
+                returning: false,
+                health: 60,
+                maxHealth: 60,
+                damageTime: 0
+            }
+        });
         buildActionTaken = true;
     }
 
-    // Build Fighters (Priority 2)
-    if (needsFighters && p.energy >= 100 && p.buildCooldowns.fighter <= 0 && !buildActionTaken) {
+    // 2. Build Fighters (Priority 2: Allow queuing up to 2 fighters)
+    const canQueueFighter = queuedFighters < 2;
+    if (needsFighters && p.energy >= 100 && canQueueFighter && !buildActionTaken) {
         p.energy -= 100;
-        p.buildCooldowns.fighter = 15;
-        let pDir = p.homePlanet.x < mapWidth / 2 ? 1 : -1;
-        p.buildQueue.push({ type: 'fighters', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, path: [{ x: p.homePlanet.x + 2.0 * pDir, y: p.homePlanet.y }], pathIndex: 0, pathDir: 1, isLoop: false, health: 150, maxHealth: 150, cooldown: 0 } });
+        if (p.buildCooldowns.fighter <= 0) {
+            p.buildCooldowns.fighter = 15;
+        }
+        p.buildQueue.push({
+            type: 'fighters',
+            unitData: {
+                x: p.homePlanet.x,
+                y: p.homePlanet.y,
+                path: [{ x: p.homePlanet.x + 1.5 * pDir, y: p.homePlanet.y }],
+                pathIndex: 0,
+                pathDir: 1,
+                isLoop: false,
+                health: 150,
+                maxHealth: 150,
+                cooldown: 0,
+                damageTime: 0
+            }
+        });
         buildActionTaken = true;
     }
 
-    // Build Stations (Priority 3, uses remaining unreserved energy)
-    let maxStations = needsExpansion ? activeCaptured.length * 2 + 4 : Math.max(3, activeCaptured.length + 2);
-    if (p.energy > 140) maxStations = 999; // If floating energy, keep expanding territory
-
+    // 3. Build Stations (Priority 3: Expands territory to envelop asteroids & dominate map)
     if (p.units.stations.length < maxStations && p.energy >= (50 + energyReservedForFighters) && p.buildCooldowns.station <= 0 && !buildActionTaken) {
         p.energy -= 50;
         p.buildCooldowns.station = 10;
-        let pDir = p.homePlanet.x < mapWidth / 2 ? 1 : -1;
-        p.buildQueue.push({ type: 'stations', unitData: { x: p.homePlanet.x, y: p.homePlanet.y, targetX: p.homePlanet.x, targetY: p.homePlanet.y, desiredTargetX: p.homePlanet.x + 2.0 * pDir, desiredTargetY: p.homePlanet.y, health: 100, maxHealth: 100, cooldown: 0 } });
+        let nextTarget = computeStationTargets(p.units.stations.length + 1)[p.units.stations.length] || { x: p.homePlanet.x + 2.0 * pDir, y: p.homePlanet.y };
+        p.buildQueue.push({
+            type: 'stations',
+            unitData: {
+                x: p.homePlanet.x,
+                y: p.homePlanet.y,
+                targetX: p.homePlanet.x,
+                targetY: p.homePlanet.y,
+                desiredTargetX: nextTarget.x,
+                desiredTargetY: nextTarget.y,
+                health: 200,
+                maxHealth: 200,
+                cooldown: 0,
+                damageTime: 0
+            }
+        });
         buildActionTaken = true;
     }
 
-    // Always have fighters patrolling or attacking
-    let defenseRadius = 7.0;
+    // --- Tactical Fighter Management ---
+    let nearestThreat = null;
+    let minThreatDist = Infinity;
+    const squadSize = p.units.fighters.length;
+
+    if (enemy) {
+        enemy.units.fighters.forEach(ef => {
+            let dPlanet = Math.hypot(ef.x - p.homePlanet.x, ef.y - p.homePlanet.y);
+            let dMiners = p.units.miners.map(m => Math.hypot(ef.x - m.x, ef.y - m.y));
+            let closestMinerDist = Math.min(...(dMiners.length > 0 ? dMiners : [Infinity]));
+
+            // If we have a squad (>= 2), we can defend any threat within 6.0 units of any friendly entity.
+            // If lone fighter (squadSize < 2), only scramble if enemy directly threatens miners or planet!
+            let isUrgentThreat = closestMinerDist < 3.5 || dPlanet < 3.5;
+            if (squadSize >= 2) {
+                let dStations = p.units.stations.map(s => Math.hypot(ef.x - s.x, ef.y - s.y));
+                let closestFriendly = Math.min(dPlanet, closestMinerDist, ...(dStations.length > 0 ? dStations : [Infinity]));
+                if (closestFriendly < 6.0 && closestFriendly < minThreatDist) {
+                    minThreatDist = closestFriendly;
+                    nearestThreat = ef;
+                }
+            } else if (isUrgentThreat) {
+                let dist = Math.min(dPlanet, closestMinerDist);
+                if (dist < minThreatDist) {
+                    minThreatDist = dist;
+                    nearestThreat = ef;
+                }
+            }
+        });
+    }
+
+    // Launch coordinated offensive push:
+    // 1) Fleet assembly: Wait for queued fighters to finish rolling out unless already at critical mass (>= 3)
+    // 2) Must have at least 2 fighters and superiority (or >= 3)
+    // 3) Or enemy has 0 fighters and 0 stations (uncontested)
+    // 4) Or all resources depleted and cannot afford more fighters (last stand)
+    const remainingResources = asteroids.reduce((acc, a) => acc + (a.resources || 0), 0);
+    const cannotAffordFighter = p.energy < 100 && (remainingResources === 0 || p.units.miners.length === 0);
+    const enemyFleetSize = enemy ? enemy.units.fighters.length : 0;
+    const isAssembling = queuedFighters > 0 && squadSize < 3;
+    const minFleetSize = Math.min(desiredFighters, 3);
+    const hasSuperiority = squadSize >= 3 || enemyFleetSize === 0 || squadSize > enemyFleetSize;
+
+    const shouldOffend = p.aiTime > 60 && !isAssembling && (
+        (squadSize >= minFleetSize && hasSuperiority) ||
+        (squadSize >= 1 && enemyFleetSize === 0 && (!enemy || enemy.units.stations.length === 0)) ||
+        (cannotAffordFighter && squadSize >= 1)
+    );
+
+    // Shared offensive target for the whole squad (focus fire)
+    let sharedAttackTarget = null;
+    if (shouldOffend && enemy) {
+        if (enemy.units.fighters.length > 0) {
+            // Priority 1: Defeat enemy fighters, prioritize closest
+            sharedAttackTarget = enemy.units.fighters.reduce((closest, ef) => {
+                let d = Math.hypot(ef.x - p.homePlanet.x, ef.y - p.homePlanet.y);
+                let cd = Math.hypot(closest.x - p.homePlanet.x, closest.y - p.homePlanet.y);
+                return d < cd ? ef : closest;
+            }, enemy.units.fighters[0]);
+        } else {
+            // Priority 2: Clear frontline enemy assets in proximity order (peel enemy fortress)
+            const candidateTargets = [
+                ...enemy.units.miners,
+                ...(squadSize >= 2 ? enemy.units.stations : enemy.units.stations.filter(s => s.health <= 80)),
+                enemy.homePlanet
+            ];
+            sharedAttackTarget = candidateTargets.reduce((closest, t) => {
+                let d = Math.hypot(t.x - p.homePlanet.x, t.y - p.homePlanet.y);
+                let cd = Math.hypot(closest.x - p.homePlanet.x, closest.y - p.homePlanet.y);
+                return d < cd ? t : closest;
+            }, enemy.homePlanet);
+        }
+    }
+
     p.units.fighters.forEach((f, i) => {
-        let isIdle = !f.path || f.path.length === 0 || (f.pathIndex >= f.path.length && !f.isLoop);
+        let isArrival = f.path && f.path.length === 1 && Math.hypot(f.x - f.path[0].x, f.y - f.path[0].y) < 0.4;
+        let isIdle = !f.path || f.path.length === 0 || (f.pathIndex >= f.path.length && !f.isLoop) || isArrival;
 
-        // If we are aggressive and enemy exists, attack them.
-        let isAggressive = !needsExpansion && p.energy > 50 && enemy;
-
-        if (isIdle || (!f.isAggressiveTarget && isAggressive)) {
-            if (isAggressive && enemy) {
-                // Attack enemy planet
-                f.path = [{ x: enemy.homePlanet.x, y: enemy.homePlanet.y }];
+        // Priority 1: Defend against active intruder
+        if (nearestThreat) {
+            if (f.pursuitTarget !== nearestThreat || isIdle || !f.isDefending) {
+                f.path = [{ x: nearestThreat.x, y: nearestThreat.y }];
                 f.pathIndex = 0;
                 f.pathDir = 1;
                 f.isLoop = false;
-                f.isAggressiveTarget = true;
-            } else if (isIdle) {
-                // Patrol around home
-                let angle = (i / Math.max(1, p.units.fighters.length)) * Math.PI * 2;
-                let cx = p.homePlanet.x;
-                let cy = p.homePlanet.y;
-                f.path = [
-                    { x: cx + Math.cos(angle) * defenseRadius, y: cy + Math.sin(angle) * defenseRadius },
-                    { x: cx + Math.cos(angle + Math.PI) * defenseRadius, y: cy + Math.sin(angle + Math.PI) * defenseRadius }
-                ];
-                f.pathIndex = 0;
-                f.pathDir = 1;
-                f.isLoop = true;
+                f.pursuitTarget = nearestThreat;
+                f.attackTargetRef = nearestThreat;
+                f.isDefending = true;
                 f.isAggressiveTarget = false;
             }
+            return;
+        }
+
+        // Priority 2: Coordinated offensive push (Squad focus fire)
+        if (shouldOffend && sharedAttackTarget) {
+            if (f.attackTargetRef !== sharedAttackTarget || isIdle || !f.isAggressiveTarget) {
+                f.path = [{ x: sharedAttackTarget.x, y: sharedAttackTarget.y }];
+                f.pathIndex = 0;
+                f.pathDir = 1;
+                f.isLoop = false;
+                f.attackTargetRef = sharedAttackTarget;
+                f.isAggressiveTarget = true;
+                f.isDefending = false;
+                f.pursuitTarget = (sharedAttackTarget.maxHealth !== undefined && sharedAttackTarget.maxHealth !== 200) ? sharedAttackTarget : null;
+            }
+            return;
+        }
+
+        // Priority 3: Safe Interior Staging
+        // Lone fighters or pre-offensive fleet wait safely behind friendly lines
+        if (isIdle || f.isAggressiveTarget) {
+            let stageX = p.homePlanet.x + 1.6 * pDir;
+            let stageY = p.homePlanet.y + (i - (Math.max(1, squadSize) - 1) / 2) * 1.2;
+            f.path = [{ x: stageX, y: stageY }];
+            f.pathIndex = 0;
+            f.pathDir = 1;
+            f.isLoop = false;
+            f.attackTargetRef = null;
+            f.pursuitTarget = null;
+            f.isAggressiveTarget = false;
+            f.isDefending = false;
         }
     });
 }

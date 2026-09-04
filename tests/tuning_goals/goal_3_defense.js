@@ -26,14 +26,14 @@ export default {
         const p1 = players[0];
         const p2 = players[1];
 
-        // Fail condition: The station is destroyed before P1 ever builds a fighter
+        // Fail condition: The station is destroyed
         if (p1.units.stations.length === 0) {
-            global.assert(false, `Defense Failed: P1 allowed its station to be destroyed by the enemy fighter at t=${timeSeconds.toFixed(1)}s without defending.`);
+            global.assert(false, `Defense Failed: P1 allowed its station to be destroyed by the enemy fighter at t=${timeSeconds.toFixed(1)}s.`);
         }
 
-        // Pass condition: P1 successfully queues or builds a fighter
-        if (p1.units.fighters.length > 0 || p1.buildQueue.some(q => q.type === 'fighters')) {
-            global.assertPass(true, `CPU successfully prioritized and built a defensive fighter at t=${timeSeconds.toFixed(1)}s.`);
+        // Pass condition: The attacking enemy fighter is destroyed and P1 station survives
+        if (p2.units.fighters.length === 0 && p1.units.stations.length > 0) {
+            global.assertPass(true, `Defense Passed: CPU successfully produced a fighter, destroyed the threat, and protected the station at t=${timeSeconds.toFixed(1)}s.`);
         }
     }
 };

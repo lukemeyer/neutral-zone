@@ -121,6 +121,12 @@
 
     <div class="container">
         <header>
+            <nav style="margin-bottom: 25px; display: flex; gap: 20px; justify-content: center; font-size: 14px;">
+                <a href="index.html" style="color: #58a6ff; text-decoration: none; font-weight: 500;">🎮 Play Game</a>
+                <a href="player_guide.html" style="color: #7ee787; text-decoration: none; font-weight: 500;">📖 Player Guide</a>
+                <a href="dev_guide.html" style="color: #d2a8ff; text-decoration: none; font-weight: bold; border-bottom: 2px solid #d2a8ff;">🛠️ Dev Guide</a>
+                <a href="evaluate.html" style="color: #3fb950; text-decoration: none; font-weight: 500;">🧪 AI Evaluator</a>
+            </nav>
             <h1>Developer Guide</h1>
             <p>Technical Architecture and Systems Overview for Neutral Zone</p>
         </header>
@@ -142,12 +148,16 @@
             </div>
 
             <h3>State Management (state.js)</h3>
-            <p>The entire game state is stored in simple, exportable JavaScript objects and arrays. This allows the
-                simulation to act deterministically and to be injected flawlessly into testing frameworks.</p>
+            <p>The entire game state is stored in simple, exportable JavaScript objects and arrays scaled to a deterministic
+                grid coordinate system (<code>GRID_W = 20</code>, <code>GRID_H = 15</code>). This allows the simulation to run decoupled from canvas pixels and execute in headless test environments.</p>
             <div class="code-block">
                 export const state = {
-                activeScout: null,
+                activeStation: null,
+                activeStationPlayer: null,
                 selectedFighters: [],
+                selectionBox: null,
+                currentPath: [],
+                drawingPath: false,
                 gameStarted: false,
                 gameOver: false,
                 lastTime: 0
@@ -158,35 +168,31 @@
         <div class="card">
             <h2>Core Systems</h2>
 
-            <h3>Territory Hull Simulation</h3>
-            <p>Territory is mapped dynamically using a Convex Hull algorithm (found in <code>utils.js</code>). The
-                points of the hull are generated dynamically every frame based on the coordinates of the <strong>Home
-                    Planet</strong> and all living <strong>Scouts</strong>.</p>
-            <p>The total area formed by this hull calculates player domination percentages. Functions like
-                <code>pointInPolygon</code> and <code>doPolygonsIntersect</code> guarantee units are repelled safely and
-                miners stop harvesting if an asteroid exits the hull boundary.</p>
+            <h3>Planar Graph & Territory Faces</h3>
+            <p>Rather than a naive convex hull, territory is mapped using a planar graph face-tracing algorithm (in <code>utils.js</code>).
+                <code>getStationGraph</code> links each station to up to 2 closest neighbors within <code>MAX_CONNECTION_LENGTH = 5</code> grid units.
+                <code>getPlayerTerritoryHulls</code> then traverses the directed angular adjacency cycles to extract closed polygon faces formed by 3 or more connected nodes.</p>
+            <p>The total area formed by these faces determines the 55% domination victory condition. Functions like
+                <code>isPointInTerritory</code> and <code>doTerritoriesIntersect</code> enforce border physics, preventing overlaps and recalling miners when resources exit friendly territory.</p>
+
+            <h3>Border Power & Perimeter Limits</h3>
+            <p>Each player has a dynamic border power budget: <code>maxPerimeter = (stations + 1) * 3.5</code>. If the sum of connection edge lengths exceeds this capacity, the UI warns of overextension and restricts further remote station moves.</p>
 
             <h3>Unit Steering and Collision</h3>
-            <p>Unit movement in <code>units.js</code> relies on autonomous steering behaviors mapped with a slight
-                physics layer. Units execute custom avoidance logic to prevent intersecting the Home Planet or Asteroids
-                during travel.</p>
-            <p>A soft-body collision system repels overlapping entities using dynamic force vectors based on whether the
-                unit is actively moving or idle (parking push logic).</p>
+            <p>Unit movement in <code>units.js</code> relies on autonomous steering behaviors mapped with a physics layer. Units execute avoidance logic to prevent intersecting the Home Planet or Asteroids during travel.</p>
+            <p>A soft-body collision system smoothly repels overlapping entities without deadlock, and units suffer a 50% movement speed penalty outside friendly territory.</p>
 
-            <h3>The CPU AI (ai.js)</h3>
-            <p>The CPU uses a deterministic state machine balancing economy, expansion, and offense within its logic
-                ticks. By evaluating its current resource throughput and distance mapping against enemy scouts, the CPU
+            <h3>The CPU AI (ai_expansioneer.js)</h3>
+            <p>The CPU uses a deterministic state machine balancing economy, expansion, and offense within its logic ticks. By evaluating its current resource throughput and distance mapping against enemy scouts, the CPU
                 makes localized decisions without cheating the game state.</p>
         </div>
 
         <div class="card">
             <h2>Testing & Telemetry</h2>
-            <p>Neutral Zone employs an offline headless testing framework utilizing <strong>Jest</strong>
-                (<code>test_runner.js</code>). By bypassing the graphical renderer layer entirely, the game logic runs
-                simulation iterations thousands of times faster than real-time to locate edge cases in unit navigation
-                or combat balancing.</p>
-            <p>Simulation outputs are dumped directly to JSON JSON logs where properties like economy-to-military build
-                ratios can be evaluated cleanly over epochs.</p>
+            <p>Neutral Zone employs an offline headless testing framework (<code>tests/ai_tuner.js</code> and <code>tests/test_runner.js</code>).
+                By bypassing the graphical renderer layer entirely, the simulation runs thousands of ticks per second to verify gameplay balance against six core tuning goals:
+                no deadlock, balanced economy, threat defense, proactive offense, target match duration (~5 min), and exploit prevention.</p>
+            <p>For visual debugging, <code>evaluate.html</code> provides an in-browser scenario runner with speed controls ($1\times$ to $10\times$) and live execution telemetry.</p>
         </div>
     </div>
 

@@ -7,7 +7,28 @@ let canvas;
 export function initInput(gameCanvas) {
     canvas = gameCanvas;
 
-    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    canvas.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        if (state.selectedFighters.length > 0) {
+            state.selectedFighters.forEach(f => {
+                f.path = [];
+                f.pursuitTarget = null;
+            });
+            state.selectedFighters = [];
+        }
+    });
+
+    window.addEventListener('keydown', e => {
+        if (e.key === 'Escape' || e.key === 'x' || e.key === 'X') {
+            if (state.selectedFighters.length > 0) {
+                state.selectedFighters.forEach(f => {
+                    f.path = [];
+                    f.pursuitTarget = null;
+                });
+                state.selectedFighters = [];
+            }
+        }
+    });
 
     canvas.addEventListener('pointerdown', (e) => {
         if (!state.gameStarted) return;

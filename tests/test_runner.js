@@ -1,9 +1,9 @@
-import { players, asteroids, projectiles, state } from '../js/state.js';
+import { players, asteroids, projectiles, state, GRID_W, GRID_H } from '../js/state.js';
 import { updateUnits, updateProjectiles } from '../js/units.js';
 import { getPlayerTerritoryHulls } from '../js/utils.js';
 // Configuration
-const MAP_WIDTH = 1000;
-const MAP_HEIGHT = 800;
+export const MAP_WIDTH = GRID_W;
+export const MAP_HEIGHT = GRID_H;
 const TICK_RATE = 1 / 60; // 60 FPS representation in `dt`
 const MAX_TICKS = 60 * 60 * 10; // Allow tests to run for max 10 minutes (600 seconds) game-time before forcibly killing them
 
@@ -37,32 +37,31 @@ export function runSimulation(conditionToStop, onTick = () => { }) {
 
     while (!conditionToStop(ticks) && ticks < MAX_TICKS) {
         players.forEach(p => {
-            if (p.buildCooldowns.miner > 0) {
-                p.buildCooldowns.miner -= TICK_RATE;
-                if (p.buildCooldowns.miner <= 0) {
-                    let qi = p.buildQueue.findIndex(b => b.type === 'miners');
-                    if (qi !== -1) { p.units.miners.push(p.buildQueue[qi].unitData); p.buildQueue.splice(qi, 1); }
+            const buildTypes = [
+                { key: 'miner', type: 'miners', time: 5 },
+                { key: 'station', type: 'stations', time: 10 },
+                { key: 'fighter', type: 'fighters', time: 15 }
+            ];
+            buildTypes.forEach(bt => {
+                if (p.buildCooldowns[bt.key] > 0) {
+                    p.buildCooldowns[bt.key] -= TICK_RATE;
+                    if (p.buildCooldowns[bt.key] <= 0) {
+                        p.buildCooldowns[bt.key] = 0;
+                        let qi = p.buildQueue.findIndex(b => b.type === bt.type);
+                        if (qi !== -1) {
+                            p.units[bt.type].push(p.buildQueue[qi].unitData);
+                            p.buildQueue.splice(qi, 1);
+                        }
+                        if (p.buildQueue.some(b => b.type === bt.type)) {
+                            p.buildCooldowns[bt.key] = bt.time;
+                        }
+                    }
+                } else if (p.buildQueue.some(b => b.type === bt.type)) {
+                    p.buildCooldowns[bt.key] = bt.time;
                 }
-            }
-            if (p.buildCooldowns.station > 0) {
-                p.buildCooldowns.station -= TICK_RATE;
-                if (p.buildCooldowns.station <= 0) {
-                    let qi = p.buildQueue.findIndex(b => b.type === 'stations');
-                    if (qi !== -1) { p.units.stations.push(p.buildQueue[qi].unitData); p.buildQueue.splice(qi, 1); }
-                }
-            }
-            if (p.buildCooldowns.fighter > 0) {
-                p.buildCooldowns.fighter -= TICK_RATE;
-                if (p.buildCooldowns.fighter <= 0) {
-                    let qi = p.buildQueue.findIndex(b => b.type === 'fighters');
-                    if (qi !== -1) { p.units.fighters.push(p.buildQueue[qi].unitData); p.buildQueue.splice(qi, 1); }
-                }
-            }
+            });
             // No selected fighters or drawing paths during headless mode
             const hulls = getPlayerTerritoryHulls(p, [], false);
-            if (p.id === 0 && ticks % 60 === 0 && ticks < 1000) {
-                console.log(`[DEBUG] p1 ticks=${ticks} hulls=${hulls.length} | currentGraph=${p.units.stations.length} | firstHullSize=${hulls.length > 0 ? hulls[0].length : 0}`);
-            }
             updateUnits(p, TICK_RATE, null, [], false);
 
             if (p.homePlanet.damageTime === undefined) p.homePlanet.damageTime = 0;

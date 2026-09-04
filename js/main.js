@@ -20,6 +20,19 @@ initRenderer(canvas);
 initInput(canvas);
 setupUIBindings();
 
+// Dynamic canvas resize observer to maintain 1:1 pixel resolution without coordinate drift
+const resizeObserver = new ResizeObserver(entries => {
+    for (let entry of entries) {
+        if (entry.target === canvas.parentElement) {
+            canvas.width = entry.contentRect.width;
+            canvas.height = entry.contentRect.height;
+        }
+    }
+});
+if (canvas.parentElement) {
+    resizeObserver.observe(canvas.parentElement);
+}
+
 // Inject dynamic SVGs into UI Elements
 const injectIcon = (selector, html) => {
     const el = document.querySelector(selector);

@@ -152,6 +152,12 @@
 
     <div class="container">
         <header>
+            <nav style="margin-bottom: 25px; display: flex; gap: 20px; justify-content: center; font-size: 14px;">
+                <a href="index.html" style="color: #58a6ff; text-decoration: none; font-weight: 500;">🎮 Play Game</a>
+                <a href="player_guide.html" style="color: #7ee787; text-decoration: none; font-weight: bold; border-bottom: 2px solid #7ee787;">📖 Player Guide</a>
+                <a href="dev_guide.html" style="color: #bc8cff; text-decoration: none; font-weight: 500;">🛠️ Dev Guide</a>
+                <a href="evaluate.html" style="color: #3fb950; text-decoration: none; font-weight: 500;">🧪 AI Evaluator</a>
+            </nav>
             <h1>Neutral Zone</h1>
             <p>The Ultimate Strategic Territory Domination Game</p>
         </header>
@@ -166,8 +172,8 @@
             <p>Welcome Commander. Your objective in <strong>Neutral Zone</strong> is simple: eradicate the enemy or
                 dominate the sector.</p>
             <ul>
-                <li><strong>Domination:</strong> Expand your territory polygon by moving Scouts to capture 70% of the
-                    map area.</li>
+                <li><strong>Domination:</strong> Expand your territory polygon by positioning Stations to capture 55% of the
+                    sector area.</li>
                 <li><strong>Destruction:</strong> Destroy the enemy's Home Planet using Fighters and offensive pushes.
                 </li>
                 <li><strong>Bankruptcy:</strong> Attrite the enemy until they have 0 units and less than 25 Energy
@@ -187,9 +193,9 @@
                     </svg>
                 </div>
                 <div>
-                    <h3 style="margin: 0; border: none; padding: 0;">Miner (25 Energy)</h3>
-                    <p style="margin: 5px 0 0 0;">Automatically searches for Asteroids located within your territory
-                        hull. Mines resources and returns them to the Home Planet. Highly vulnerable.</p>
+                    <h3 style="margin: 0; border: none; padding: 0;">Miner (25 Energy, 5s Build)</h3>
+                    <p style="margin: 5px 0 0 0;">Automatically searches for Asteroids located within your territory.
+                        Mines resources (up to 25 payload) and returns them to the Home Planet. Highly vulnerable with 60 HP.</p>
                 </div>
             </div>
 
@@ -200,9 +206,9 @@
                     </svg>
                 </div>
                 <div>
-                    <h3 style="margin: 0; border: none; padding: 0;">Scout (50 Energy)</h3>
-                    <p style="margin: 5px 0 0 0;">The cornerstone of your expansion. Drag them across the map to
-                        aggressively expand your territory border. They fire defensively at enemy Fighters.</p>
+                    <h3 style="margin: 0; border: none; padding: 0;">Station (50 Energy, 10s Build)</h3>
+                    <p style="margin: 5px 0 0 0;">The cornerstone of your expansion. Drag them across the map to anchor
+                        territory polygons. Automatically links with up to 2 nearby nodes within 5 grid units and fires defensive turrets at approaching enemy Fighters.</p>
                 </div>
             </div>
 
@@ -214,10 +220,9 @@
                     </svg>
                 </div>
                 <div>
-                    <h3 style="margin: 0; border: none; padding: 0;">Fighter (100 Energy)</h3>
-                    <p style="margin: 5px 0 0 0;">Your offensive muscle. Drag from a Fighter (or use the "Select All"
-                        tool) to draw a custom flight path. They actively engage enemy units and the enemy Home Planet.
-                    </p>
+                    <h3 style="margin: 0; border: none; padding: 0;">Fighter (100 Energy, 15s Build)</h3>
+                    <p style="margin: 5px 0 0 0;">Your offensive muscle. Click or drag-select fighters, then drag to draw a
+                        custom waypoint flight path. They actively engage enemy fighters, stations, and the enemy Home Planet.</p>
                 </div>
             </div>
         </div>
@@ -229,16 +234,16 @@
         </div>
 
         <div class="card">
-            <h2>Mechanics & Stategy</h2>
-            <p>Mastering Neutral Zone involves managing both economy and space.</p>
+            <h2>Mechanics & Strategy</h2>
+            <p>Mastering Neutral Zone involves managing both economy, perimeter power, and space.</p>
             <ul>
-                <li><strong>Territory Physics:</strong> Your territory is defined as a convex hull drawn around your
-                    Home Planet and all your living Scouts. Push Scouts outwards to envelop Asteroids so Miners can
-                    reach them safely.</li>
-                <li><strong>Energy Pipeline:</strong> Without Miners, you will quickly run out of Energy. Protect your
-                    Asteroids! If an Asteroid falls outside your territory, the Miners will abort and fly home.</li>
-                <li><strong>Drawing Paths:</strong> Selecting Fighters allows you to draw intricate intercept paths. Use
-                    this to flank the enemy's defensive lines or target vulnerable miners.</li>
+                <li><strong>Territory Network:</strong> Territory is formed by planar graph polygons. Each Station links to its
+                    closest neighbors within 5 grid units. When 3 or more connected nodes form a closed loop, they project territory. Keep stations linked to maintain power!</li>
+                <li><strong>Border Power:</strong> Each station expands your border perimeter capacity. Overextended borders turn red and limit further expansion.</li>
+                <li><strong>Territory Advantage:</strong> Units move 50% slower when operating outside friendly territory. Expanding forward creates a tactical highway for your fleet.</li>
+                <li><strong>Energy Pipeline:</strong> Without Miners, you will quickly starve of Energy. Protect your
+                    Asteroids! If an Asteroid falls outside your territory, miners will abort and retreat home.</li>
+                <li><strong>Drawing & Clearing Paths:</strong> Select Fighters individually or with a drag box, then draw waypoint paths to flank enemies. Press <kbd>Escape</kbd> or <kbd>X</kbd> to clear flight paths.</li>
             </ul>
         </div>
     </div>
