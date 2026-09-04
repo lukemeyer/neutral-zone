@@ -116,55 +116,289 @@ export function isPointInTerritory(pt, player, useTarget = false, extraRadius = 
 
 export const MAX_CONNECTION_LENGTH = 5;
 
+export function polygonArea(poly) {
+    if (!poly || poly.length < 3) return 0;
+    let a = 0;
+    for (let i = 0; i < poly.length; i++) {
+        let p1 = poly[i];
+        let p2 = poly[(i + 1) % poly.length];
+        a += (p1.x * p2.y - p2.x * p1.y);
+    }
+    return Math.abs(a / 2);
+}
+
+function prunePolygon(poly) {
+    let pts = [...poly];
+    let changed = true;
+    while (changed && pts.length >= 3) {
+        changed = false;
+        for (let i = 0; i < pts.length; i++) {
+            let next = pts[(i + 1) % pts.length];
+            if (Math.hypot(pts[i].x - next.x, pts[i].y - next.y) < 1e-4) {
+                pts.splice(i, 1);
+                changed = true;
+                break;
+            }
+        }
+        if (changed) continue;
+        for (let i = 0; i < pts.length; i++) {
+            let prev = pts[(i - 1 + pts.length) % pts.length];
+            let next = pts[(i + 1) % pts.length];
+            if (Math.hypot(prev.x - next.x, prev.y - next.y) < 1e-4) {
+                pts.splice(i, 1);
+                changed = true;
+                break;
+            }
+        }
+    }
+    return pts;
+}
+
+function splitAtPinchPoints(poly) {
+    const counts = new Map();
+    for (let p of poly) {
+        let k = p.x.toFixed(2) + ',' + p.y.toFixed(2);
+        counts.set(k, (counts.get(k) || 0) + 1);
+    }
+    let hasPinch = false;
+    for (let count of counts.values()) {
+        if (count > 1) { hasPinch = true; break; }
+    }
+    if (!hasPinch) return [poly];
+
+    const result = [];
+    let current = [];
+    const seenMap = new Map();
+
+    for (let i = 0; i < poly.length; i++) {
+        let p = poly[i];
+        let k = p.x.toFixed(2) + ',' + p.y.toFixed(2);
+        if (seenMap.has(k)) {
+            let prevIdx = seenMap.get(k);
+            let subLoop = current.slice(prevIdx);
+            if (subLoop.length >= 3) {
+                result.push(subLoop);
+            }
+            current = current.slice(0, prevIdx);
+            seenMap.clear();
+            current.forEach((pt, idx) => seenMap.set(pt.x.toFixed(2) + ',' + pt.y.toFixed(2), idx));
+        }
+        seenMap.set(k, current.length);
+        current.push(p);
+    }
+    if (current.length >= 3) result.push(current);
+    return result;
+}
+
+function getHullsForComponent(nodes, getPos) {
+    if (nodes.length < 3) return [];
+    const positions = nodes.map(getPos);
+    const unique = [];
+    const seen = new Set();
+    for (let p of positions) {
+        let k = p.x.toFixed(2) + ',' + p.y.toFixed(2);
+        if (!seen.has(k)) { seen.add(k); unique.push(p); }
+    }
+    if (unique.length < 3) return [];
+
+    const convex = getConvexHull(unique);
+    if (convex.length < 3) return [];
+
+    const innerNodes = unique.filter(n => !convex.some(c => Math.hypot(c.x - n.x, c.y - n.y) < 1e-4));
+
+    function findShortestBridge(start, end, available) {
+        const queue = [[start]];
+        const shortestPaths = [];
+        let minHops = Infinity;
+
+        while (queue.length > 0) {
+            let path = queue.shift();
+            if (path.length > minHops) break;
+            let curr = path[path.length - 1];
+
+            let d = Math.hypot(curr.x - end.x, curr.y - end.y);
+            if (d <= MAX_CONNECTION_LENGTH + 1e-4) {
+                shortestPaths.push([...path, end]);
+                minHops = path.length;
+                continue;
+            }
+
+            if (path.length >= minHops) continue;
+
+            for (let cand of available) {
+                if (!path.includes(cand)) {
+                    let dist = Math.hypot(curr.x - cand.x, curr.y - cand.y);
+                    if (dist <= MAX_CONNECTION_LENGTH + 1e-4) {
+                        queue.push([...path, cand]);
+                    }
+                }
+            }
+        }
+
+        if (shortestPaths.length === 0) return null;
+
+        shortestPaths.sort((p1, p2) => {
+            let a1 = 0, a2 = 0;
+            for (let k = 0; k < p1.length - 1; k++) a1 += p1[k].x * p1[k + 1].y - p1[k + 1].x * p1[k].y;
+            for (let k = 0; k < p2.length - 1; k++) a2 += p2[k].x * p2[k + 1].y - p2[k + 1].x * p2[k].y;
+            return Math.abs(a2) - Math.abs(a1);
+        });
+        return shortestPaths[0];
+    }
+
+    let poly = [];
+    for (let i = 0; i < convex.length; i++) {
+        let A = convex[i];
+        let B = convex[(i + 1) % convex.length];
+        let d = Math.hypot(A.x - B.x, A.y - B.y);
+        if (d <= MAX_CONNECTION_LENGTH + 1e-4) {
+            poly.push(A);
+        } else {
+            let best = findShortestBridge(A, B, innerNodes);
+            if (!best) {
+                return getHullsForComponent(unique.filter(n => n !== A), p => p);
+            }
+            for (let k = 0; k < best.length - 1; k++) {
+                poly.push(best[k]);
+            }
+        }
+    }
+
+    let cleaned = prunePolygon(poly);
+    let loops = splitAtPinchPoints(cleaned);
+    let validHulls = [];
+    for (let loop of loops) {
+        if (loop.length >= 3) {
+            let area = polygonArea(loop);
+            if (area > 0.1) {
+                validHulls.push(loop);
+            }
+        }
+    }
+    return validHulls;
+}
+
 export function getStationGraph(player, useTarget = false) {
     const nodes = [player.homePlanet, ...player.units.stations];
-    nodes.forEach((n, i) => n.__tempId = i);
-
     const getPos = (n) => {
-        if (n === player.homePlanet) return n;
-        return useTarget ? { x: n.targetX, y: n.targetY } : { x: n.x, y: n.y };
+        if (n === player.homePlanet || !useTarget) return { x: n.x, y: n.y };
+        return {
+            x: n.targetX !== undefined ? n.targetX : n.x,
+            y: n.targetY !== undefined ? n.targetY : n.y
+        };
     };
 
+    // 1. Partition nodes into connected groups based on MAX_CONNECTION_LENGTH
+    const rawAdj = new Map();
+    nodes.forEach(n => rawAdj.set(n, []));
+    for (let i = 0; i < nodes.length; i++) {
+        let p1 = getPos(nodes[i]);
+        for (let j = i + 1; j < nodes.length; j++) {
+            let p2 = getPos(nodes[j]);
+            let d = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+            if (d <= MAX_CONNECTION_LENGTH + 1e-4) {
+                rawAdj.get(nodes[i]).push(nodes[j]);
+                rawAdj.get(nodes[j]).push(nodes[i]);
+            }
+        }
+    }
+
+    const rawComponents = [];
+    const visitedNodes = new Set();
+    for (let node of nodes) {
+        if (!visitedNodes.has(node)) {
+            let comp = [];
+            let q = [node];
+            visitedNodes.add(node);
+            while (q.length > 0) {
+                let curr = q.shift();
+                comp.push(curr);
+                for (let neighbor of rawAdj.get(curr)) {
+                    if (!visitedNodes.has(neighbor)) {
+                        visitedNodes.add(neighbor);
+                        q.push(neighbor);
+                    }
+                }
+            }
+            rawComponents.push(comp);
+        }
+    }
+
+    // 2. Compute convex-prioritized territory hulls for each component
+    const allHulls = [];
+    for (let comp of rawComponents) {
+        if (comp.length >= 3) {
+            let compHulls = getHullsForComponent(comp, getPos);
+            allHulls.push(...compHulls);
+        }
+    }
+
+    // 3. Build validEdges
     const validEdges = [];
     const brokenEdges = [];
     const edgeSet = new Set();
 
-    for (let s of player.units.stations) {
-        let pos1 = getPos(s);
-        let others = nodes.filter(n => n !== s);
+    const addEdge = (u, v) => {
+        let posA = getPos(u);
+        let posB = getPos(v);
+        let dist = Math.hypot(posA.x - posB.x, posA.y - posB.y);
+        let uIdx = nodes.indexOf(u);
+        let vIdx = nodes.indexOf(v);
+        let key = Math.min(uIdx, vIdx) + '-' + Math.max(uIdx, vIdx);
+        if (!edgeSet.has(key)) {
+            edgeSet.add(key);
+            if (dist <= MAX_CONNECTION_LENGTH + 1e-4) {
+                validEdges.push({ nodeA: u, nodeB: v, posA, posB, dist });
+            } else {
+                brokenEdges.push({ nodeA: u, nodeB: v, posA, posB, dist });
+            }
+        }
+    };
 
-        others.sort((a, b) => {
-            let pa = getPos(a);
-            let pb = getPos(b);
-            return Math.hypot(pa.x - pos1.x, pa.y - pos1.y) - Math.hypot(pb.x - pos1.x, pb.y - pos1.y);
-        });
+    // Add edges along perimeter of all hulls
+    for (let hull of allHulls) {
+        for (let i = 0; i < hull.length; i++) {
+            let p1 = hull[i];
+            let p2 = hull[(i + 1) % hull.length];
+            let nodeA = nodes.find(n => {
+                let p = getPos(n);
+                return Math.hypot(p.x - p1.x, p.y - p1.y) < 1e-4;
+            });
+            let nodeB = nodes.find(n => {
+                let p = getPos(n);
+                return Math.hypot(p.x - p2.x, p.y - p2.y) < 1e-4;
+            });
+            if (nodeA && nodeB) {
+                addEdge(nodeA, nodeB);
+            }
+        }
+    }
 
-        let closest = others.slice(0, 2);
-
-        for (let c of closest) {
-            let pos2 = getPos(c);
-            let dist = Math.hypot(pos2.x - pos1.x, pos2.y - pos1.y);
-            let minId = Math.min(s.__tempId, c.__tempId);
-            let maxId = Math.max(s.__tempId, c.__tempId);
-            let edgeHash = minId + '-' + maxId;
-
-            if (!edgeSet.has(edgeHash)) {
-                edgeSet.add(edgeHash);
-                // When useTarget is false, stations are in transit and could theoretically be 2 * 4.4 dist apart 
-                // between their starting and ending anchors before completing the move. Use 9.0 to maintain the connection.
-                let maxLen = useTarget ? MAX_CONNECTION_LENGTH : 9.0;
-                if (dist <= maxLen) {
-                    validEdges.push({ nodeA: s, nodeB: c, posA: pos1, posB: pos2, dist });
-                } else {
-                    brokenEdges.push({ nodeA: s, nodeB: c, posA: pos1, posB: pos2, dist });
+    // For any node with degree < 2, connect to closest neighbors within MAX_CONNECTION_LENGTH
+    for (let node of nodes) {
+        let currentDegree = validEdges.filter(e => e.nodeA === node || e.nodeB === node).length;
+        if (currentDegree < 2) {
+            let others = nodes.filter(n => n !== node);
+            others.sort((a, b) => {
+                let pa = getPos(a), pb = getPos(b), pn = getPos(node);
+                return Math.hypot(pa.x - pn.x, pa.y - pn.y) - Math.hypot(pb.x - pn.x, pb.y - pn.y);
+            });
+            for (let target of others) {
+                let pt = getPos(target), pn = getPos(node);
+                let d = Math.hypot(pt.x - pn.x, pt.y - pn.y);
+                if (d <= MAX_CONNECTION_LENGTH + 1e-4) {
+                    addEdge(node, target);
+                    currentDegree++;
+                    if (currentDegree >= 2) break;
                 }
             }
         }
     }
 
-    // Find all disconnected components
+    // Connected components using validEdges
     const components = [];
     const visited = new Set();
+    nodes.forEach((n, i) => n.__tempId = i);
 
     for (let node of nodes) {
         if (!visited.has(node.__tempId)) {
@@ -175,16 +409,12 @@ export function getStationGraph(player, useTarget = false) {
 
             while (queue.length > 0) {
                 let currentId = queue.shift();
-
-                // Find all edges connected to this node
                 for (let edge of validEdges) {
                     let idA = edge.nodeA.__tempId;
                     let idB = edge.nodeB.__tempId;
-
                     let neighborId = null;
                     if (idA === currentId) neighborId = idB;
                     if (idB === currentId) neighborId = idA;
-
                     if (neighborId !== null && !visited.has(neighborId)) {
                         visited.add(neighborId);
                         currentComponent.add(neighborId);
@@ -195,95 +425,21 @@ export function getStationGraph(player, useTarget = false) {
             components.push(nodes.filter(n => currentComponent.has(n.__tempId)));
         }
     }
-
     nodes.forEach(n => delete n.__tempId);
 
-    // Filter out components that lack a path to the home planet.
-    // Ensure only the component containing the home planet remains valid territory.
     const homeComponentNodes = components.find(comp => comp.includes(player.homePlanet)) || [];
 
-    // All graph operations now return the entire set of valid sub-components
-    return { validEdges, brokenEdges, connectedNodes: homeComponentNodes, components };
+    return {
+        validEdges,
+        brokenEdges,
+        connectedNodes: homeComponentNodes,
+        components,
+        hulls: allHulls
+    };
 }
 
 export function getPlayerTerritoryHulls(player, allPlayers, useTarget = false) {
-    const graph = getStationGraph(player, useTarget);
-    const hulls = [];
-    const getPos = (n) => useTarget ? { x: n.targetX, y: n.targetY } : { x: n.x, y: n.y };
-
-    for (let comp of graph.components) {
-        if (comp.length < 3) continue;
-
-        const adj = new Map();
-        comp.forEach(n => adj.set(n, []));
-
-        for (let e of graph.validEdges) {
-            if (adj.has(e.nodeA) && adj.has(e.nodeB)) {
-                adj.get(e.nodeA).push(e.nodeB);
-                adj.get(e.nodeB).push(e.nodeA);
-            }
-        }
-
-        for (let [u, neighbors] of adj.entries()) {
-            let p1 = getPos(u);
-            neighbors.sort((a, b) => {
-                let pa = getPos(a);
-                let pb = getPos(b);
-                let a1 = Math.atan2(pa.y - p1.y, pa.x - p1.x);
-                let a2 = Math.atan2(pb.y - p1.y, pb.x - p1.x);
-                if (Math.abs(a1 - a2) < 0.0001) {
-                    return Math.hypot(pa.x - p1.x, pa.y - p1.y) - Math.hypot(pb.x - p1.x, pb.y - p1.y);
-                }
-                return a1 - a2;
-            });
-        }
-
-        const seen = new Set();
-        let nodeId = new Map();
-        comp.forEach((n, i) => nodeId.set(n, i));
-
-        for (let u of adj.keys()) {
-            for (let v of adj.get(u)) {
-                let edgeKey = nodeId.get(u) + '-' + nodeId.get(v);
-                if (seen.has(edgeKey)) continue;
-
-                let curr = u, next = v;
-                let faceNodes = [];
-                let isCycle = false;
-
-                while (true) {
-                    seen.add(nodeId.get(curr) + '-' + nodeId.get(next));
-                    faceNodes.push(getPos(curr));
-
-                    let nextNeighbors = adj.get(next);
-                    let idx = nextNeighbors.indexOf(curr);
-                    let nextNext = nextNeighbors[(idx + 1) % nextNeighbors.length];
-
-                    curr = next;
-                    next = nextNext;
-
-                    if (curr === u && next === v) {
-                        isCycle = true;
-                        break;
-                    }
-                    if (faceNodes.length > comp.length * 5) break;
-                }
-
-                if (isCycle && faceNodes.length >= 3) {
-                    let area = 0;
-                    for (let i = 0; i < faceNodes.length; i++) {
-                        let p1 = faceNodes[i];
-                        let p2 = faceNodes[(i + 1) % faceNodes.length];
-                        area += (p2.x - p1.x) * (p2.y + p1.y);
-                    }
-                    if (area > 0.1) {
-                        hulls.push(faceNodes);
-                    }
-                }
-            }
-        }
-    }
-    return hulls;
+    return getStationGraph(player, useTarget).hulls;
 }
 
 // Lenient check for asteroids on the edge of territories
