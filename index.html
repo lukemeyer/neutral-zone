@@ -20,8 +20,13 @@
     <div id="start-screen">
         <div class="setup-box">
             <h1>Neutral Zone</h1>
-            <button id="btn-start-game"
-                style="font-size: 20px; padding: 12px 30px; margin-bottom: 20px; cursor: pointer;">Start Game</button>
+            <div style="display:flex; gap:12px; justify-content:center; margin-bottom: 20px;">
+                <button id="btn-start-game"
+                    style="font-size: 18px; padding: 12px 24px; cursor: pointer;">Start Classic Game</button>
+                <a href="hex.html" style="text-decoration:none;">
+                    <button type="button" style="font-size: 18px; padding: 12px 24px; background: #238636; border: 1px solid #2ea043; color: white; border-radius: 6px; cursor: pointer; font-weight: bold;">⬡ Play Hex Variant</button>
+                </a>
+            </div>
             <div class="setup-row">
                 <div class="player-setup">
                     <h2 style="color:#1f6feb">Player 1 (Left)</h2>
@@ -56,6 +61,7 @@
                     interception.</p>
             </div>
             <div class="nav-links" style="margin-top: 20px; display: flex; gap: 20px; justify-content: center; font-size: 14px;">
+                <a href="hex.html" style="color: #2ea043; text-decoration: none; font-weight: bold;">⬡ Hex Variant</a>
                 <a href="player_guide.html" style="color: #58a6ff; text-decoration: none; font-weight: 500;">📖 Player Guide</a>
                 <a href="dev_guide.html" style="color: #bc8cff; text-decoration: none; font-weight: 500;">🛠️ Dev Guide</a>
                 <a href="evaluate.html" style="color: #3fb950; text-decoration: none; font-weight: 500;">🧪 AI Evaluator</a>

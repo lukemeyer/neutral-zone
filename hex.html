@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neutral Zone: Hex Grid Variant</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #090d13;
+            color: #c9d1d9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #top-nav {
+            height: 48px;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+
+        .nav-title {
+            font-size: 16px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dom-meter-wrap {
+            flex: 1;
+            max-width: 480px;
+            margin: 0 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .dom-bar-container {
+            height: 10px;
+            background: #21262d;
+            border-radius: 5px;
+            display: flex;
+            overflow: hidden;
+            border: 1px solid #30363d;
+        }
+
+        .dom-bar-p1 {
+            background: #1f6feb;
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .dom-bar-p2 {
+            background: #f85149;
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .dom-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-family: monospace;
+        }
+
+        .top-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .top-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .top-btn:hover {
+            background: #30363d;
+            color: #ffffff;
+        }
+
+        .top-btn.active {
+            background: #1f6feb;
+            border-color: #58a6ff;
+            color: #ffffff;
+        }
+
+        .classic-link {
+            color: #8b949e;
+            text-decoration: none;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .classic-link:hover {
+            color: #58a6ff;
+        }
+
+        #game-area {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 250px;
+            background: #0d1117;
+            border-right: 1px solid #30363d;
+            padding: 14px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+            z-index: 5;
+        }
+
+        .sidebar.right-side {
+            border-right: none;
+            border-left: 1px solid #30363d;
+        }
+
+        .player-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .card-header {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .energy-val {
+            font-size: 20px;
+            font-weight: bold;
+            font-family: monospace;
+            color: #58a6ff;
+            margin-bottom: 4px;
+        }
+
+        .hangar-box {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .hangar-header {
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .hangar-stats {
+            font-size: 11px;
+            color: #8b949e;
+            font-family: monospace;
+        }
+
+        .btn-action {
+            background: #238636;
+            border: none;
+            color: #ffffff;
+            padding: 7px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-action:hover {
+            background: #2ea043;
+        }
+
+        .btn-secondary {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-secondary:hover {
+            background: #30363d;
+            color: #ffffff;
+        }
+
+        .progress-slot {
+            height: 4px;
+            background: #21262d;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #3fb950;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        .instructions-card {
+            background: rgba(22, 27, 34, 0.6);
+            border: 1px dashed #30363d;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 11px;
+            color: #8b949e;
+            line-height: 1.4;
+        }
+
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            background: #090d13;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #game-over-modal {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(9, 13, 19, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .modal-box {
+            background: #161b22;
+            border: 1px solid #30363d;
+            padding: 30px 40px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        }
+
+        .modal-box h2 {
+            margin-top: 0;
+            font-size: 28px;
+        }
+
+        .btn-restart {
+            background: #1f6feb;
+            color: #ffffff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+
+        .btn-restart:hover {
+            background: #388bfd;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="top-nav">
+        <div class="nav-title">
+            <span>⬡</span> Neutral Zone <span style="font-weight:normal;color:#8b949e">| Hex Grid Variant</span>
+        </div>
+
+        <div class="dom-meter-wrap">
+            <div class="dom-bar-container">
+                <div id="dom-bar-p1" class="dom-bar-p1" style="width: 10%;"></div>
+                <div style="flex:1"></div>
+                <div id="dom-bar-p2" class="dom-bar-p2" style="width: 10%;"></div>
+            </div>
+            <div class="dom-labels">
+                <span style="color:#58a6ff">P1: <span id="p1-sectors">3 (10%)</span></span>
+                <span style="color:#8b949e">Goal: 50% Control</span>
+                <span style="color:#ff7b72">P2: <span id="p2-sectors">3 (10%)</span></span>
+            </div>
+        </div>
+
+        <div class="top-actions">
+            <button id="btn-pause" class="top-btn">⏸ Pause</button>
+            <button id="btn-speed-1x" class="top-btn active">1x</button>
+            <button id="btn-speed-2x" class="top-btn">2x</button>
+            <button id="btn-mute" class="top-btn">🔊 Sound</button>
+            <a href="index.html" class="classic-link">← Classic Mode</a>
+        </div>
+    </div>
+
+    <div id="game-area">
+        <!-- Left Sidebar: Player 1 (Blue) -->
+        <div class="sidebar">
+            <div class="player-card">
+                <div class="card-header" style="color:#58a6ff">
+                    <span>Player 1 (Blue)</span>
+                    <span style="font-size:11px;color:#8b949e">HUMAN</span>
+                </div>
+                <div class="energy-val">⚡ <span id="p1-energy">120</span> E</div>
+            </div>
+
+            <!-- Miner Hangar -->
+            <div class="hangar-box">
+                <div class="hangar-header" style="color:#3fb950">
+                    <span>⛏️ Miner Hangar</span>
+                    <span class="hangar-stats">Docked: <b id="p1-miners-docked">2</b></span>
+                </div>
+                <div class="hangar-stats">Active in Flight: <span id="p1-miners-active">0</span></div>
+                <button id="p1-btn-miner" class="btn-action">
+                    <span>Build Miner</span>
+                    <span>30 E</span>
+                </button>
+                <div class="progress-slot">
+                    <div id="p1-prog-miner" class="progress-fill"></div>
+                </div>
+            </div>
+
+            <!-- Fighter Hangar -->
+            <div class="hangar-box">
+                <div class="hangar-header" style="color:#58a6ff">
+                    <span>✈️ Fighter Hangar</span>
+                    <span class="hangar-stats">Docked: <b id="p1-fighters-docked">2</b></span>
+                </div>
+                <div class="hangar-stats">Active in Flight: <span id="p1-fighters-active">0</span></div>
+                <button id="p1-btn-fighter" class="btn-action" style="background:#1f6feb">
+                    <span>Build Fighter</span>
+                    <span>75 E</span>
+                </button>
+                <div class="progress-slot">
+                    <div id="p1-prog-fighter" class="progress-fill" style="background:#58a6ff"></div>
+                </div>
+                <div style="display:flex;gap:6px;margin-top:2px;">
+                    <button id="p1-btn-scramble" class="btn-secondary" style="flex:1">Scramble (2)</button>
+                    <button id="p1-btn-recall" class="btn-secondary" style="flex:1">Recall to Bay</button>
+                </div>
+            </div>
+
+            <!-- Strategic Guide -->
+            <div class="instructions-card">
+                <b>⬡ Station Construction:</b><br>
+                Click an empty hex intersection connected to your network to build a <b>Relay</b> (35 E).<br><br>
+                <b>🏰 Defense Turret:</b><br>
+                Click any owned Relay to upgrade to a defensive plasma <b>Turret</b> (45 E).<br><br>
+                <b>📦 Clean Hangars:</b><br>
+                Miners and fighters dock safely inside hangars when idle—no clutter or collisions!
+            </div>
+        </div>
+
+        <!-- Center Canvas -->
+        <div id="canvas-container">
+            <canvas id="hex-canvas"></canvas>
+
+            <div id="game-over-modal" style="display:none;">
+                <div class="modal-box">
+                    <h2 id="game-over-text">Player Wins!</h2>
+                    <button id="btn-restart" class="btn-restart">Play Again</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar: Player 2 (Red CPU) -->
+        <div class="sidebar right-side">
+            <div class="player-card">
+                <div class="card-header" style="color:#ff7b72">
+                    <span>Player 2 (Red)</span>
+                    <span style="font-size:11px;color:#8b949e">CPU</span>
+                </div>
+                <div class="energy-val" style="color:#ff7b72">⚡ <span id="p2-energy">120</span> E</div>
+            </div>
+
+            <div class="hangar-box">
+                <div class="hangar-header" style="color:#ff7b72">
+                    <span>⛏️ CPU Miner Hangar</span>
+                    <span class="hangar-stats">Docked: <b id="p2-miners-docked">2</b></span>
+                </div>
+            </div>
+
+            <div class="hangar-box">
+                <div class="hangar-header" style="color:#ff7b72">
+                    <span>✈️ CPU Fighter Hangar</span>
+                    <span class="hangar-stats">Docked: <b id="p2-fighters-docked">2</b></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/hex/hex_main.js"></script>
+</body>
+</html>

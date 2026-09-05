@@ -81,11 +81,13 @@ async function runScript(scriptPath, title) {
 
 async function main() {
     await runScript('tests/test_territory_and_mining.js', 'test_territory_and_mining.js');
+    await runScript('tests/test_hex_grid.js', 'test_hex_grid.js');
+    await runScript('tests/test_hex_gameplay.js', 'test_hex_gameplay.js');
     for (const file of goalFiles) {
         await runGoal(file);
     }
 
-    const totalTests = goalFiles.length + 1;
+    const totalTests = goalFiles.length + 3;
     console.log(`\n------------------------------------------------------`);
     console.log(`  Summary: ${passedCount} Passed, ${failedCount} Failed out of ${totalTests} Tests`);
     console.log(`------------------------------------------------------\n`);
