@@ -1,4 +1,4 @@
-import { getTerritoryPolygon, getBorderIntersection } from './commander_math.js';
+import { getTerritoryPolygon, getBorderIntersection, degreeToAngleRad, angleRadToDegree } from './commander_math.js';
 import { calculateLaunchTarget } from './commander_units.js';
 
 export function renderCommanderGame(ctx, canvas, state) {
@@ -60,13 +60,8 @@ export function renderCommanderGame(ctx, canvas, state) {
             const screenPoly = poly.map(pt => toScreen(pt.x, pt.y));
 
             // Shaded Territory Fill behind the 91-point border
-            const cornerScreen = toScreen(isP2 ? 20 : 0, isP2 ? 0 : 15);
-            const wallStartScreen = toScreen(isP2 ? 20 : 0, poly[0].y);
-            const wallEndScreen = toScreen(poly[90].x, isP2 ? 0 : 15);
-
             ctx.beginPath();
-            ctx.moveTo(cornerScreen.x, cornerScreen.y);
-            ctx.lineTo(wallStartScreen.x, wallStartScreen.y);
+            ctx.moveTo(screenPoly[0].x, screenPoly[0].y);
             for (let i = 0; i < screenPoly.length - 1; i++) {
                 const p0 = screenPoly[i];
                 const p1 = screenPoly[i + 1];
@@ -75,7 +70,23 @@ export function renderCommanderGame(ctx, canvas, state) {
                 ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
             }
             ctx.lineTo(screenPoly[screenPoly.length - 1].x, screenPoly[screenPoly.length - 1].y);
-            ctx.lineTo(wallEndScreen.x, wallEndScreen.y);
+
+            if (!isP2) {
+                const leftWall = toScreen(0, poly[90].y);
+                const corner = toScreen(0, 15);
+                const bottomWall = toScreen(poly[0].x, 15);
+                ctx.lineTo(leftWall.x, leftWall.y);
+                ctx.lineTo(corner.x, corner.y);
+                ctx.lineTo(bottomWall.x, bottomWall.y);
+            } else {
+                const rightWall = toScreen(20, poly[90].y);
+                const corner = toScreen(20, 0);
+                const topWall = toScreen(poly[0].x, 0);
+                ctx.lineTo(rightWall.x, rightWall.y);
+                ctx.lineTo(corner.x, corner.y);
+                ctx.lineTo(topWall.x, topWall.y);
+            }
+
             ctx.closePath();
             ctx.fillStyle = p.territoryColor;
             ctx.fill();
@@ -176,56 +187,72 @@ export function renderCommanderGame(ctx, canvas, state) {
         ctx.fillRect(hpScreen.x - hpW / 2, hpScreen.y + 20, hpW * hpRatio, 4);
 
         // Launch Trajectory: line from center of HQ extending 2x HQ radius with an arrow at the end
-        const launchAngle = p.launchAngle !== undefined ? p.launchAngle : (p.id === 0 ? -Math.PI * 0.25 : Math.PI * 0.75);
+        const isP2 = p.id === 1;
+        const aimDeg = p.aimDegree !== undefined ? p.aimDegree : (p.launchAngle !== undefined ? angleRadToDegree(isP2 ? 1 : 0, p.launchAngle) : 45);
+        const launchAngle = degreeToAngleRad(isP2 ? 1 : 0, aimDeg);
         const trajLen = p.homePlanet.radius * 2.0; // 2x HQ radius
         const arrowEndX = p.homePlanet.x + Math.cos(launchAngle) * trajLen;
         const arrowEndY = p.homePlanet.y + Math.sin(launchAngle) * trajLen;
         const arrowScreen = toScreen(arrowEndX, arrowEndY);
 
-        // Frontier border intersection point along launch angle
-        const isP2 = p.id === 1;
-        const borderDist = getBorderIntersection(p.homePlanet, p.borderDistances || p.stations, isP2, launchAngle);
+        // Frontier border intersection point along launch degree
+        const borderDist = getBorderIntersection(p.homePlanet, p.borderDistances || p.stations, isP2, aimDeg);
         const borderX = p.homePlanet.x + Math.cos(launchAngle) * borderDist;
         const borderY = p.homePlanet.y + Math.sin(launchAngle) * borderDist;
         const borderScreen = toScreen(borderX, borderY);
 
-        // Aiming guide ray extending outward toward the prospective frontier impact point
+        // Target position on border along degree system (slides if occupied)
         const enemy = players.find(ep => ep.id !== p.id);
-        const targetPos = calculateLaunchTarget(p, launchAngle, enemy);
+        const targetPos = calculateLaunchTarget(p, aimDeg, enemy);
         const guideScreen = toScreen(targetPos.x, targetPos.y);
+        const isSlid = targetPos.degree !== aimDeg;
 
         ctx.save();
         // Inner trajectory line from HQ arrow to border
         ctx.setLineDash([2, 6]);
-        ctx.strokeStyle = p.accentColor + '33';
+        ctx.strokeStyle = p.accentColor + '44';
         ctx.lineWidth = 1.0;
         ctx.beginPath();
         ctx.moveTo(arrowScreen.x, arrowScreen.y);
         ctx.lineTo(borderScreen.x, borderScreen.y);
         ctx.stroke();
 
-        // Frontier launch ray: constant distance from border frontier into space
-        ctx.setLineDash([3, 4]);
-        ctx.strokeStyle = p.accentColor + '99';
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        ctx.moveTo(borderScreen.x, borderScreen.y);
-        ctx.lineTo(guideScreen.x, guideScreen.y);
-        ctx.stroke();
+        // If target slid due to occupation, draw slide curve to actual landing degree
+        if (isSlid) {
+            ctx.setLineDash([2, 3]);
+            ctx.strokeStyle = '#f0883e'; // Orange warning
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.moveTo(borderScreen.x, borderScreen.y);
+            ctx.quadraticCurveTo(hpScreen.x, hpScreen.y, guideScreen.x, guideScreen.y);
+            ctx.stroke();
+
+            // Occupied warning badge
+            ctx.font = '10px monospace';
+            ctx.fillStyle = '#f0883e';
+            ctx.textAlign = 'center';
+            ctx.fillText(`Occupied -> ${targetPos.degree}°`, guideScreen.x, guideScreen.y - 12);
+        }
 
         // Frontier border launch origin dot
         ctx.setLineDash([]);
         ctx.beginPath();
-        ctx.arc(borderScreen.x, borderScreen.y, 3, 0, Math.PI * 2);
-        ctx.fillStyle = p.accentColor;
+        ctx.arc(borderScreen.x, borderScreen.y, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = isSlid ? '#f0883e' : p.accentColor;
         ctx.fill();
 
-        // Frontier impact reticle ring
+        // Frontier impact reticle ring at target degree
         ctx.beginPath();
-        ctx.arc(guideScreen.x, guideScreen.y, 6, 0, Math.PI * 2);
-        ctx.strokeStyle = p.accentColor + 'ee';
-        ctx.lineWidth = 1.8;
+        ctx.arc(guideScreen.x, guideScreen.y, 6.5, 0, Math.PI * 2);
+        ctx.strokeStyle = p.accentColor;
+        ctx.lineWidth = 2.0;
         ctx.stroke();
+
+        // Aim degree readout
+        ctx.font = 'bold 11px monospace';
+        ctx.fillStyle = p.accentColor;
+        ctx.textAlign = 'center';
+        ctx.fillText(`${aimDeg}°`, arrowScreen.x, arrowScreen.y - 14);
 
         ctx.restore();
 

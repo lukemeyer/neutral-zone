@@ -1,4 +1,4 @@
-import { computeStationPositions, getTerritoryPolygon, getBorderIntersection, isPointInFan, canExpandStation, doPolygonsIntersect, pushRadialBorder, pullRadialBorder, createRadialBorder, createBorderFromStations, checkPointEnemyCollision } from './commander_math.js';
+import { computeStationPositions, getTerritoryPolygon, getBorderIntersection, isPointInFan, canExpandStation, doPolygonsIntersect, pushRadialBorder, pullRadialBorder, createRadialBorder, createBorderFromStations, checkPointEnemyCollision, degreeToAngleRad, angleRadToDegree, getBorderDistanceAtDegree, pinStationToBorder } from './commander_math.js';
 
 export const COMMANDER_COSTS = {
     station: 50,
@@ -144,7 +144,8 @@ export function updateCommanderUnits(state, dt) {
 
                     // Impulse push and pull: new station pushes outward, pulling existing stations in a weighted way
                     const enemy = players.find(ep => ep.id !== p.id);
-                    onStationAdded(p, { x: ls.targetX, y: ls.targetY }, enemy);
+                    onStationAdded(p, { x: ls.targetX, y: ls.targetY, degree: ls.degree }, enemy);
+                    p.stationCount = p.stations.length;
                 }
             }
         }
@@ -629,121 +630,106 @@ export function isPolygonSafe(testStations, player, enemy = null) {
     return !doPolygonsIntersect(proposedPoly, enemyPoly);
 }
 
-// Pins a station to the frontier border curve at its current angle
-export function pinStationToBorder(station, homePlanet, borderDistances, isP2 = false, enemy = null) {
-    const hx = homePlanet.x;
-    const hy = homePlanet.y;
-    const curX = station.targetX !== undefined ? station.targetX : station.x;
-    const curY = station.targetY !== undefined ? station.targetY : station.y;
-    let ang = station.angle;
-    if (ang === undefined || isNaN(ang)) {
-        ang = Math.atan2(curY - hy, curX - hx);
-    }
-    let canonical = isP2 ? ang - Math.PI : ang;
-    const t = (canonical - (-Math.PI * 0.5)) / (Math.PI * 0.5);
-    const deg = Math.max(0, Math.min(90, Math.round(t * 90)));
-    let r = borderDistances ? borderDistances[deg] : 3.8;
-
-    let candX = Math.max(0.5, Math.min(19.5, Math.round((hx + r * Math.cos(ang)) * 1000) / 1000));
-    let candY = Math.max(0.5, Math.min(14.5, Math.round((hy + r * Math.sin(ang)) * 1000) / 1000));
-
-    if (enemy) {
-        const dummyPlayer = { id: isP2 ? 1 : 0, homePlanet: { x: hx, y: hy } };
-        while (r > 1.5 && !isPositionSafe({ x: candX, y: candY }, dummyPlayer, enemy)) {
-            r -= 0.1;
-            candX = Math.max(0.5, Math.min(19.5, Math.round((hx + r * Math.cos(ang)) * 1000) / 1000));
-            candY = Math.max(0.5, Math.min(14.5, Math.round((hy + r * Math.sin(ang)) * 1000) / 1000));
-        }
-    }
-
-    station.targetX = candX;
-    station.targetY = candY;
-    station.angle = ang;
-    return station;
-}
-
-// Stations no longer have behavior tied to distance between them (no pairwise distance repulsion)
+// Stations are purely visual representations pinned to the continuous border
 export function relaxStations(stations, isP2, enemy = null) {
     // No-op: stations maintain their positions along the border without pairwise distance repulsion
 }
 
-// Constant station launch distance from the border frontier (based on starting inter-station spacing along arc)
+// Constant station launch distance from the border frontier (backward compatibility)
 export const STATION_LAUNCH_DISTANCE = 2.0;
 
-// Calculates where a newly launched station will push the frontier along angle without overlapping enemy territory
-export function calculateLaunchTarget(player, angle, enemy = null) {
+// Calculates where a newly launched station will land along degree system, sliding if occupied
+export function calculateLaunchTarget(player, targetDegOrAngle = null, enemy = null) {
     const isP2 = player.id === 1;
     const hx = player.homePlanet.x;
     const hy = player.homePlanet.y;
-    const borderSource = player.borderDistances || player.stations;
-    const borderDist = getBorderIntersection(player.homePlanet, borderSource, isP2, angle);
 
-    let effectiveEnemy = enemy;
-    if (enemy && enemy.launchingStations && enemy.launchingStations.length > 0) {
-        const plannedStations = [
-            ...(enemy.stations || []),
-            ...enemy.launchingStations.map(ls => ({ x: ls.targetX, y: ls.targetY, targetX: ls.targetX, targetY: ls.targetY, isPerimeter: true }))
-        ];
-        effectiveEnemy = { ...enemy, stations: plannedStations };
-    }
-
-    const angleOffsets = [0, 0.05, -0.05, 0.1, -0.1, 0.15, -0.15, 0.2, -0.2, 0.25, -0.25, 0.3, -0.3, 0.4, -0.4];
-    for (let dAng of angleOffsets) {
-        const testAng = angle + dAng;
-        const cosA = Math.cos(testAng);
-        const sinA = Math.sin(testAng);
-        const bDist = getBorderIntersection(player.homePlanet, borderSource, isP2, testAng);
-        const maxD = bDist + STATION_LAUNCH_DISTANCE;
-        const minD = bDist;
-
-        const candMax = {
-            x: Math.max(0.5, Math.min(19.5, hx + cosA * maxD)),
-            y: Math.max(0.5, Math.min(14.5, hy + sinA * maxD))
-        };
-        if (isPositionSafe(candMax, player, effectiveEnemy) && isPolygonSafe([...(player.stations || []), candMax], player, effectiveEnemy)) {
-            return candMax;
+    let aimDeg = 45;
+    let rawAngle = null;
+    if (typeof targetDegOrAngle === 'number') {
+        if (targetDegOrAngle >= 0 && targetDegOrAngle <= 90 && Math.abs(targetDegOrAngle - Math.round(targetDegOrAngle)) < 1e-4) {
+            aimDeg = Math.round(targetDegOrAngle);
+        } else {
+            rawAngle = targetDegOrAngle;
+            aimDeg = angleRadToDegree(isP2 ? 1 : 0, targetDegOrAngle);
         }
+    } else if (player.launchAngle !== undefined && player.aimDegree === undefined) {
+        rawAngle = player.launchAngle;
+        aimDeg = angleRadToDegree(isP2 ? 1 : 0, player.launchAngle);
+    } else if (player.aimDegree !== undefined) {
+        aimDeg = player.aimDegree;
+    } else if (player.launchAngle !== undefined) {
+        rawAngle = player.launchAngle;
+        aimDeg = angleRadToDegree(isP2 ? 1 : 0, player.launchAngle);
+    }
+    aimDeg = Math.max(0, Math.min(90, aimDeg));
 
-        let low = minD;
-        let high = maxD;
-        let bestSafe = null;
-        for (let iter = 0; iter < 8; iter++) {
-            const mid = (low + high) / 2;
-            const cand = {
-                x: Math.max(0.5, Math.min(19.5, hx + cosA * mid)),
-                y: Math.max(0.5, Math.min(14.5, hy + sinA * mid))
-            };
-            if (isPositionSafe(cand, player, effectiveEnemy) && isPolygonSafe([...(player.stations || []), cand], player, effectiveEnemy)) {
-                bestSafe = cand;
-                low = mid;
-            } else {
-                high = mid;
+    // Occupied dot detection: check if existing station is too close along border
+    let landingDegree = aimDeg;
+    const isOccupied = player.stations && player.stations.some(s => {
+        const sDeg = s.degree !== undefined ? s.degree : angleRadToDegree(isP2 ? 1 : 0, s.angle);
+        return Math.round(sDeg) === landingDegree;
+    });
+
+    if (isOccupied) {
+        // Collide and slide to the nearest free adjacent degree
+        for (let offset = 1; offset <= 45; offset++) {
+            let found = false;
+            for (const sign of [1, -1]) {
+                const testDeg = aimDeg + sign * offset;
+                if (testDeg >= 0 && testDeg <= 90) {
+                    const occ = player.stations.some(s => {
+                        const sDeg = s.degree !== undefined ? s.degree : angleRadToDegree(isP2 ? 1 : 0, s.angle);
+                        return Math.round(sDeg) === testDeg;
+                    });
+                    if (!occ) {
+                        landingDegree = testDeg;
+                        found = true;
+                        break;
+                    }
+                }
             }
+            if (found) break;
         }
-        if (bestSafe) return bestSafe;
     }
 
-    const cosA = Math.cos(angle);
-    const sinA = Math.sin(angle);
+    const currentR = getBorderDistanceAtDegree(player.borderDistances, landingDegree);
+    const targetR = currentR + STATION_LAUNCH_DISTANCE;
+    const rad = (landingDegree === aimDeg && rawAngle !== null) ? rawAngle : degreeToAngleRad(isP2 ? 1 : 0, landingDegree);
+
     return {
-        x: Math.max(0.5, Math.min(19.5, hx + cosA * borderDist)),
-        y: Math.max(0.5, Math.min(14.5, hy + sinA * borderDist))
+        x: Math.max(0.5, Math.min(19.5, Math.round((hx + targetR * Math.cos(rad)) * 1000) / 1000)),
+        y: Math.max(0.5, Math.min(14.5, Math.round((hy + targetR * Math.sin(rad)) * 1000) / 1000)),
+        degree: landingDegree,
+        angle: rad
     };
 }
 
-// Launches a newly constructed station along the trajectory line from the frontier border
+// Launches a newly constructed station along the degree system from the HQ/border
 export function launchStation(player, state = null) {
     if (!player.launchingStations) player.launchingStations = [];
     const isP2 = player.id === 1;
     const enemy = state && state.players ? state.players.find(p => p.id !== player.id) : (player.enemy || null);
-    const launchAngle = player.launchAngle !== undefined ? player.launchAngle : (isP2 ? Math.PI * 0.75 : -Math.PI * 0.25);
 
-    const borderSource = player.borderDistances || player.stations;
-    const borderDist = getBorderIntersection(player.homePlanet, borderSource, isP2, launchAngle);
-    const startX = Math.max(0.5, Math.min(19.5, player.homePlanet.x + Math.cos(launchAngle) * borderDist));
-    const startY = Math.max(0.5, Math.min(14.5, player.homePlanet.y + Math.sin(launchAngle) * borderDist));
+    let aimDeg = 45;
+    let rad = isP2 ? Math.PI * 0.75 : -Math.PI * 0.25;
+    if (player.launchAngle !== undefined && player.aimDegree === undefined) {
+        rad = player.launchAngle;
+        aimDeg = angleRadToDegree(isP2 ? 1 : 0, rad);
+    } else if (player.aimDegree !== undefined) {
+        aimDeg = player.aimDegree;
+        rad = degreeToAngleRad(isP2 ? 1 : 0, aimDeg);
+    } else if (player.launchAngle !== undefined) {
+        rad = player.launchAngle;
+        aimDeg = angleRadToDegree(isP2 ? 1 : 0, rad);
+    }
 
-    const targetPos = calculateLaunchTarget(player, launchAngle, enemy);
+    const targetPos = calculateLaunchTarget(player, player.launchAngle !== undefined ? player.launchAngle : aimDeg, enemy);
+    const launchRad = targetPos.angle !== undefined ? targetPos.angle : rad;
+
+    const currentR = getBorderDistanceAtDegree(player.borderDistances, targetPos.degree);
+    const startX = Math.max(0.5, Math.min(19.5, player.homePlanet.x + Math.cos(launchRad) * currentR));
+    const startY = Math.max(0.5, Math.min(14.5, player.homePlanet.y + Math.sin(launchRad) * currentR));
 
     player.launchingStations.push({
         id: (isP2 ? 100 : 0) + player.stationCount,
@@ -753,87 +739,88 @@ export function launchStation(player, state = null) {
         startY: startY,
         targetX: targetPos.x,
         targetY: targetPos.y,
-        angle: launchAngle,
+        degree: targetPos.degree,
+        angle: launchRad,
         progress: 0,
-        speed: 1.5 // ~0.66s travel time
+        speed: 1.8 // ~0.55s travel time
     });
 }
 
-// Handles physical addition of a new station: pushes frontier out and pulls existing stations
-export function onStationAdded(player, impactPos, enemy = null) {
+// Handles physical addition of a new station: always affects a single dot (like the prototype)
+export function onStationAdded(player, impactPosOrDeg, enemy = null) {
     const isP2 = player.id === 1;
     const hx = player.homePlanet.x;
     const hy = player.homePlanet.y;
 
-    // Initialize borderDistances if not present
     if (!player.borderDistances) {
         player.borderDistances = createBorderFromStations(player.homePlanet, player.stations || [], isP2);
     }
 
-    const launchAng = impactPos
-        ? Math.atan2(impactPos.y - hy, impactPos.x - hx)
-        : (player.launchAngle !== undefined ? player.launchAngle : (isP2 ? Math.PI * 0.75 : -Math.PI * 0.25));
+    let landingDegree = 45;
+    if (typeof impactPosOrDeg === 'number') {
+        landingDegree = Math.round(impactPosOrDeg);
+    } else if (impactPosOrDeg && impactPosOrDeg.degree !== undefined) {
+        landingDegree = impactPosOrDeg.degree;
+    } else if (impactPosOrDeg && impactPosOrDeg.x !== undefined) {
+        const ang = Math.atan2(impactPosOrDeg.y - hy, impactPosOrDeg.x - hx);
+        landingDegree = angleRadToDegree(isP2 ? 1 : 0, ang);
+    } else if (player.aimDegree !== undefined) {
+        landingDegree = player.aimDegree;
+    }
+    landingDegree = Math.max(0, Math.min(90, landingDegree));
 
-    // Push radial border with whole-arc distributed growth and directional emphasis
+    // Single-dot push with prototype 3-dot rounded crest and neighbor redistribution
     pushRadialBorder(
         player.homePlanet,
         player.borderDistances,
-        launchAng,
-        2.0,
+        landingDegree,
+        STATION_LAUNCH_DISTANCE,
         enemy ? enemy.homePlanet : null,
         enemy ? enemy.borderDistances : null,
         enemy ? enemy.stations : null
     );
 
-    if (player.stations) {
-        player.stations._borderDistances = player.borderDistances;
-    }
-
-    // Existing stations stay locked to the border, gliding outward with the expanding frontier
-    if (player.stations) {
-        player.stations.forEach(s => {
-            pinStationToBorder(s, player.homePlanet, player.borderDistances, isP2, enemy);
-        });
-    } else {
-        player.stations = [];
-    }
+    if (!player.stations) player.stations = [];
 
     const newStation = {
         id: (isP2 ? 100 : 0) + player.stations.length,
-        x: impactPos.x,
-        y: impactPos.y,
-        targetX: impactPos.x,
-        targetY: impactPos.y,
+        degree: landingDegree,
         health: 250,
         maxHealth: 250,
         cooldown: 0,
         range: 2.5,
-        isPerimeter: true,
-        angle: launchAng
+        isPerimeter: true
     };
-    pinStationToBorder(newStation, player.homePlanet, player.borderDistances, isP2, enemy);
+    pinStationToBorder(newStation, player.homePlanet, player.borderDistances, isP2);
     newStation.x = newStation.targetX;
     newStation.y = newStation.targetY;
     player.stations.push(newStation);
     player.stationCount = player.stations.length;
     player.stations._borderDistances = player.borderDistances;
+
+    // Existing stations stay locked to their position and glide with the expanding border
+    player.stations.forEach(s => {
+        pinStationToBorder(s, player.homePlanet, player.borderDistances, isP2);
+    });
 }
 
-// Handles physical destruction of a station: remaining stations remain pinned to the pulled border
+// Handles physical destruction of a station: always affects a single dot (like the prototype)
 export function onStationDestroyed(player, destroyedStation, enemy = null) {
     const isP2 = player.id === 1;
-    const hx = player.homePlanet.x;
-    const hy = player.homePlanet.y;
-    const deadX = destroyedStation.targetX !== undefined ? destroyedStation.targetX : destroyedStation.x;
-    const deadY = destroyedStation.targetY !== undefined ? destroyedStation.targetY : destroyedStation.y;
-    const deadAng = destroyedStation.angle !== undefined ? destroyedStation.angle : Math.atan2(deadY - hy, deadX - hx);
+    let deadDegree = 45;
+    if (destroyedStation.degree !== undefined) {
+        deadDegree = destroyedStation.degree;
+    } else {
+        const deadX = destroyedStation.targetX !== undefined ? destroyedStation.targetX : destroyedStation.x;
+        const deadY = destroyedStation.targetY !== undefined ? destroyedStation.targetY : destroyedStation.y;
+        const deadAng = Math.atan2(deadY - player.homePlanet.y, deadX - player.homePlanet.x);
+        deadDegree = angleRadToDegree(isP2 ? 1 : 0, deadAng);
+    }
+    deadDegree = Math.max(0, Math.min(90, deadDegree));
 
-    // Pull radial border inward at destroyed station angle
+    // Pull radial border inward at the single destroyed station degree
     if (player.borderDistances) {
-        pullRadialBorder(player.homePlanet, player.borderDistances, deadAng, 1.8);
-        if (player.stations) {
-            player.stations._borderDistances = player.borderDistances;
-        }
+        pullRadialBorder(player.homePlanet, player.borderDistances, deadDegree, 1.4);
     }
 
     player.stations = player.stations.filter(s => s !== destroyedStation);
@@ -842,9 +829,15 @@ export function onStationDestroyed(player, destroyedStation, enemy = null) {
         player.stations._borderDistances = player.borderDistances;
     }
 
-    // Remaining stations stay locked to their angle on the border, gliding inward with the frontier
+    // Surviving stations shift slightly toward the gap along the border:
+    // closer stations move more, farther stations move less
     player.stations.forEach(s => {
-        pinStationToBorder(s, player.homePlanet, player.borderDistances, isP2, enemy);
+        const diff = deadDegree - s.degree;
+        if (Math.abs(diff) < 45 && Math.abs(diff) > 0.01) {
+            const w = Math.pow(1 - Math.abs(diff) / 45, 2);
+            s.degree = Math.max(0, Math.min(90, s.degree + Math.sign(diff) * (5.0 * w)));
+        }
+        pinStationToBorder(s, player.homePlanet, player.borderDistances, isP2);
     });
 }
 

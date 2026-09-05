@@ -1,5 +1,5 @@
 import { queueBuild, COMMANDER_COSTS } from './commander_units.js';
-import { getTerritoryPolygon, isPointInFan } from './commander_math.js';
+import { getTerritoryPolygon, isPointInFan, angleRadToDegree, degreeToAngleRad } from './commander_math.js';
 
 export function updateCommanderAI(state, dt) {
     const { players, asteroids } = state;
@@ -56,9 +56,8 @@ export function updateCommanderAI(state, dt) {
         });
         if (best) {
             let angle = Math.atan2(best.y - ai.homePlanet.y, best.x - ai.homePlanet.x);
-            // Clamp to P2 expansion quadrant: [0.53 PI, 0.97 PI] (~95 deg to ~175 deg)
-            angle = Math.max(Math.PI * 0.53, Math.min(Math.PI * 0.97, angle));
-            ai.launchAngle = angle;
+            ai.aimDegree = angleRadToDegree(1, angle);
+            ai.launchAngle = degreeToAngleRad(1, ai.aimDegree);
         }
     }
 }

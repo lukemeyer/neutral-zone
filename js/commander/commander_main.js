@@ -2,7 +2,7 @@ import { createCommanderState } from './commander_state.js';
 import { updateCommanderUnits, queueBuild, COMMANDER_COSTS, COMMANDER_BUILD_TIMES, updateStationLayout } from './commander_units.js';
 import { updateCommanderAI } from './commander_ai.js';
 import { renderCommanderGame } from './commander_renderer.js';
-import { polygonArea, getTerritoryPolygon, canExpandStation } from './commander_math.js';
+import { polygonArea, getTerritoryPolygon, canExpandStation, degreeToAngleRad, angleRadToDegree } from './commander_math.js';
 
 let state = null;
 let canvas = null;
@@ -90,13 +90,15 @@ function setupUIHandlers() {
         if (e.code === 'Digit1' || e.code === 'KeyP') setStance('patrol');
         if (e.code === 'Digit2' || e.code === 'KeyD') setStance('defend');
         if (e.code === 'Digit3' || e.code === 'KeyA') setStance('attack');
-        // Steer launch trajectory with Q / E or ArrowLeft / ArrowRight
+        // Steer launch trajectory with Q / E or ArrowLeft / ArrowRight (by 1 degree)
         if (e.code === 'KeyQ' || e.code === 'ArrowLeft') {
-            p1.launchAngle = Math.max(-Math.PI * 0.47, p1.launchAngle - 0.05);
+            p1.aimDegree = Math.max(0, (p1.aimDegree !== undefined ? p1.aimDegree : 45) - 1);
+            p1.launchAngle = degreeToAngleRad(0, p1.aimDegree);
             p1.steeringAngle = p1.launchAngle;
         }
         if (e.code === 'KeyE' || e.code === 'ArrowRight') {
-            p1.launchAngle = Math.min(-Math.PI * 0.03, p1.launchAngle + 0.05);
+            p1.aimDegree = Math.min(90, (p1.aimDegree !== undefined ? p1.aimDegree : 45) + 1);
+            p1.launchAngle = degreeToAngleRad(0, p1.aimDegree);
             p1.steeringAngle = p1.launchAngle;
         }
         if (e.code === 'Space') {
@@ -106,7 +108,7 @@ function setupUIHandlers() {
         }
     });
 
-    // Pointer & Touch Aiming for Launch Trajectory
+    // Pointer & Touch Aiming for Launch Trajectory using the 91-Degree System
     let isAiming = false;
     function steerTrajectoryFromPointer(e) {
         const p1 = getP1();
@@ -119,16 +121,12 @@ function setupUIHandlers() {
 
         const dx = wx - p1.homePlanet.x;
         const dy = wy - p1.homePlanet.y;
-        let angle = Math.atan2(dy, dx);
+        const angle = Math.atan2(dy, dx);
+        const deg = angleRadToDegree(0, angle);
 
-        // Valid forward quadrant for P1: -85 deg to -5 deg
-        const minA = -Math.PI * 0.47;
-        const maxA = -Math.PI * 0.03;
-
-        if (angle > -Math.PI * 0.95 && angle < Math.PI * 0.35) {
-            p1.launchAngle = Math.max(minA, Math.min(maxA, angle));
-            p1.steeringAngle = p1.launchAngle;
-        }
+        p1.aimDegree = Math.max(0, Math.min(90, deg));
+        p1.launchAngle = degreeToAngleRad(0, p1.aimDegree);
+        p1.steeringAngle = p1.launchAngle;
     }
 
     canvas.addEventListener('pointerdown', (e) => {

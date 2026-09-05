@@ -9,15 +9,13 @@ export function createCommanderState() {
 
     function initStations(home, count, isP2) {
         const border = isP2 ? p2Border : p1Border;
-        const angles = isP2
-            ? [Math.PI * 0.58, Math.PI * 0.75, Math.PI * 0.92]
-            : [-Math.PI * 0.42, -Math.PI * 0.25, -Math.PI * 0.08];
+        const degrees = [75, 45, 15];
         const stations = [];
         for (let idx = 0; idx < count; idx++) {
-            const ang = angles[idx];
+            const deg = degrees[idx % degrees.length];
             const s = {
                 id: (isP2 ? 100 : 0) + idx,
-                angle: ang,
+                degree: deg,
                 health: 250,
                 maxHealth: 250,
                 cooldown: 0,
@@ -54,6 +52,7 @@ export function createCommanderState() {
                 miners: [],
                 fighters: []
             },
+            aimDegree: 45,
             launchAngle: -Math.PI * 0.25,
             steeringAngle: -Math.PI * 0.25,
             launchHits: [],
@@ -79,6 +78,7 @@ export function createCommanderState() {
                 miners: [],
                 fighters: []
             },
+            aimDegree: 45,
             launchAngle: Math.PI * 0.75,
             steeringAngle: Math.PI * 0.75,
             launchHits: [],
