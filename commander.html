@@ -257,6 +257,38 @@
             transition: width 0.1s linear;
         }
 
+        .dock-queue-pips {
+            display: flex;
+            gap: 4px;
+            justify-content: center;
+            margin-top: 3px;
+        }
+
+        .dock-queue-pips .pip {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #30363d;
+            border: 1px solid #21262d;
+            transition: all 0.15s ease;
+        }
+
+        .dock-queue-pips .pip.active {
+            background: #3fb950;
+            box-shadow: 0 0 4px rgba(63, 185, 80, 0.8);
+        }
+
+        .dock-queue-pips .pip.waiting {
+            background: #58a6ff;
+            box-shadow: 0 0 4px rgba(88, 166, 255, 0.8);
+        }
+
+        .dock-btn.blocked {
+            opacity: 0.45;
+            cursor: not-allowed;
+            border-color: #da3633 !important;
+        }
+
         .dock-stance-btn {
             background: #21262d;
             border: 1px solid #30363d;
@@ -398,14 +430,17 @@
                     <button id="btn-build-station" class="dock-btn highlight" title="Expand Station Perimeter (50 Energy)">
                         <div class="dock-btn-row"><span>📡 +Station</span><span class="dock-cost">50E</span></div>
                         <div class="dock-prog-wrap"><div id="p1-prog-station" class="dock-prog"></div></div>
+                        <div id="p1-queue-station" class="dock-queue-pips"><span class="pip"></span><span class="pip"></span><span class="pip"></span></div>
                     </button>
                     <button id="btn-build-miner" class="dock-btn" title="Commission Miner (25 Energy)">
                         <div class="dock-btn-row"><span>⛏️ +Miner</span><span class="dock-cost">25E</span></div>
                         <div class="dock-prog-wrap"><div id="p1-prog-miner" class="dock-prog"></div></div>
+                        <div id="p1-queue-miner" class="dock-queue-pips"><span class="pip"></span><span class="pip"></span><span class="pip"></span></div>
                     </button>
                     <button id="btn-build-fighter" class="dock-btn" title="Commission Fighter (75 Energy)">
                         <div class="dock-btn-row"><span>✈️ +Fighter</span><span class="dock-cost">75E</span></div>
                         <div class="dock-prog-wrap"><div id="p1-prog-fighter" class="dock-prog"></div></div>
+                        <div id="p1-queue-fighter" class="dock-queue-pips"><span class="pip"></span><span class="pip"></span><span class="pip"></span></div>
                     </button>
                 </div>
 

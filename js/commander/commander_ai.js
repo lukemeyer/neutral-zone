@@ -19,11 +19,11 @@ export function updateCommanderAI(state, dt) {
     const neededMiners = capturedAsteroids.length * 2;
 
     if (totalMiners < neededMiners && ai.energy >= COMMANDER_COSTS.miner) {
-        queueBuild(ai, 'miner');
-    } else if (ai.stationCount < 7 && ai.energy >= COMMANDER_COSTS.station) {
-        queueBuild(ai, 'station');
-    } else if (ai.units.fighters.length < 5 && ai.energy >= COMMANDER_COSTS.fighter) {
-        queueBuild(ai, 'fighter');
+        queueBuild(ai, 'miner', player);
+    } else if (ai.stationCount < 12 && ai.energy >= COMMANDER_COSTS.station) {
+        queueBuild(ai, 'station', player);
+    } else if (ai.units.fighters.length < 8 && ai.energy >= COMMANDER_COSTS.fighter) {
+        queueBuild(ai, 'fighter', player);
     }
 
     // 2. High-Level Stance Evaluation

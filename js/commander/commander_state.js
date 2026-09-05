@@ -74,7 +74,7 @@ export function createCommanderState() {
                 x: p.homePlanet.x + (pId === 0 ? 0.6 : -0.6) * (i + 1),
                 y: p.homePlanet.y + (pId === 0 ? -0.6 : 0.6) * (i + 1),
                 payload: 0,
-                maxPayload: 25,
+                maxPayload: 10,
                 targetAsteroid: null,
                 returning: false,
                 health: 100,

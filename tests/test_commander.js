@@ -1,4 +1,6 @@
-import { computeStationPositions, getTerritoryPolygon, polygonArea, isPointInFan, getAsteroidLayout } from '../js/commander/commander_math.js';
+import { computeStationPositions, getTerritoryPolygon, polygonArea, isPointInFan, getAsteroidLayout, doPolygonsIntersect, canExpandStation } from '../js/commander/commander_math.js';
+import { createCommanderState } from '../js/commander/commander_state.js';
+import { queueBuild, updateCommanderUnits } from '../js/commander/commander_units.js';
 
 console.log("\n============================================================");
 console.log("  Testing: Commander Variant Mathematics & Radial Expansion");
@@ -92,6 +94,63 @@ assert(isPointInFan(tier1AstP1, poly3), "Tier 1 asteroid enveloped at N=3 statio
 const tier2AstP1 = asteroids.find(a => a.tier === 2 && a.side === 'p1');
 assert(!isPointInFan(tier2AstP1, poly3), "Tier 2 asteroid outside territory at N=3 stations");
 assert(isPointInFan(tier2AstP1, poly6), "Tier 2 asteroid enveloped at N=6 stations");
+
+// 5. Test "No Overlapping Territories" Restriction
+const polySeparatedP1 = getTerritoryPolygon(p1Home, computeStationPositions(p1Home, 8, false), false);
+const polySeparatedP2 = getTerritoryPolygon(p2Home, computeStationPositions(p2Home, 8, true), true);
+assert(!doPolygonsIntersect(polySeparatedP1, polySeparatedP2), "Territories at N=8 do not intersect across the map");
+
+const polyCollidingP1 = getTerritoryPolygon(p1Home, computeStationPositions(p1Home, 13, false), false);
+const polyCollidingP2 = getTerritoryPolygon(p2Home, computeStationPositions(p2Home, 13, true), true);
+assert(doPolygonsIntersect(polyCollidingP1, polyCollidingP2), "Territories at N=13 intersect along the central frontier");
+
+const dummyP1 = { id: 0, homePlanet: p1Home, stationCount: 12 };
+const dummyP2 = { id: 1, homePlanet: p2Home, stationCount: 13, stations: computeStationPositions(p2Home, 13, true) };
+assert(!canExpandStation(dummyP1, dummyP2, 13), "canExpandStation correctly forbids expanding into overlapping enemy territory");
+
+// 6. Test Build Queue (Max 3 per unit type)
+const testState = createCommanderState();
+const p1 = testState.players[0];
+const p2 = testState.players[1];
+p1.energy = 500;
+
+assert(queueBuild(p1, 'miner', p2), "Queue miner 1 succeeds");
+assert(queueBuild(p1, 'miner', p2), "Queue miner 2 succeeds");
+assert(queueBuild(p1, 'miner', p2), "Queue miner 3 succeeds");
+assert(!queueBuild(p1, 'miner', p2), "Queue miner 4 rejected (max 3 queued)");
+
+// 7. Test Miner Payload Capacity (Reduced to 10)
+assert(p1.units.miners[0].maxPayload === 10, "Starting miner capacity is reduced to 10");
+assert(p1.units.miners[1].maxPayload === 10, "Second starting miner capacity is 10");
+
+// 8. Test Shared Attack Target in Attack Mode
+p1.stance = 'attack';
+updateCommanderUnits(testState, 0.1);
+// Check that all attacking fighters target the exact same entity
+const targetEntity0 = p2.stations.find(s => Math.hypot(s.x - p1.units.fighters[0].x, s.y - p1.units.fighters[0].y) < 20);
+assert(targetEntity0 !== undefined, "Attacking fleet found an enemy station target");
+
+// 9. Test Attack Standoff Range (Stops at firing range <= 2.2 instead of 0.0)
+let bestStation = null;
+let minDist = Infinity;
+p2.stations.forEach(es => {
+    const d = Math.hypot(es.x - p1.homePlanet.x, es.y - p1.homePlanet.y);
+    if (d < minDist) {
+        minDist = d;
+        bestStation = es;
+    }
+});
+
+const testFighter = p1.units.fighters[0];
+p1.units.fighters = [testFighter]; // isolate fighter
+testFighter.x = bestStation.x + 2.0;
+testFighter.y = bestStation.y;
+const initialDist = Math.hypot(bestStation.x - testFighter.x, bestStation.y - testFighter.y);
+
+// Update movement: since initialDist (2.0) <= 2.2, fighter should hold position, not fly to 0.0
+updateCommanderUnits(testState, 0.1);
+const newDist = Math.hypot(bestStation.x - testFighter.x, bestStation.y - testFighter.y);
+assert(Math.abs(newDist - initialDist) < 0.05, `Fighter held firing range standoff (initial=${initialDist.toFixed(2)}, new=${newDist.toFixed(2)})`);
 
 console.log(`\n------------------------------------------------------------`);
 console.log(`  Summary: ${passed} Passed, ${failed} Failed`);

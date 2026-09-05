@@ -24,6 +24,68 @@ export function isPointInFan(pt, poly) {
     return inside;
 }
 
+export function doLineSegmentsIntersect(p1, q1, p2, q2) {
+    const orientation = (p, q, r) => {
+        let val = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
+        if (Math.abs(val) < 1e-9) return 0;
+        return (val > 0) ? 1 : 2;
+    };
+    const onSegment = (p, q, r) => {
+        return q.x <= Math.max(p.x, r.x) + 1e-5 && q.x >= Math.min(p.x, r.x) - 1e-5 &&
+               q.y <= Math.max(p.y, r.y) + 1e-5 && q.y >= Math.min(p.y, r.y) - 1e-5;
+    };
+
+    let o1 = orientation(p1, q1, p2);
+    let o2 = orientation(p1, q1, q2);
+    let o3 = orientation(p2, q2, p1);
+    let o4 = orientation(p2, q2, q1);
+
+    if (o1 !== o2 && o3 !== o4) return true;
+    if (o1 === 0 && onSegment(p1, p2, q1)) return true;
+    if (o2 === 0 && onSegment(p1, q2, q1)) return true;
+    if (o3 === 0 && onSegment(p2, p1, q2)) return true;
+    if (o4 === 0 && onSegment(p2, q1, q2)) return true;
+    return false;
+}
+
+export function doPolygonsIntersect(polyA, polyB) {
+    if (!polyA || !polyB || polyA.length < 3 || polyB.length < 3) return false;
+
+    // 1. Edge-edge intersections
+    for (let i = 0; i < polyA.length; i++) {
+        const a1 = polyA[i];
+        const a2 = polyA[(i + 1) % polyA.length];
+        for (let j = 0; j < polyB.length; j++) {
+            const b1 = polyB[j];
+            const b2 = polyB[(j + 1) % polyB.length];
+            if (doLineSegmentsIntersect(a1, a2, b1, b2)) return true;
+        }
+    }
+
+    // 2. Vertex containment
+    for (let pt of polyA) {
+        if (isPointInFan(pt, polyB)) return true;
+    }
+    for (let pt of polyB) {
+        if (isPointInFan(pt, polyA)) return true;
+    }
+
+    return false;
+}
+
+// Check if player can expand stations without overlapping enemy territory
+export function canExpandStation(player, enemy, targetCount = null) {
+    if (!player || !enemy) return true;
+    const isP2 = player.id === 1;
+    const count = targetCount !== null ? targetCount : (player.stationCount + 1);
+
+    const proposedStations = computeStationPositions(player.homePlanet, count, isP2);
+    const proposedPoly = getTerritoryPolygon(player.homePlanet, proposedStations, isP2);
+    const enemyPoly = getTerritoryPolygon(enemy.homePlanet, enemy.stations, enemy.id === 1);
+
+    return !doPolygonsIntersect(proposedPoly, enemyPoly);
+}
+
 // Computes station coordinates for N stations around corner Home Planet
 export function computeStationPositions(homePlanet, n, isPlayer2 = false) {
     if (n <= 0) return [];

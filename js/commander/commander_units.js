@@ -1,4 +1,4 @@
-import { computeStationPositions, getTerritoryPolygon, isPointInFan } from './commander_math.js';
+import { computeStationPositions, getTerritoryPolygon, isPointInFan, canExpandStation } from './commander_math.js';
 
 export const COMMANDER_COSTS = {
     station: 50,
@@ -12,12 +12,32 @@ export const COMMANDER_BUILD_TIMES = {
     fighter: 8.0
 };
 
-// Queue expansion or unit
-export function queueBuild(player, type) {
+// Queue expansion or unit (max 3 per unit type, enforces no overlapping territory)
+export function queueBuild(player, type, enemyPlayer = null) {
     const cost = COMMANDER_COSTS[type];
+    if (!cost) return false;
+
+    // Maximum 3 units building/queued for each unit type
+    const inProgress = player.buildCooldowns[type] > 0 ? 1 : 0;
+    const queued = player.buildQueue.filter(b => b.type === type).length;
+    const currentCount = inProgress + queued;
+    if (currentCount >= 3) return false;
+
+    // Enforce "no overlapping territories" restriction
+    if (type === 'station' && enemyPlayer) {
+        const nextTotalStations = player.stationCount + currentCount + 1;
+        if (!canExpandStation(player, enemyPlayer, nextTotalStations)) {
+            return false;
+        }
+    }
+
     if (player.energy >= cost) {
         player.energy -= cost;
-        player.buildQueue.push({ type });
+        if (player.buildCooldowns[type] <= 0) {
+            player.buildCooldowns[type] = COMMANDER_BUILD_TIMES[type];
+        } else {
+            player.buildQueue.push({ type });
+        }
         return true;
     }
     return false;
@@ -44,7 +64,7 @@ export function updateCommanderUnits(state, dt) {
                             x: p.homePlanet.x + (p.id === 0 ? 0.5 : -0.5),
                             y: p.homePlanet.y + (p.id === 0 ? -0.5 : 0.5),
                             payload: 0,
-                            maxPayload: 25,
+                            maxPayload: 10,
                             targetAsteroid: null,
                             returning: false,
                             health: 100,
@@ -195,6 +215,33 @@ export function updateCommanderUnits(state, dt) {
         const perimeterStations = p.stations.filter(s => s.isPerimeter);
         const sortedPerimeter = [...perimeterStations].sort((a, b) => a.angle - b.angle);
 
+        // When in attack mode, all fighters share the exact same target
+        let sharedAttackTarget = null;
+        if (p.stance === 'attack') {
+            // Priority 1: Nearest enemy station to friendly home base
+            if (enemy.stations.length > 0) {
+                let bestStation = null;
+                let minDist = Infinity;
+                enemy.stations.forEach(es => {
+                    const d = Math.hypot(es.x - p.homePlanet.x, es.y - p.homePlanet.y);
+                    if (d < minDist) {
+                        minDist = d;
+                        bestStation = es;
+                    }
+                });
+                sharedAttackTarget = bestStation;
+            } else if (enemy.units.fighters.length > 0) {
+                // Priority 2: Primary enemy fighter
+                sharedAttackTarget = enemy.units.fighters[0];
+            } else if (enemy.units.miners.length > 0) {
+                // Priority 3: Primary enemy miner
+                sharedAttackTarget = enemy.units.miners[0];
+            } else {
+                // Priority 4: Enemy Home Planet
+                sharedAttackTarget = enemy.homePlanet;
+            }
+        }
+
         p.units.fighters.forEach((f, fIdx) => {
             f.cooldown = Math.max(0, f.cooldown - dt);
 
@@ -252,52 +299,40 @@ export function updateCommanderUnits(state, dt) {
                     targetY = p.homePlanet.y + holdDist * Math.sin(baseAngle + spread);
                 }
             } else if (p.stance === 'attack') {
-                // Offensive strike priority:
-                // 1. Nearest enemy station
-                // 2. Nearest enemy fighter
-                // 3. Enemy Home Planet
-                let nearestStation = null;
-                let minStationDist = Infinity;
-                enemy.stations.forEach(es => {
-                    const d = Math.hypot(es.x - f.x, es.y - f.y);
-                    if (d < minStationDist) {
-                        minStationDist = d;
-                        nearestStation = es;
-                    }
-                });
-
-                if (nearestStation) {
-                    targetX = nearestStation.x;
-                    targetY = nearestStation.y;
-                    targetEntity = nearestStation;
-                } else {
-                    const nearestFighter = enemy.units.fighters[0];
-                    if (nearestFighter) {
-                        targetX = nearestFighter.x;
-                        targetY = nearestFighter.y;
-                        targetEntity = nearestFighter;
-                    } else {
-                        // Assault enemy Home Planet
-                        targetX = enemy.homePlanet.x;
-                        targetY = enemy.homePlanet.y;
-                        targetEntity = enemy.homePlanet;
-                    }
+                targetEntity = sharedAttackTarget;
+                if (targetEntity) {
+                    targetX = targetEntity.x;
+                    targetY = targetEntity.y;
                 }
             }
 
-            // Move fighter towards target
+            // Move fighter towards target - stop when target is in weapons firing range (2.2)
             const dx = targetX - f.x;
             const dy = targetY - f.y;
             const dist = Math.hypot(dx, dy);
+            const stopRange = targetEntity ? 2.2 : 0.3;
 
-            if (dist > 0.3) {
+            if (dist > stopRange) {
                 f.x += (dx / dist) * f.speed * dt;
                 f.y += (dy / dist) * f.speed * dt;
             }
 
-            // Combat firing
+            // Friendly fighter separation so units do not occupy the exact same coordinates
+            p.units.fighters.forEach((other, oIdx) => {
+                if (fIdx !== oIdx) {
+                    const sepDx = f.x - other.x;
+                    const sepDy = f.y - other.y;
+                    const sepDist = Math.hypot(sepDx, sepDy);
+                    if (sepDist > 0 && sepDist < 0.65) {
+                        const push = ((0.65 - sepDist) / 0.65) * 2.0 * dt;
+                        f.x += (sepDx / sepDist) * push;
+                        f.y += (sepDy / sepDist) * push;
+                    }
+                }
+            });
+
+            // Combat firing (range 2.8)
             if (f.cooldown <= 0) {
-                // Check if target entity in range
                 if (targetEntity && Math.hypot(targetEntity.x - f.x, targetEntity.y - f.y) <= 2.8) {
                     f.cooldown = 0.65;
                     const angle = Math.atan2(targetEntity.y - f.y, targetEntity.x - f.x);

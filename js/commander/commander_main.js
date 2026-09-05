@@ -2,15 +2,16 @@ import { createCommanderState } from './commander_state.js';
 import { updateCommanderUnits, queueBuild, COMMANDER_COSTS, COMMANDER_BUILD_TIMES } from './commander_units.js';
 import { updateCommanderAI } from './commander_ai.js';
 import { renderCommanderGame } from './commander_renderer.js';
-import { polygonArea, getTerritoryPolygon } from './commander_math.js';
+import { polygonArea, getTerritoryPolygon, canExpandStation } from './commander_math.js';
 
 let state = null;
 let canvas = null;
 let ctx = null;
 let lastTime = 0;
 
-export function initCommanderGame() {
+export function initCommander() {
     canvas = document.getElementById('commander-canvas');
+    if (!canvas) return;
     ctx = canvas.getContext('2d');
 
     function resizeCanvas() {
@@ -37,17 +38,17 @@ function setupUIHandlers() {
     // Build buttons
     const btnStation = document.getElementById('btn-build-station');
     if (btnStation) {
-        btnStation.addEventListener('click', () => queueBuild(p1, 'station'));
+        btnStation.addEventListener('click', () => queueBuild(p1, 'station', state.players[1]));
     }
 
     const btnMiner = document.getElementById('btn-build-miner');
     if (btnMiner) {
-        btnMiner.addEventListener('click', () => queueBuild(p1, 'miner'));
+        btnMiner.addEventListener('click', () => queueBuild(p1, 'miner', state.players[1]));
     }
 
     const btnFighter = document.getElementById('btn-build-fighter');
     if (btnFighter) {
-        btnFighter.addEventListener('click', () => queueBuild(p1, 'fighter'));
+        btnFighter.addEventListener('click', () => queueBuild(p1, 'fighter', state.players[1]));
     }
 
     // Fleet Stance buttons
@@ -150,7 +151,7 @@ function updateHUD() {
         domBarP2.style.width = `${p2Pct}%`;
     }
 
-    // Progress Bars
+    // Progress Bars & Build Queue (Max 3 per unit type)
     ['station', 'miner', 'fighter'].forEach(t => {
         const prog = document.getElementById(`p1-prog-${t}`);
         if (prog) {
@@ -158,6 +159,40 @@ function updateHUD() {
             const maxCd = COMMANDER_BUILD_TIMES[t];
             const r = cd > 0 ? (1 - cd / maxCd) : 0;
             prog.style.width = `${r * 100}%`;
+        }
+
+        const inProgress = p1.buildCooldowns[t] > 0 ? 1 : 0;
+        const queuedCount = p1.buildQueue.filter(b => b.type === t).length;
+        const totalQueued = inProgress + queuedCount;
+
+        const queueContainer = document.getElementById(`p1-queue-${t}`);
+        if (queueContainer) {
+            const pips = queueContainer.querySelectorAll('.pip');
+            pips.forEach((pip, idx) => {
+                pip.classList.remove('active', 'waiting');
+                if (idx === 0 && inProgress) {
+                    pip.classList.add('active');
+                } else if (idx < totalQueued) {
+                    pip.classList.add('waiting');
+                }
+            });
+        }
+
+        // Button states: full queue / blocked expansion
+        const btn = document.getElementById(`btn-build-${t}`);
+        if (btn) {
+            if (t === 'station') {
+                const canExpand = canExpandStation(p1, p2, p1.stationCount + totalQueued + 1);
+                if (!canExpand) {
+                    btn.classList.add('blocked');
+                    btn.title = 'Frontier Blocked: Cannot overlap enemy territory!';
+                } else {
+                    btn.classList.remove('blocked');
+                    btn.title = `Expand Station Perimeter (50 Energy) [${totalQueued}/3 queued]`;
+                }
+            } else {
+                btn.title = `Build ${t} (${COMMANDER_COSTS[t]} Energy) [${totalQueued}/3 queued]`;
+            }
         }
     });
 }
