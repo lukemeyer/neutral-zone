@@ -629,14 +629,53 @@ export function isPolygonSafe(testStations, player, enemy = null) {
     return !doPolygonsIntersect(proposedPoly, enemyPoly);
 }
 
-// Relaxes stations to guarantee even distribution and strictly prevent clustering and territory overlap
+// Pins a station to the frontier border curve at its current angle
+export function pinStationToBorder(station, homePlanet, borderDistances, isP2 = false, enemy = null) {
+    const hx = homePlanet.x;
+    const hy = homePlanet.y;
+    const curX = station.targetX !== undefined ? station.targetX : station.x;
+    const curY = station.targetY !== undefined ? station.targetY : station.y;
+    let ang = station.angle;
+    if (ang === undefined || isNaN(ang)) {
+        ang = Math.atan2(curY - hy, curX - hx);
+    }
+    let canonical = isP2 ? ang - Math.PI : ang;
+    const t = (canonical - (-Math.PI * 0.5)) / (Math.PI * 0.5);
+    const deg = Math.max(0, Math.min(90, Math.round(t * 90)));
+    let r = borderDistances ? borderDistances[deg] : 3.8;
+
+    let candX = Math.max(0.5, Math.min(19.5, Math.round((hx + r * Math.cos(ang)) * 1000) / 1000));
+    let candY = Math.max(0.5, Math.min(14.5, Math.round((hy + r * Math.sin(ang)) * 1000) / 1000));
+
+    if (enemy) {
+        const dummyPlayer = { id: isP2 ? 1 : 0, homePlanet: { x: hx, y: hy } };
+        while (r > 1.5 && !isPositionSafe({ x: candX, y: candY }, dummyPlayer, enemy)) {
+            r -= 0.1;
+            candX = Math.max(0.5, Math.min(19.5, Math.round((hx + r * Math.cos(ang)) * 1000) / 1000));
+            candY = Math.max(0.5, Math.min(14.5, Math.round((hy + r * Math.sin(ang)) * 1000) / 1000));
+        }
+    }
+
+    station.targetX = candX;
+    station.targetY = candY;
+    station.angle = ang;
+    return station;
+}
+
+// Relaxes stations to guarantee even distribution along the border curve and strictly prevent clustering and overlap
 export function relaxStations(stations, isP2, enemy = null) {
     if (!stations || stations.length <= 1) return;
     const minSpacing = 1.95;
-    const iterations = 8;
+    const iterations = 20;
     const cx = isP2 ? 20 : 0;
     const cy = isP2 ? 0 : 15;
-    const dummyPlayer = { id: isP2 ? 1 : 0, homePlanet: { x: cx === 0 ? 2.5 : 17.5, y: cy === 15 ? 12.5 : 2.5 }, stations };
+    const hx = cx === 0 ? 2.5 : 17.5;
+    const hy = cy === 15 ? 12.5 : 2.5;
+    const border = stations._borderDistances || createQuadrantBorder(3.8);
+    const dummyPlayer = { id: isP2 ? 1 : 0, homePlanet: { x: hx, y: hy }, stations, borderDistances: border };
+
+    const minAngle = isP2 ? Math.PI * 0.54 : -Math.PI * 0.46;
+    const maxAngle = isP2 ? Math.PI * 0.96 : -Math.PI * 0.04;
 
     for (let it = 0; it < iterations; it++) {
         for (let i = 0; i < stations.length; i++) {
@@ -648,36 +687,44 @@ export function relaxStations(stations, isP2, enemy = null) {
                 const x2 = s2.targetX !== undefined ? s2.targetX : s2.x;
                 const y2 = s2.targetY !== undefined ? s2.targetY : s2.y;
 
-                const dx = x2 - x1;
-                const dy = y2 - y1;
-                const d = Math.hypot(dx, dy);
+                const d = Math.hypot(x2 - x1, y2 - y1);
+                if (d < minSpacing) {
+                    const r1 = Math.hypot(x1 - hx, y1 - hy);
+                    const r2 = Math.hypot(x2 - hx, y2 - hy);
+                    const rAvg = Math.max(1.0, (r1 + r2) / 2);
+                    const reqAng = 2 * Math.asin(Math.min(0.99, minSpacing / (2 * rAvg)));
 
-                if (d < minSpacing && d > 0.001) {
-                    const push = (minSpacing - d) * 0.35;
-                    const ux = dx / d;
-                    const uy = dy / d;
+                    let a1 = s1.angle !== undefined ? s1.angle : Math.atan2(y1 - hy, x1 - hx);
+                    let a2 = s2.angle !== undefined ? s2.angle : Math.atan2(y2 - hy, x2 - hx);
+                    let angDiff = a2 - a1;
+                    let sign = angDiff > 0 ? 1 : (angDiff < 0 ? -1 : (i < j ? -1 : 1));
+                    const push = Math.max(0.02, (reqAng - Math.abs(angDiff)) * 0.4);
 
-                    const cand1 = {
-                        x: Math.max(0.5, Math.min(19.5, x1 - ux * push)),
-                        y: Math.max(0.5, Math.min(14.5, y1 - uy * push))
-                    };
-                    const cand2 = {
-                        x: Math.max(0.5, Math.min(19.5, x2 + ux * push)),
-                        y: Math.max(0.5, Math.min(14.5, y2 + uy * push))
-                    };
+                    const newA1 = Math.max(minAngle, Math.min(maxAngle, a1 - sign * push));
+                    const newA2 = Math.max(minAngle, Math.min(maxAngle, a2 + sign * push));
 
-                    const testStations1 = stations.map((s, idx) => idx === i ? cand1 : s);
-                    if (isPositionSafe(cand1, dummyPlayer, enemy) && isPolygonSafe(testStations1, dummyPlayer, enemy)) {
-                        s1.targetX = Math.round(cand1.x * 1000) / 1000;
-                        s1.targetY = Math.round(cand1.y * 1000) / 1000;
-                        s1.angle = Math.atan2(s1.targetY - cy, s1.targetX - cx);
+                    // Update s1 if safe
+                    const origA1 = s1.angle;
+                    const origX1 = s1.targetX;
+                    const origY1 = s1.targetY;
+                    s1.angle = newA1;
+                    pinStationToBorder(s1, { x: hx, y: hy }, border, isP2, enemy);
+                    if (!isPositionSafe({ x: s1.targetX, y: s1.targetY }, dummyPlayer, enemy) || !isPolygonSafe(stations, dummyPlayer, enemy)) {
+                        s1.angle = origA1;
+                        s1.targetX = origX1;
+                        s1.targetY = origY1;
                     }
 
-                    const testStations2 = stations.map((s, idx) => idx === j ? cand2 : s);
-                    if (isPositionSafe(cand2, dummyPlayer, enemy) && isPolygonSafe(testStations2, dummyPlayer, enemy)) {
-                        s2.targetX = Math.round(cand2.x * 1000) / 1000;
-                        s2.targetY = Math.round(cand2.y * 1000) / 1000;
-                        s2.angle = Math.atan2(s2.targetY - cy, s2.targetX - cx);
+                    // Update s2 if safe
+                    const origA2 = s2.angle;
+                    const origX2 = s2.targetX;
+                    const origY2 = s2.targetY;
+                    s2.angle = newA2;
+                    pinStationToBorder(s2, { x: hx, y: hy }, border, isP2, enemy);
+                    if (!isPositionSafe({ x: s2.targetX, y: s2.targetY }, dummyPlayer, enemy) || !isPolygonSafe(stations, dummyPlayer, enemy)) {
+                        s2.angle = origA2;
+                        s2.targetX = origX2;
+                        s2.targetY = origY2;
                     }
                 }
             }
@@ -772,17 +819,19 @@ export function launchStation(player, state = null) {
 // Handles physical addition of a new station: pushes frontier out and pulls existing stations
 export function onStationAdded(player, impactPos, enemy = null) {
     const isP2 = player.id === 1;
-    const cx = isP2 ? 20 : 0;
-    const cy = isP2 ? 0 : 15;
+    const hx = player.homePlanet.x;
+    const hy = player.homePlanet.y;
 
     // Initialize borderDistances if not present
     if (!player.borderDistances) {
         player.borderDistances = createBorderFromStations(player.homePlanet, player.stations || [], isP2);
     }
 
-    const launchAng = player.launchAngle !== undefined ? player.launchAngle : (isP2 ? Math.PI * 0.75 : -Math.PI * 0.25);
+    const launchAng = impactPos
+        ? Math.atan2(impactPos.y - hy, impactPos.x - hx)
+        : (player.launchAngle !== undefined ? player.launchAngle : (isP2 ? Math.PI * 0.75 : -Math.PI * 0.25));
 
-    // Push radial border with angular falloff and neighbor excess redistribution upon collision
+    // Push radial border with whole-arc distributed growth and directional emphasis
     pushRadialBorder(
         player.homePlanet,
         player.borderDistances,
@@ -797,35 +846,23 @@ export function onStationAdded(player, impactPos, enemy = null) {
         player.stations._borderDistances = player.borderDistances;
     }
 
-    const clampedNewPos = clampStationToSeam(impactPos, isP2);
-
-    // Pull existing stations in a weighted way: closer stations move more, farther stations move less
-    const pullRadius = 8.0;
-    const maxDisplacement = 0.35;
-
+    // Existing stations stay locked to the border, gliding outward with the expanding frontier
+    // Closer stations also experience weighted angular pull toward the new station
     if (player.stations) {
-        player.stations.forEach((s, idx) => {
-            const curX = s.targetX !== undefined ? s.targetX : s.x;
-            const curY = s.targetY !== undefined ? s.targetY : s.y;
-            const d = Math.hypot(clampedNewPos.x - curX, clampedNewPos.y - curY);
-            if (d < pullRadius && d > 0.01) {
-                const w = Math.pow(1 - d / pullRadius, 2);
-                const moveDist = maxDisplacement * w;
+        const maxSpan = Math.PI * 0.45;
+        const maxShift = 0.05;
+        const minAngle = isP2 ? Math.PI * 0.54 : -Math.PI * 0.46;
+        const maxAngle = isP2 ? Math.PI * 0.96 : -Math.PI * 0.04;
 
-                const dx = (clampedNewPos.x - curX) / d;
-                const dy = (clampedNewPos.y - curY) / d;
-
-                let nx = curX + dx * moveDist;
-                let ny = curY + dy * moveDist;
-
-                const clamped = clampStationToSeam({ x: nx, y: ny }, isP2);
-                const testStations = player.stations.map((st, i) => i === idx ? clamped : st);
-                if (isPositionSafe(clamped, player, enemy) && isPolygonSafe(testStations, player, enemy)) {
-                    s.targetX = Math.round(clamped.x * 1000) / 1000;
-                    s.targetY = Math.round(clamped.y * 1000) / 1000;
-                    s.angle = Math.atan2(s.targetY - cy, s.targetX - cx);
-                }
+        player.stations.forEach(s => {
+            let curAng = s.angle !== undefined ? s.angle : Math.atan2((s.targetY ?? s.y) - hy, (s.targetX ?? s.x) - hx);
+            const diff = launchAng - curAng;
+            if (Math.abs(diff) < maxSpan) {
+                const w = Math.pow(1 - Math.abs(diff) / maxSpan, 2);
+                curAng = Math.max(minAngle, Math.min(maxAngle, curAng + Math.sign(diff) * maxShift * w));
+                s.angle = curAng;
             }
+            pinStationToBorder(s, player.homePlanet, player.borderDistances, isP2, enemy);
         });
     } else {
         player.stations = [];
@@ -833,36 +870,39 @@ export function onStationAdded(player, impactPos, enemy = null) {
 
     const newStation = {
         id: (isP2 ? 100 : 0) + player.stations.length,
-        x: clampedNewPos.x,
-        y: clampedNewPos.y,
-        targetX: Math.round(clampedNewPos.x * 1000) / 1000,
-        targetY: Math.round(clampedNewPos.y * 1000) / 1000,
+        x: impactPos.x,
+        y: impactPos.y,
+        targetX: impactPos.x,
+        targetY: impactPos.y,
         health: 250,
         maxHealth: 250,
         cooldown: 0,
         range: 2.5,
         isPerimeter: true,
-        angle: Math.atan2(clampedNewPos.y - cy, clampedNewPos.x - cx)
+        angle: launchAng
     };
+    pinStationToBorder(newStation, player.homePlanet, player.borderDistances, isP2, enemy);
+    newStation.x = newStation.targetX;
+    newStation.y = newStation.targetY;
     player.stations.push(newStation);
     player.stationCount = player.stations.length;
     player.stations._borderDistances = player.borderDistances;
 
-    // Enforce even distribution across network (prevent clustering and prevent overlap)
+    // Enforce even distribution across network along the frontier border (prevent clustering and prevent overlap)
     relaxStations(player.stations, isP2, enemy);
 }
 
 // Handles physical destruction of a station: remaining stations pull in to fill the gap
 export function onStationDestroyed(player, destroyedStation, enemy = null) {
     const isP2 = player.id === 1;
-    const cx = isP2 ? 20 : 0;
-    const cy = isP2 ? 0 : 15;
+    const hx = player.homePlanet.x;
+    const hy = player.homePlanet.y;
     const deadX = destroyedStation.targetX !== undefined ? destroyedStation.targetX : destroyedStation.x;
     const deadY = destroyedStation.targetY !== undefined ? destroyedStation.targetY : destroyedStation.y;
+    const deadAng = destroyedStation.angle !== undefined ? destroyedStation.angle : Math.atan2(deadY - hy, deadX - hx);
 
     // Pull radial border inward at destroyed station angle
     if (player.borderDistances) {
-        const deadAng = Math.atan2(deadY - player.homePlanet.y, deadX - player.homePlanet.x);
         pullRadialBorder(player.homePlanet, player.borderDistances, deadAng, 1.8);
         if (player.stations) {
             player.stations._borderDistances = player.borderDistances;
@@ -875,35 +915,25 @@ export function onStationDestroyed(player, destroyedStation, enemy = null) {
         player.stations._borderDistances = player.borderDistances;
     }
 
-    // Remaining stations move in a weighted way to fill the gap: closer stations move more, farther stations move less
-    const fillRadius = 8.0;
-    const maxFillMove = 0.40;
+    // Remaining stations move in a weighted way along the border to fill the gap:
+    // closer stations move more, farther stations move less
+    const maxSpan = Math.PI * 0.45;
+    const maxShift = 0.08;
+    const minAngle = isP2 ? Math.PI * 0.54 : -Math.PI * 0.46;
+    const maxAngle = isP2 ? Math.PI * 0.96 : -Math.PI * 0.04;
 
-    player.stations.forEach((s, idx) => {
-        const curX = s.targetX !== undefined ? s.targetX : s.x;
-        const curY = s.targetY !== undefined ? s.targetY : s.y;
-        const d = Math.hypot(deadX - curX, deadY - curY);
-        if (d < fillRadius && d > 0.01) {
-            const w = Math.pow(1 - d / fillRadius, 2);
-            const moveDist = maxFillMove * w;
-
-            const dx = (deadX - curX) / d;
-            const dy = (deadY - curY) / d;
-
-            let nx = curX + dx * moveDist;
-            let ny = curY + dy * moveDist;
-
-            const clamped = clampStationToSeam({ x: nx, y: ny }, isP2);
-            const testStations = player.stations.map((st, i) => i === idx ? clamped : st);
-            if (isPositionSafe(clamped, player, enemy) && isPolygonSafe(testStations, player, enemy)) {
-                s.targetX = Math.round(clamped.x * 1000) / 1000;
-                s.targetY = Math.round(clamped.y * 1000) / 1000;
-                s.angle = Math.atan2(s.targetY - cy, s.targetX - cx);
-            }
+    player.stations.forEach(s => {
+        let curAng = s.angle !== undefined ? s.angle : Math.atan2((s.targetY ?? s.y) - hy, (s.targetX ?? s.x) - hx);
+        const diff = deadAng - curAng;
+        if (Math.abs(diff) < maxSpan) {
+            const w = Math.pow(1 - Math.abs(diff) / maxSpan, 2);
+            curAng = Math.max(minAngle, Math.min(maxAngle, curAng + Math.sign(diff) * maxShift * w));
+            s.angle = curAng;
         }
+        pinStationToBorder(s, player.homePlanet, player.borderDistances, isP2, enemy);
     });
 
-    // Enforce even distribution as network re-balances
+    // Enforce even distribution as network re-balances along the border
     relaxStations(player.stations, isP2, enemy);
 }
 
@@ -925,6 +955,9 @@ export function updateStationLayout(player, spawnPos = null) {
             isPerimeter: pos.isPerimeter,
             angle: pos.angle
         }));
+        if (player.borderDistances) {
+            player.stations._borderDistances = player.borderDistances;
+        }
         return;
     }
     while (player.stations.length < player.stationCount) {

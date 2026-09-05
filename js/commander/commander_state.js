@@ -1,27 +1,41 @@
-import { computeStationPositions, getTerritoryPolygon, getAsteroidLayout, createBorderFromStations } from './commander_math.js';
+import { computeStationPositions, getTerritoryPolygon, getAsteroidLayout, createBorderFromStations, createQuadrantBorder, pinStationToBorder } from './commander_math.js';
 
 export function createCommanderState() {
     const p1Home = { x: 2.5, y: 12.5, health: 1500, maxHealth: 1500, radius: 0.8 };
     const p2Home = { x: 17.5, y: 2.5, health: 1500, maxHealth: 1500, radius: 0.8 };
 
+    const p1Border = createQuadrantBorder(3.8);
+    const p2Border = createQuadrantBorder(3.8);
+
     function initStations(home, count, isP2) {
-        const positions = computeStationPositions(home, count, isP2);
-        return positions.map((pos, idx) => ({
-            id: (isP2 ? 100 : 0) + idx,
-            x: pos.x,
-            y: pos.y,
-            targetX: pos.x,
-            targetY: pos.y,
-            health: 250,
-            maxHealth: 250,
-            cooldown: 0,
-            range: 2.5,
-            isPerimeter: pos.isPerimeter
-        }));
+        const border = isP2 ? p2Border : p1Border;
+        const angles = isP2
+            ? [Math.PI * 0.58, Math.PI * 0.75, Math.PI * 0.92]
+            : [-Math.PI * 0.42, -Math.PI * 0.25, -Math.PI * 0.08];
+        const stations = [];
+        for (let idx = 0; idx < count; idx++) {
+            const ang = angles[idx];
+            const s = {
+                id: (isP2 ? 100 : 0) + idx,
+                angle: ang,
+                health: 250,
+                maxHealth: 250,
+                cooldown: 0,
+                range: 2.5,
+                isPerimeter: true
+            };
+            pinStationToBorder(s, home, border, isP2);
+            s.x = s.targetX;
+            s.y = s.targetY;
+            stations.push(s);
+        }
+        return stations;
     }
 
     const p1Stations = initStations(p1Home, 3, false);
     const p2Stations = initStations(p2Home, 3, true);
+    p1Stations._borderDistances = p1Border;
+    p2Stations._borderDistances = p2Border;
 
     const players = [
         {
@@ -34,7 +48,7 @@ export function createCommanderState() {
             homePlanet: p1Home,
             stationCount: 3,
             stations: p1Stations,
-            borderDistances: createBorderFromStations(p1Home, p1Stations, false),
+            borderDistances: p1Border,
             stance: 'patrol', // 'patrol' | 'defend' | 'attack'
             units: {
                 miners: [],
@@ -59,7 +73,7 @@ export function createCommanderState() {
             homePlanet: p2Home,
             stationCount: 3,
             stations: p2Stations,
-            borderDistances: createBorderFromStations(p2Home, p2Stations, true),
+            borderDistances: p2Border,
             stance: 'patrol',
             units: {
                 miners: [],

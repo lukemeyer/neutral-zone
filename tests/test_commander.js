@@ -657,6 +657,57 @@ const safeCandidate = { x: 14.5, y: 12.0 };
 const candidateSafe = isPolygonSafe([...flankBlueStations, safeCandidate], { id: 0, homePlanet: p1Home }, { id: 1, homePlanet: p2Home, stations: flankRedStations });
 assert(candidateSafe, "New station can be launched into the open corridor below Red without collision");
 
+// 32. Test Smooth Arc Initial State, Distributed Whole-Arc Growth, and Stations Pinned to Frontier Border
+const smoothState = createCommanderState();
+const sP1 = smoothState.players[0];
+const sP2 = smoothState.players[1];
+
+// A. Initial state is a mathematically uniform circular arc
+const initR = sP1.borderDistances[0];
+assert(Math.abs(initR - 3.8) < 0.01, `Initial territory radius is 3.8 (${initR.toFixed(2)})`);
+let isUniformArcP1 = true;
+let isUniformArcP2 = true;
+for (let d = 0; d <= 90; d++) {
+    if (Math.abs(sP1.borderDistances[d] - 3.8) > 0.001) isUniformArcP1 = false;
+    if (Math.abs(sP2.borderDistances[d] - 3.8) > 0.001) isUniformArcP2 = false;
+}
+assert(isUniformArcP1, "P1 initial territory is a perfectly uniform smooth circular arc across all 91 degrees");
+assert(isUniformArcP2, "P2 initial territory is a perfectly uniform smooth circular arc across all 91 degrees");
+
+// B. Starting stations are positioned directly on the frontier border curve
+sP1.stations.forEach((s, idx) => {
+    const dHQ = Math.hypot(s.x - sP1.homePlanet.x, s.y - sP1.homePlanet.y);
+    assert(Math.abs(dHQ - 3.8) < 0.02, `P1 starting station ${idx} is pinned to border arc (dHQ=${dHQ.toFixed(3)})`);
+});
+sP2.stations.forEach((s, idx) => {
+    const dHQ = Math.hypot(s.x - sP2.homePlanet.x, s.y - sP2.homePlanet.y);
+    assert(Math.abs(dHQ - 3.8) < 0.02, `P2 starting station ${idx} is pinned to border arc (dHQ=${dHQ.toFixed(3)})`);
+});
+
+// C. Adding a station expands the WHOLE arc in a distributed way with directional peak
+const beforeBorder = new Float64Array(sP1.borderDistances);
+const launchTarget = calculateLaunchTarget(sP1, sP1.launchAngle);
+onStationAdded(sP1, launchTarget);
+
+let minDegreeGrowth = Infinity;
+let maxDegreeGrowth = -Infinity;
+for (let d = 0; d <= 90; d++) {
+    const growth = sP1.borderDistances[d] - beforeBorder[d];
+    if (growth < minDegreeGrowth) minDegreeGrowth = growth;
+    if (growth > maxDegreeGrowth) maxDegreeGrowth = growth;
+}
+assert(minDegreeGrowth >= 0.40, `Entire arc grows outward on launch (min growth across any degree: ${minDegreeGrowth.toFixed(3)} >= 0.40)`);
+assert(Math.abs(maxDegreeGrowth - 2.00) < 0.05, `Peak growth occurs at launch angle (${maxDegreeGrowth.toFixed(3)} ~ 2.00)`);
+
+// D. All stations remain pinned to the expanding border curve, not floating around
+sP1.stations.forEach((s, idx) => {
+    const t = (s.angle - (-Math.PI * 0.5)) / (Math.PI * 0.5);
+    const deg = Math.max(0, Math.min(90, Math.round(t * 90)));
+    const expectedBorderR = sP1.borderDistances[deg];
+    const actualR = Math.hypot(s.targetX - sP1.homePlanet.x, s.targetY - sP1.homePlanet.y);
+    assert(Math.abs(actualR - expectedBorderR) < 0.02, `Station ${idx} remains strictly on the frontier border curve (dist=${actualR.toFixed(2)}, border=${expectedBorderR.toFixed(2)})`);
+});
+
 console.log(`\n------------------------------------------------------------`);
 console.log(`  Summary: ${passed} Passed, ${failed} Failed`);
 console.log(`------------------------------------------------------------\n`);

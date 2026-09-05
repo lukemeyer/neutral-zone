@@ -135,9 +135,9 @@ export function computeStationPositions(homePlanet, n, isPlayer2 = false, steeri
     if (n === 1) {
         rings = [{ r: 3.2, count: 1, minA: -Math.PI * 0.25, maxA: -Math.PI * 0.25, isPerimeter: true }];
     } else if (n === 2) {
-        rings = [{ r: 3.8, count: 2, minA: -Math.PI * 0.40, maxA: -Math.PI * 0.10, isPerimeter: true }];
+        rings = [{ r: 3.5, count: 2, minA: -Math.PI * 0.40, maxA: -Math.PI * 0.10, isPerimeter: true }];
     } else if (n === 3) {
-        rings = [{ r: 4.5, count: 3, minA: -Math.PI * 0.42, maxA: -Math.PI * 0.08, isPerimeter: true }];
+        rings = [{ r: 3.8, count: 3, minA: -Math.PI * 0.42, maxA: -Math.PI * 0.08, isPerimeter: true }];
     } else if (n === 4) {
         rings = [
             { r: 2.8, count: 1, minA: -Math.PI * 0.25, maxA: -Math.PI * 0.25, isPerimeter: false },
@@ -314,6 +314,26 @@ export function createQuadrantBorder(initialRadius = 3.8) {
 }
 export const createRadialBorder = createQuadrantBorder;
 
+// Pins a station to the frontier border curve at its current angle
+export function pinStationToBorder(station, homePlanet, borderDistances, isP2 = false) {
+    const hx = homePlanet.x;
+    const hy = homePlanet.y;
+    const curX = station.targetX !== undefined ? station.targetX : station.x;
+    const curY = station.targetY !== undefined ? station.targetY : station.y;
+    let ang = station.angle;
+    if (ang === undefined || isNaN(ang)) {
+        ang = Math.atan2(curY - hy, curX - hx);
+    }
+    let canonical = isP2 ? ang - Math.PI : ang;
+    const t = (canonical - (-Math.PI * 0.5)) / (Math.PI * 0.5);
+    const deg = Math.max(0, Math.min(90, Math.round(t * 90)));
+    const r = borderDistances ? borderDistances[deg] : 3.8;
+    station.targetX = Math.max(0.5, Math.min(19.5, Math.round((hx + r * Math.cos(ang)) * 1000) / 1000));
+    station.targetY = Math.max(0.5, Math.min(14.5, Math.round((hy + r * Math.sin(ang)) * 1000) / 1000));
+    station.angle = ang;
+    return station;
+}
+
 // Generates a 91-degree radial border enclosing given stations
 export function createBorderFromStations(hq, stations, isP2 = false) {
     if (stations && stations._borderDistances) return stations._borderDistances;
@@ -383,18 +403,20 @@ export function pushRadialBorder(homePlanet, border, targetAngleRad, pushAmount 
 
     const t = (canonicalAngle - (-Math.PI * 0.5)) / (Math.PI * 0.5);
     const targetDeg = Math.max(0, Math.min(90, Math.round(t * 90)));
-    const spread = 25;
+    const spread = 45;
+    const baseGrowth = 0.4;
+    const dirGrowth = Math.max(0, pushAmount - baseGrowth);
     const pendingPush = new Float64Array(91);
 
     for (let d = 0; d <= 90; d++) {
         const diff = Math.abs(d - targetDeg);
-        if (diff <= spread) {
-            const w = Math.cos((Math.PI / 2) * (diff / spread));
-            pendingPush[d] = pushAmount * w * w;
-        }
+        const w = diff <= spread ? Math.cos((Math.PI / 2) * (diff / spread)) : 0;
+        pendingPush[d] = baseGrowth + dirGrowth * w * w;
     }
 
-    for (let iter = 0; iter < 10; iter++) {
+    const maxIter = 3;
+    const decay = 0.35;
+    for (let iter = 0; iter < maxIter; iter++) {
         const excess = new Float64Array(91);
         let hasExcess = false;
 
@@ -409,12 +431,12 @@ export function pushRadialBorder(homePlanet, border, targetAngleRad, pushAmount 
 
             const desiredR = border[d] + pendingPush[d];
             let safeR = border[d];
-            const testSteps = 10;
+            const testSteps = 20;
             for (let s = 1; s <= testSteps; s++) {
                 const r = border[d] + (desiredR - border[d]) * (s / testSteps);
                 if (r > maxWall) break;
                 const p = { x: hx + r * cosA, y: hy + r * sinA };
-                if (enemyHQ && checkPointEnemyCollision(p, enemyHQ, enemyBorder, enemyStations, 0.5)) break;
+                if (enemyHQ && checkPointEnemyCollision(p, enemyHQ, enemyBorder, enemyStations, 0.65)) break;
                 safeR = r;
             }
 
@@ -423,8 +445,8 @@ export function pushRadialBorder(homePlanet, border, targetAngleRad, pushAmount 
             const rem = pendingPush[d] - actualPush;
             if (rem > 0.01) {
                 hasExcess = true;
-                if (d > 0) excess[d - 1] += rem * 0.45;
-                if (d < 90) excess[d + 1] += rem * 0.45;
+                if (d > 0) excess[d - 1] += rem * decay;
+                if (d < 90) excess[d + 1] += rem * decay;
             }
             pendingPush[d] = 0;
         }
