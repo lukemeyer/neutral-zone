@@ -1,6 +1,6 @@
 import { computeStationPositions, getTerritoryPolygon, getBorderIntersection, polygonArea, isPointInFan, getAsteroidLayout, doPolygonsIntersect, doLineSegmentsIntersect, canExpandStation } from '../js/commander/commander_math.js';
 import { createCommanderState } from '../js/commander/commander_state.js';
-import { queueBuild, updateCommanderUnits, calculateLaunchTarget, onStationAdded, onStationDestroyed } from '../js/commander/commander_units.js';
+import { queueBuild, updateCommanderUnits, calculateLaunchTarget, onStationAdded, onStationDestroyed, isPolygonSafe } from '../js/commander/commander_units.js';
 
 console.log("\n============================================================");
 console.log("  Testing: Commander Variant Mathematics & Radial Expansion");
@@ -594,6 +594,68 @@ try {
 assert(combatError === null, `Attack simulation and station destruction executed with 0 errors: ${combatError ? combatError.message : 'none'}`);
 assert(!cPlayer2.stations.includes(targetStation), "Target station was successfully destroyed and removed from player stations");
 assert(cPlayer2.units.miners.filter(m => m.id === 9999).length === 0, "Killed miner was cleaned up successfully");
+
+// 30. Test Concave Territory Polygon Generation (U-shaped concave frontier)
+const uStations = [
+    { id: 0, x: 1.0, y: 10.0 },
+    { id: 1, x: 2.0, y: 7.0 },
+    { id: 2, x: 4.0, y: 4.0 },   // North prong tip
+    { id: 3, x: 4.0, y: 11.0 },  // Recessed valley
+    { id: 4, x: 8.0, y: 13.0 },
+    { id: 5, x: 14.0, y: 12.0 }  // South/East prong tip
+];
+const uPoly = getTerritoryPolygon(p1Home, uStations, false);
+assert(uPoly.length >= 6, `Concave territory polygon created with ${uPoly.length} vertices`);
+const hasValley = uPoly.some(pt => Math.hypot(pt.x - 4.0, pt.y - 11.0) < 0.01);
+assert(hasValley, "Recessed valley station is included in territory boundary creating concave shape");
+
+let uSelfIntersects = false;
+for (let i = 0; i < uPoly.length; i++) {
+    const a1 = uPoly[i];
+    const a2 = uPoly[(i + 1) % uPoly.length];
+    for (let j = i + 2; j < uPoly.length; j++) {
+        if ((j + 1) % uPoly.length === i) continue;
+        const b1 = uPoly[j];
+        const b2 = uPoly[(j + 1) % uPoly.length];
+        if (doLineSegmentsIntersect(a1, a2, b1, b2)) {
+            uSelfIntersects = true;
+        }
+    }
+}
+assert(!uSelfIntersects, "Concave U-shaped polygon has zero self-intersections");
+
+// 31. Test Flanking Territory Expansion Below Enemy Territory
+const flankRedStations = [
+    { id: 0, x: 17.5, y: 2.5 },
+    { id: 1, x: 15.0, y: 3.5 },
+    { id: 2, x: 14.0, y: 5.5 },
+    { id: 3, x: 15.5, y: 7.0 },
+    { id: 4, x: 18.0, y: 6.0 },
+    { id: 5, x: 13.0, y: 7.5 },
+    { id: 6, x: 11.0, y: 8.5 },
+    { id: 7, x: 9.5, y: 9.5 } // Southwest tip facing Blue
+];
+const flankRedPoly = getTerritoryPolygon(p2Home, flankRedStations, true);
+
+const flankBlueStations = [
+    { id: 0, x: 2.5, y: 12.5 },
+    { id: 1, x: 1.5, y: 11.5 },
+    { id: 2, x: 4.5, y: 11.5 },
+    { id: 3, x: 6.0, y: 12.8 },
+    { id: 4, x: 5.0, y: 9.5 },
+    { id: 5, x: 7.0, y: 8.0 },
+    { id: 6, x: 7.5, y: 9.0 },
+    { id: 7, x: 8.95, y: 11.52 },
+    { id: 8, x: 10.93, y: 11.23 },
+    { id: 9, x: 13.5, y: 11.0 } // Flanking deep below Red
+];
+const flankBluePoly = getTerritoryPolygon(p1Home, flankBlueStations, false);
+const flankIntersects = doPolygonsIntersect(flankBluePoly, flankRedPoly);
+assert(!flankIntersects, "Blue concave U-shaped expansion below Red does not intersect Red territory");
+
+const safeCandidate = { x: 14.5, y: 12.0 };
+const candidateSafe = isPolygonSafe([...flankBlueStations, safeCandidate], { id: 0, homePlanet: p1Home }, { id: 1, homePlanet: p2Home, stations: flankRedStations });
+assert(candidateSafe, "New station can be launched into the open corridor below Red without collision");
 
 console.log(`\n------------------------------------------------------------`);
 console.log(`  Summary: ${passed} Passed, ${failed} Failed`);

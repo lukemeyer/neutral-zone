@@ -267,7 +267,48 @@ export function convexHull(points) {
     return lower.concat(upper);
 }
 
-// Builds territory polygon filling the entire 90 degree corner
+// Helper to dig cavities along wide frontier edges for concave territory shapes (e.g. U-shapes)
+function digCavity(A, B, stations, boundary) {
+    // Both A and B must be stations (not corner wall anchor points)
+    const isWallA = A.x === 0 || A.y === 15;
+    const isWallB = B.x === 0 || B.y === 15;
+    if (isWallA || isWallB) return [];
+
+    const dx = B.x - A.x;
+    const dy = B.y - A.y;
+    const L = Math.hypot(dx, dy);
+    if (L < 5.0) return [];
+
+    const candidates = [];
+    for (let p of stations) {
+        if (boundary.some(b => Math.hypot(b.x - p.x, b.y - p.y) < 0.1)) continue;
+        const t = ((p.x - A.x) * dx + (p.y - A.y) * dy) / (L * L);
+        if (t <= 0.05 || t >= 0.95) continue;
+        const depth = (dx * (p.y - A.y) - dy * (p.x - A.x)) / L;
+
+        // Valley must have sufficient depth from outer chord to represent a genuine recessed bay
+        if (depth >= 2.8) {
+            candidates.push({ p, t, depth });
+        }
+    }
+
+    if (candidates.length === 0) return [];
+
+    candidates.sort((a, b) => a.t - b.t);
+
+    const result = [];
+    candidates.forEach(c => {
+        if (result.length === 0 || c.t - result[result.length - 1].t > 0.10) {
+            result.push(c);
+        } else if (c.depth < result[result.length - 1].depth) {
+            result[result.length - 1] = c;
+        }
+    });
+
+    return result.map(c => c.p);
+}
+
+// Builds territory polygon filling the entire 90 degree corner with support for concave shapes
 export function getTerritoryPolygon(homePlanet, stations, isPlayer2 = false) {
     if (!stations || stations.length === 0) {
         return [];
@@ -283,17 +324,20 @@ export function getTerritoryPolygon(homePlanet, stations, isPlayer2 = false) {
         let leftStation = null;
         let bottomStation = null;
 
-        stations.forEach(s => {
-            const curX = s.targetX !== undefined ? s.targetX : s.x;
-            const curY = s.targetY !== undefined ? s.targetY : s.y;
-            const ang = Math.atan2(curY - 15, curX);
+        const st = stations.map(s => ({
+            x: s.targetX !== undefined ? s.targetX : s.x,
+            y: s.targetY !== undefined ? s.targetY : s.y
+        }));
+
+        st.forEach(s => {
+            const ang = Math.atan2(s.y - 15, s.x);
             if (ang < minAngle) {
                 minAngle = ang;
-                leftStation = { x: curX, y: curY };
+                leftStation = s;
             }
             if (ang > maxAngle) {
                 maxAngle = ang;
-                bottomStation = { x: curX, y: curY };
+                bottomStation = s;
             }
         });
 
@@ -306,10 +350,7 @@ export function getTerritoryPolygon(homePlanet, stations, isPlayer2 = false) {
         const allPoints = [
             { x: 0, y: 15 },
             leftWallPoint,
-            ...stations.map(s => ({
-                x: s.targetX !== undefined ? s.targetX : s.x,
-                y: s.targetY !== undefined ? s.targetY : s.y
-            })),
+            ...st,
             bottomWallPoint
         ];
 
@@ -325,9 +366,24 @@ export function getTerritoryPolygon(homePlanet, stations, isPlayer2 = false) {
         if (ordered.length >= 2 && ordered[1].x !== 0) {
             const rev = [ordered[0]];
             for (let i = ordered.length - 1; i >= 1; i--) rev.push(ordered[i]);
-            return rev;
+            ordered = rev;
         }
-        return ordered;
+
+        // Dig cavities along wide frontier edges to permit concave territory shapes (e.g. U-shapes)
+        const refined = [];
+        for (let i = 0; i < ordered.length; i++) {
+            const A = ordered[i];
+            const B = ordered[(i + 1) % ordered.length];
+            refined.push(A);
+
+            const isWallEdge = (A.x === 0 && B.x === 0) || (A.y === 15 && B.y === 15) || (A.x === 0 && A.y === 15) || (B.x === 0 && B.y === 15);
+            if (!isWallEdge) {
+                const dug = digCavity(A, B, st, ordered);
+                dug.forEach(p => refined.push(p));
+            }
+        }
+
+        return refined;
     } else {
         // P2 Corner is (20, 0)
         // Canonical reflection from P1
@@ -351,7 +407,7 @@ export function getTerritoryPolygon(homePlanet, stations, isPlayer2 = false) {
     }
 }
 
-// Finds distance from HQ to current territory border along angle
+// Finds distance from HQ to current territory border along angle (outermost frontier)
 export function getBorderIntersection(homePlanet, stations, isPlayer2, angle) {
     if (!homePlanet) return 2.0;
     const isP2 = isPlayer2 !== undefined ? isPlayer2 : homePlanet.x > 10;
@@ -364,7 +420,7 @@ export function getBorderIntersection(homePlanet, stations, isPlayer2, angle) {
     if (!poly || poly.length < 3) return 2.0;
 
     let borderDist = null;
-    let minT = Infinity;
+    let maxT = -Infinity;
 
     for (let i = 0; i < poly.length; i++) {
         const p1 = poly[i];
@@ -379,8 +435,8 @@ export function getBorderIntersection(homePlanet, stations, isPlayer2, angle) {
             const u = ((p1.y - hy) * cosA - (p1.x - hx) * sinA) / denom;
 
             if (t > 0.05 && u >= -0.01 && u <= 1.01) {
-                if (t < minT) {
-                    minT = t;
+                if (t > maxT) {
+                    maxT = t;
                     borderDist = t;
                 }
             }
