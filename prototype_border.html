@@ -12,15 +12,10 @@
             --text-primary: #e6edf3;
             --text-secondary: #8b949e;
             --accent-blue: #58a6ff;
+            --accent-red: #f85149;
             --accent-cyan: #39c5cf;
             --accent-green: #3fb950;
             --accent-orange: #d29922;
-            --accent-red: #f85149;
-            --ray-color: rgba(56, 139, 253, 0.18);
-            --line-color: #58a6ff;
-            --dot-color: #79c0ff;
-            --dot-hover: #ffffff;
-            --hq-color: #238636;
         }
 
         * {
@@ -79,9 +74,8 @@
             color: var(--text-secondary);
         }
 
-        .header-stats span b {
-            color: var(--text-primary);
-        }
+        .header-stats span.blue { color: var(--accent-blue); font-weight: bold; }
+        .header-stats span.red { color: var(--accent-red); font-weight: bold; }
 
         /* Main Workspace Layout */
         #workspace {
@@ -107,7 +101,7 @@
 
         /* Floating Controls Sidebar */
         #controls-sidebar {
-            width: 340px;
+            width: 350px;
             height: 100%;
             background: var(--panel-bg);
             border-left: 1px solid var(--border-color);
@@ -120,7 +114,7 @@
         }
 
         .sidebar-section {
-            padding: 16px 18px;
+            padding: 14px 18px;
             border-bottom: 1px solid var(--border-color);
         }
 
@@ -129,19 +123,19 @@
         }
 
         .section-title {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             color: var(--text-secondary);
-            margin-bottom: 14px;
+            margin-bottom: 12px;
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
 
         .control-group {
-            margin-bottom: 14px;
+            margin-bottom: 12px;
         }
 
         .control-group:last-child {
@@ -153,7 +147,7 @@
             justify-content: space-between;
             align-items: center;
             font-size: 12px;
-            margin-bottom: 6px;
+            margin-bottom: 5px;
         }
 
         .control-label-row span.name {
@@ -209,12 +203,12 @@
             border-color: var(--accent-blue);
         }
 
-        /* Buttons */
+        /* Buttons & Segmented Controls */
         .btn-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 8px;
-            margin-top: 8px;
+            margin-top: 6px;
         }
 
         .btn-segmented {
@@ -224,7 +218,7 @@
             border-radius: 6px;
             padding: 2px;
             gap: 2px;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
         .btn-segmented button {
@@ -232,7 +226,7 @@
             background: transparent;
             border: none;
             color: var(--text-secondary);
-            padding: 6px 0;
+            padding: 5px 0;
             font-size: 12px;
             font-weight: 700;
             border-radius: 4px;
@@ -249,6 +243,11 @@
             background: #1f6feb;
             color: #ffffff;
             box-shadow: 0 0 6px rgba(88, 166, 255, 0.5);
+        }
+
+        .btn-segmented button.active.red {
+            background: #da3633;
+            box-shadow: 0 0 6px rgba(248, 81, 73, 0.5);
         }
 
         button.btn {
@@ -313,7 +312,7 @@
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
-            margin-top: 6px;
+            margin-top: 4px;
         }
 
         .chip {
@@ -321,7 +320,7 @@
             border: 1px solid var(--border-color);
             color: var(--text-secondary);
             font-size: 11px;
-            padding: 4px 9px;
+            padding: 4px 8px;
             border-radius: 12px;
             cursor: pointer;
             transition: all 0.15s ease;
@@ -338,7 +337,7 @@
             position: absolute;
             top: 16px;
             left: 16px;
-            background: rgba(22, 27, 34, 0.88);
+            background: rgba(22, 27, 34, 0.90);
             border: 1px solid var(--border-color);
             border-radius: 8px;
             padding: 10px 14px;
@@ -360,12 +359,21 @@
             color: #79c0ff;
         }
 
+        #hud-inspector span.collision-tag {
+            background: rgba(248, 81, 73, 0.2);
+            color: var(--accent-red);
+            border: 1px solid rgba(248, 81, 73, 0.4);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
         /* Instructions Banner */
         #hint-banner {
             position: absolute;
             bottom: 16px;
             left: 16px;
-            background: rgba(22, 27, 34, 0.88);
+            background: rgba(22, 27, 34, 0.90);
             border: 1px solid rgba(88, 166, 255, 0.3);
             border-radius: 8px;
             padding: 8px 14px;
@@ -377,15 +385,6 @@
             align-items: center;
             gap: 8px;
         }
-
-        #hint-banner .key {
-            background: #21262d;
-            border: 1px solid var(--border-color);
-            padding: 1px 5px;
-            border-radius: 4px;
-            font-family: ui-monospace, monospace;
-            font-size: 11px;
-        }
     </style>
 </head>
 <body>
@@ -393,13 +392,12 @@
         <div class="header-title">
             <span>⭐</span>
             <span>Border Mechanics Prototype</span>
-            <span class="tag">Isolated Lab</span>
+            <span class="tag">Dual HQ & Collision Lab</span>
         </div>
         <div class="header-stats">
-            <span>HQ: <b id="stat-hq">Bottom-Left (80, H-80)</b></span>
-            <span>Degrees: <b>0° to 90° (91 rays)</b></span>
-            <span>Max Turn: <b id="stat-max-turn">0.00°</b></span>
-            <span>Avg Radius: <b id="stat-avg-radius">280.0 px</b></span>
+            <span>🔵 <span class="blue">Blue (P1)</span>: <b id="stat-p1-r">280px</b> (Turn: <b id="stat-p1-turn">0.0°</b>)</span>
+            <span>🔴 <span class="red">Red (P2)</span>: <b id="stat-p2-r">280px</b> (Turn: <b id="stat-p2-turn">0.0°</b>)</span>
+            <span>Collision Status: <b id="stat-collision">Clear</b></span>
         </div>
     </header>
 
@@ -408,30 +406,69 @@
             <canvas id="prototype-canvas"></canvas>
 
             <div id="hud-inspector">
+                <div>Active Player: <span id="insp-player" class="highlight">Blue (P1)</span></div>
                 <div>Hover: <span id="insp-deg" class="highlight">--</span>° | Dist from HQ: <span id="insp-dist" class="highlight">--</span> px</div>
                 <div>Position: <span id="insp-pos" class="coord">(--, --)</span></div>
                 <div>Influence Window: <span id="insp-window">--</span></div>
+                <div id="insp-collision-row" style="display:none; margin-top:4px;"><span class="collision-tag">FRONTLINE COLLISION</span> Value redistributed to neighbors</div>
             </div>
 
             <div id="hint-banner">
-                <span>👉 <b>Left-Click</b> to expand (+), <b>Right-Click</b> to subtract (-). Drag to shape frontier.</span>
+                <span>👉 <b>Left-Click</b> to expand (+), <b>Right-Click</b> to subtract (-). Click near Blue or Red to control either HQ!</span>
             </div>
         </div>
 
         <aside id="controls-sidebar">
-            <!-- Tap & Distance Controls -->
+            <!-- Target Player Selection -->
+            <div class="sidebar-section">
+                <div class="section-title">
+                    <span>Target Player</span>
+                    <span style="color:var(--accent-blue)">Manual / Auto</span>
+                </div>
+                <div class="btn-segmented" id="group-target-player">
+                    <button type="button" class="player-btn active" data-target="auto">Auto (Cursor)</button>
+                    <button type="button" class="player-btn" data-target="0">Blue (P1)</button>
+                    <button type="button" class="player-btn" data-target="1">Red (P2)</button>
+                </div>
+            </div>
+
+            <!-- Collision & Redistribution Dynamics -->
+            <div class="sidebar-section">
+                <div class="section-title">
+                    <span>Collision & Redistribution</span>
+                    <span style="color:var(--accent-green)">Active</span>
+                </div>
+
+                <label class="toggle-row">
+                    <input type="checkbox" id="toggle-collision" checked>
+                    <span><b>Frontier Collision System</b></span>
+                </label>
+                <div style="font-size:11px; color:var(--text-secondary); margin-bottom:8px; line-height:1.4;">
+                    If a dot would cross enemy territory, it stops at the boundary and redistributes its value increase equally to immediate neighbors until no dots can move.
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label-row">
+                        <span class="name">Frontier Clearance Buffer</span>
+                        <span class="val" id="lbl-clearance">8 px</span>
+                    </div>
+                    <input type="range" id="slider-clearance" min="0" max="25" value="8" step="1">
+                </div>
+            </div>
+
+            <!-- Tap Dynamics (User Preferred Defaults) -->
             <div class="sidebar-section">
                 <div class="section-title">
                     <span>Tap Dynamics</span>
-                    <span style="color:var(--accent-blue)">Primary</span>
+                    <span style="color:var(--accent-blue)">Preferred Settings</span>
                 </div>
 
                 <div class="control-group">
                     <div class="control-label-row">
                         <span class="name">Tap Distance (ΔR)</span>
-                        <span class="val" id="lbl-tap-dist">40 px</span>
+                        <span class="val" id="lbl-tap-dist">20 px</span>
                     </div>
-                    <input type="range" id="slider-tap-dist" min="5" max="150" value="40" step="1">
+                    <input type="range" id="slider-tap-dist" min="5" max="150" value="20" step="1">
                 </div>
 
                 <div class="control-group">
@@ -453,8 +490,8 @@
                         <span class="name">Spread Profile</span>
                     </div>
                     <select id="select-spread-mode">
-                        <option value="plateau" selected>Full Crest (All K dots move together)</option>
-                        <option value="rounded">Rounded Crest (Smooth arc cap across K dots)</option>
+                        <option value="rounded" selected>Rounded Crest (Smooth arc cap across K dots)</option>
+                        <option value="plateau">Full Crest (All K dots move together)</option>
                         <option value="distributed">Distributed (Shared across K dots)</option>
                     </select>
                 </div>
@@ -462,17 +499,17 @@
                 <div class="control-group">
                     <div class="control-label-row">
                         <span class="name">Neighbor Strength</span>
-                        <span class="val" id="lbl-neighbor-strength">0.70</span>
+                        <span class="val" id="lbl-neighbor-strength">1.00</span>
                     </div>
-                    <input type="range" id="slider-neighbor-strength" min="0.0" max="1.0" value="0.70" step="0.01">
+                    <input type="range" id="slider-neighbor-strength" min="0.0" max="1.0" value="1.00" step="0.01">
                 </div>
 
                 <div class="control-group">
                     <div class="control-label-row">
                         <span class="name">Neighbor Spread</span>
-                        <span class="val" id="lbl-neighbor-spread">±18°</span>
+                        <span class="val" id="lbl-neighbor-spread">±10°</span>
                     </div>
-                    <input type="range" id="slider-neighbor-spread" min="1" max="45" value="18" step="1">
+                    <input type="range" id="slider-neighbor-spread" min="1" max="45" value="10" step="1">
                 </div>
 
                 <div class="control-group">
@@ -480,10 +517,10 @@
                         <span class="name">Falloff Curve</span>
                     </div>
                     <select id="select-falloff">
-                        <option value="gaussian" selected>Gaussian (Bell curve)</option>
+                        <option value="smoothstep" selected>Hermite / Smoothstep</option>
+                        <option value="gaussian">Gaussian (Bell curve)</option>
                         <option value="cosine">Cosine / Hann Window</option>
                         <option value="linear">Linear Triangular</option>
-                        <option value="smoothstep">Hermite / Smoothstep</option>
                         <option value="exponential">Exponential Decay</option>
                     </select>
                 </div>
@@ -494,7 +531,7 @@
                 </label>
             </div>
 
-            <!-- Smoothing & Filtering -->
+            <!-- Curvature & Smoothing -->
             <div class="sidebar-section">
                 <div class="section-title">
                     <span>Curvature & Smoothing</span>
@@ -518,7 +555,7 @@
 
                 <div class="control-group">
                     <button class="btn" id="btn-apply-smoothing-now" style="width: 100%; margin-top: 4px;">
-                        <span>✨ Smooth Border Now</span>
+                        <span>✨ Smooth Both Borders Now</span>
                     </button>
                 </div>
             </div>
@@ -552,11 +589,11 @@
                     <span>Quick Presets</span>
                 </div>
                 <div class="chip-container">
+                    <span class="chip" data-preset="user-favorite">⭐ User Favorite</span>
                     <span class="chip" data-preset="organic">Organic Swell</span>
                     <span class="chip" data-preset="broad">Broad Arc Growth</span>
-                    <span class="chip" data-preset="narrow">Focused Push</span>
+                    <span class="chip" data-preset="focused">Focused Push</span>
                     <span class="chip" data-preset="isolated">Single Dot Only</span>
-                    <span class="chip" data-preset="super-smooth">Super Smooth</span>
                 </div>
             </div>
 
@@ -568,7 +605,7 @@
 
                 <label class="toggle-row">
                     <input type="checkbox" id="toggle-rays" checked>
-                    <span>Show 91 Radial Rays</span>
+                    <span>Show 91 Radial Rays (Per Player)</span>
                 </label>
 
                 <label class="toggle-row">
@@ -597,7 +634,7 @@
                 </label>
             </div>
 
-            <!-- Actions: Reset / Undo / Redo -->
+            <!-- Actions -->
             <div class="sidebar-section">
                 <div class="section-title">
                     <span>Actions</span>
@@ -609,7 +646,7 @@
                 </div>
 
                 <button class="btn primary" id="btn-reset" style="width:100%; margin-top: 8px;">
-                    <span>🔄 Reset to Initial Arc</span>
+                    <span>🔄 Reset Both to Initial Arcs</span>
                 </button>
             </div>
         </aside>
@@ -621,21 +658,50 @@
         const ctx = canvas.getContext('2d');
 
         const state = {
-            numDegrees: 91, // 0..90 degrees in bottom-left quadrant
-            distances: new Float64Array(91), // radius at each degree (0 = +X / right, 90 = -Y / up)
+            numDegrees: 91, // 0..90 degrees per player quadrant
             initialRadius: 280,
             hqOffset: 80,
-            hq: { x: 80, y: 0 }, // calculated in resizeCanvas
 
-            // Interactive Controls
-            tapDistance: 40,
-            initialSpreadDots: 3, // 1, 3, 5, 7 dots to spread the initial value across
-            spreadMode: 'plateau', // 'plateau' (full crest), 'rounded', 'distributed'
-            neighborStrength: 0.70,
-            neighborSpread: 18,
-            falloffCurve: 'gaussian',
+            // Interactive Controls (Default: User Preferred Settings)
+            tapDistance: 20,
+            initialSpreadDots: 3,
+            spreadMode: 'rounded',
+            neighborStrength: 1.00,
+            neighborSpread: 10,
+            falloffCurve: 'smoothstep',
+            restrictContraction: true,
             smoothingPasses: 1,
             laplacianWeight: 0.18,
+
+            // Collision system
+            enableCollision: true,
+            frontierClearance: 8,
+
+            // Dual Player Configuration
+            targetSelection: 'auto', // 'auto', 0 (Blue), 1 (Red)
+            activePlayerId: 0,
+            players: [
+                {
+                    id: 0,
+                    name: 'Blue (P1)',
+                    color: '#58a6ff',
+                    accentColor: '#1f6feb',
+                    dotColor: '#79c0ff',
+                    hq: { x: 80, y: 0 }, // Bottom-Left
+                    corner: { x: 0, y: 0 }, // Bottom-Left corner
+                    distances: new Float64Array(91)
+                },
+                {
+                    id: 1,
+                    name: 'Red (P2)',
+                    color: '#f85149',
+                    accentColor: '#da3633',
+                    dotColor: '#ff7b72',
+                    hq: { x: 0, y: 80 }, // Top-Right
+                    corner: { x: 0, y: 0 }, // Top-Right corner
+                    distances: new Float64Array(91)
+                }
+            ],
 
             // Display options
             showRays: true,
@@ -644,7 +710,6 @@
             showFill: true,
             showPreview: true,
             showDegreeLabels: false,
-            restrictContraction: true, // dot value can never decrease when another dot is tapped
 
             // Interaction tracking
             hoveredDegree: -1,
@@ -657,21 +722,22 @@
             historyIndex: -1
         };
 
-        // Initialize distances array to circular arc
+        // Initialize distances array for both players
         function resetDistances(radius = state.initialRadius) {
-            for (let i = 0; i < state.numDegrees; i++) {
-                state.distances[i] = radius;
+            for (const p of state.players) {
+                for (let i = 0; i < state.numDegrees; i++) {
+                    p.distances[i] = radius;
+                }
             }
             saveHistorySnapshot();
         }
 
-        // Save history snapshot for Undo/Redo
         function saveHistorySnapshot() {
-            // Truncate redo tree if we branched
             if (state.historyIndex < state.history.length - 1) {
                 state.history = state.history.slice(0, state.historyIndex + 1);
             }
-            state.history.push(new Float64Array(state.distances));
+            const snapshot = state.players.map(p => new Float64Array(p.distances));
+            state.history.push(snapshot);
             state.historyIndex = state.history.length - 1;
             updateUndoRedoUI();
         }
@@ -679,7 +745,8 @@
         function undo() {
             if (state.historyIndex > 0) {
                 state.historyIndex--;
-                state.distances.set(state.history[state.historyIndex]);
+                const snap = state.history[state.historyIndex];
+                state.players.forEach((p, idx) => p.distances.set(snap[idx]));
                 updateUndoRedoUI();
                 render();
             }
@@ -688,7 +755,8 @@
         function redo() {
             if (state.historyIndex < state.history.length - 1) {
                 state.historyIndex++;
-                state.distances.set(state.history[state.historyIndex]);
+                const snap = state.history[state.historyIndex];
+                state.players.forEach((p, idx) => p.distances.set(snap[idx]));
                 updateUndoRedoUI();
                 render();
             }
@@ -700,18 +768,26 @@
         }
 
         // --- Angle & Coordinate Math ---
-        // Angle convention:
-        // deg 0  = 0 rad = directly East (along horizontal right wall)
-        // deg 90 = -PI/2 rad = directly North (along vertical left wall)
-        function degreeToAngleRad(deg) {
-            return - (deg / 90.0) * (Math.PI * 0.5);
+        // Player 1 (Bottom-Left HQ):
+        //   deg 0  = 0 rad (East / rightwards along bottom)
+        //   deg 90 = -PI/2 rad (North / upwards along left)
+        // Player 2 (Top-Right HQ):
+        //   deg 0  = PI rad (West / leftwards along top)
+        //   deg 90 = PI/2 rad (South / downwards along right)
+        function degreeToAngleRad(playerId, deg) {
+            if (playerId === 0) {
+                return - (deg / 90.0) * (Math.PI * 0.5);
+            } else {
+                return Math.PI - (deg / 90.0) * (Math.PI * 0.5);
+            }
         }
 
-        function getDotPosition(deg, r = state.distances[deg]) {
-            const rad = degreeToAngleRad(deg);
+        function getDotPosition(playerId, deg, r = state.players[playerId].distances[deg]) {
+            const p = state.players[playerId];
+            const rad = degreeToAngleRad(playerId, deg);
             return {
-                x: state.hq.x + r * Math.cos(rad),
-                y: state.hq.y + r * Math.sin(rad)
+                x: p.hq.x + r * Math.cos(rad),
+                y: p.hq.y + r * Math.sin(rad)
             };
         }
 
@@ -723,6 +799,10 @@
             const norm = deltaDeg / spread; // 0..1
 
             switch (curveType) {
+                case 'smoothstep': {
+                    const x = norm;
+                    return 1.0 - (3 * x * x - 2 * x * x * x);
+                }
                 case 'gaussian': {
                     const sigma = spread / 2.5;
                     return Math.exp(-0.5 * Math.pow(deltaDeg / sigma, 2));
@@ -733,16 +813,150 @@
                 case 'linear': {
                     return Math.max(0.0, 1.0 - norm);
                 }
-                case 'smoothstep': {
-                    const x = norm;
-                    return 1.0 - (3 * x * x - 2 * x * x * x);
-                }
                 case 'exponential': {
                     return Math.exp(-3.0 * norm);
                 }
                 default:
                     return Math.max(0.0, 1.0 - norm);
             }
+        }
+
+        function calculateTapWeight(deltaDeg, initialDots, spreadMode, neighborSpread, neighborStrength, falloffCurve) {
+            const rCore = Math.floor((initialDots - 1) / 2);
+
+            if (spreadMode === 'rounded') {
+                if (deltaDeg <= rCore) {
+                    if (rCore === 0) return 1.0;
+                    const t = deltaDeg / (rCore + 1);
+                    return Math.cos(Math.PI * 0.25 * t);
+                }
+                const deltaOut = deltaDeg - rCore;
+                const edgeVal = Math.cos(Math.PI * 0.25 * (rCore / (rCore + 1)));
+                const inf = calculateInfluence(deltaOut, neighborSpread, falloffCurve);
+                return edgeVal * inf * neighborStrength;
+            } else if (spreadMode === 'plateau') {
+                if (deltaDeg <= rCore) return 1.0;
+                const deltaOut = deltaDeg - rCore;
+                const inf = calculateInfluence(deltaOut, neighborSpread, falloffCurve);
+                return inf * neighborStrength;
+            } else if (spreadMode === 'distributed') {
+                const baseShare = 1.0 / Math.max(1, initialDots);
+                if (deltaDeg <= rCore) return baseShare;
+                const deltaOut = deltaDeg - rCore;
+                const inf = calculateInfluence(deltaOut, neighborSpread, falloffCurve);
+                return baseShare * inf * neighborStrength;
+            }
+            return 1.0;
+        }
+
+        // --- Territory Polygon Construction ---
+        function getTerritoryPolygon(playerId) {
+            const p = state.players[playerId];
+            const poly = [];
+
+            if (playerId === 0) {
+                // Left wall contact (deg 90)
+                poly.push({ x: 0, y: Math.max(0, p.hq.y - p.distances[90]) });
+                // Bottom-left corner
+                poly.push({ x: 0, y: p.corner.y });
+                // Bottom wall contact (deg 0)
+                poly.push({ x: Math.min(canvas.clientWidth, p.hq.x + p.distances[0]), y: p.corner.y });
+                // 91 frontier dots (deg 0 to 90)
+                for (let i = 0; i < state.numDegrees; i++) {
+                    poly.push(getDotPosition(playerId, i));
+                }
+            } else {
+                // 91 frontier dots (deg 0 to 90: West to South)
+                for (let i = 0; i < state.numDegrees; i++) {
+                    poly.push(getDotPosition(playerId, i));
+                }
+                // Right wall contact (deg 90 is South)
+                poly.push({ x: p.corner.x, y: Math.min(canvas.clientHeight, p.hq.y + p.distances[90]) });
+                // Top-right corner
+                poly.push({ x: p.corner.x, y: 0 });
+                // Top wall contact (deg 0 is West)
+                poly.push({ x: Math.max(0, p.hq.x - p.distances[0]), y: 0 });
+            }
+
+            return poly;
+        }
+
+        // Point-in-polygon containment test (Ray-casting)
+        function isPointInPolygon(pt, poly) {
+            let inside = false;
+            for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+                const xi = poly[i].x, yi = poly[i].y;
+                const xj = poly[j].x, yj = poly[j].y;
+                const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+                    (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi + 1e-9) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        // Point to line segment minimum squared distance
+        function distSqToSegment(p, a, b) {
+            const l2 = Math.hypot(b.x - a.x, b.y - a.y) ** 2;
+            if (l2 === 0) return Math.hypot(p.x - a.x, p.y - a.y) ** 2;
+            let t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y))) ** 2;
+        }
+
+        // --- Collision Check ---
+        // Returns true if candidate point pt crosses into enemy territory or violates clearance
+        function isPointCrossingEnemy(playerId, pt, clearance = state.frontierClearance) {
+            const enemyId = 1 - playerId;
+            const enemy = state.players[enemyId];
+            const enemyPoly = getTerritoryPolygon(enemyId);
+
+            // 1. Map boundaries check (canvas borders)
+            const w = canvas.clientWidth;
+            const h = canvas.clientHeight;
+            if (pt.x < clearance || pt.x > w - clearance || pt.y < clearance || pt.y > h - clearance) {
+                return true;
+            }
+
+            // 2. Enemy polygon containment check
+            if (isPointInPolygon(pt, enemyPoly)) {
+                return true;
+            }
+
+            // 3. Distance clearance to enemy frontier segments
+            const clSq = clearance * clearance;
+            for (let i = 0; i < state.numDegrees - 1; i++) {
+                const e1 = getDotPosition(enemyId, i);
+                const e2 = getDotPosition(enemyId, i + 1);
+                if (distSqToSegment(pt, e1, e2) < clSq) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // Binary search to find max safe displacement along ray d without crossing enemy
+        function findMaxSafeDelta(playerId, deg, currentR, desiredInc, clearance = state.frontierClearance) {
+            if (desiredInc <= 0.01) return 0;
+
+            const testPtMax = getDotPosition(playerId, deg, currentR + desiredInc);
+            if (!isPointCrossingEnemy(playerId, testPtMax, clearance)) {
+                return desiredInc;
+            }
+
+            // Binary search for contact boundary
+            let low = 0;
+            let high = desiredInc;
+            for (let iter = 0; iter < 12; iter++) {
+                const mid = (low + high) * 0.5;
+                const midPt = getDotPosition(playerId, deg, currentR + mid);
+                if (isPointCrossingEnemy(playerId, midPt, clearance)) {
+                    high = mid;
+                } else {
+                    low = mid;
+                }
+            }
+            return low;
         }
 
         // --- Laplacian Smoothing ---
@@ -765,51 +979,43 @@
             }
         }
 
-        // --- Tap Weight Formulation (Initial Spread across K dots + Neighbor Falloff) ---
-        function calculateTapWeight(deltaDeg, initialDots, spreadMode, neighborSpread, neighborStrength, falloffCurve) {
-            const rCore = Math.floor((initialDots - 1) / 2);
-
-            if (spreadMode === 'plateau') {
-                // Full Crest: All K dots receive full initial value (1.0), falloff applies outside the K dots
-                if (deltaDeg <= rCore) {
-                    return 1.0;
-                }
-                const deltaOut = deltaDeg - rCore;
-                const inf = calculateInfluence(deltaOut, neighborSpread, falloffCurve);
-                return inf * neighborStrength;
-            } else if (spreadMode === 'rounded') {
-                // Rounded Crest: Smooth cosine curve across the K dots, meeting falloff at core boundary
-                if (deltaDeg <= rCore) {
-                    if (rCore === 0) return 1.0;
-                    const t = deltaDeg / (rCore + 1);
-                    return Math.cos(Math.PI * 0.25 * t);
-                }
-                const deltaOut = deltaDeg - rCore;
-                const edgeVal = Math.cos(Math.PI * 0.25 * (rCore / (rCore + 1)));
-                const inf = calculateInfluence(deltaOut, neighborSpread, falloffCurve);
-                return edgeVal * inf * neighborStrength;
-            } else if (spreadMode === 'distributed') {
-                // Distributed: Initial value divided/shared across K dots, then neighbor falloff
-                const baseShare = 1.0 / Math.max(1, initialDots);
-                if (deltaDeg <= rCore) {
-                    return baseShare;
-                }
-                const deltaOut = deltaDeg - rCore;
-                const inf = calculateInfluence(deltaOut, neighborSpread, falloffCurve);
-                return baseShare * inf * neighborStrength;
-            }
-            return 1.0;
-        }
-
-        // --- Tap Interaction ---
-        function tapDegree(centerDeg, pushAmount = state.tapDistance, isPull = false) {
+        // --- Tap Interaction with Collision & Neighbor Redistribution ---
+        function tapDegree(playerId, centerDeg, pushAmount = state.tapDistance, isPull = false) {
             if (centerDeg < 0 || centerDeg >= state.numDegrees) return;
 
-            const prevDistances = new Float64Array(state.distances);
+            const p = state.players[playerId];
+            const prevDistances = new Float64Array(p.distances);
+
             const rCore = Math.floor((state.initialSpreadDots - 1) / 2);
             const totalRadius = rCore + state.neighborSpread;
             const signedPush = isPull ? -pushAmount : pushAmount;
 
+            if (isPull) {
+                // Contraction: pull inward down to safe minimum
+                const minDeg = Math.max(0, Math.floor(centerDeg - totalRadius));
+                const maxDeg = Math.min(state.numDegrees - 1, Math.ceil(centerDeg + totalRadius));
+                for (let i = minDeg; i <= maxDeg; i++) {
+                    const deltaDeg = Math.abs(i - centerDeg);
+                    const weight = calculateTapWeight(
+                        deltaDeg,
+                        state.initialSpreadDots,
+                        state.spreadMode,
+                        state.neighborSpread,
+                        state.neighborStrength,
+                        state.falloffCurve
+                    );
+                    p.distances[i] = Math.max(40, p.distances[i] + signedPush * weight);
+                }
+                if (state.smoothingPasses > 0) {
+                    applyLaplacianSmoothing(p.distances, state.laplacianWeight, state.smoothingPasses);
+                }
+                saveHistorySnapshot();
+                render();
+                return;
+            }
+
+            // Expansion tap with neighbor redistribution on collision
+            let pending = new Float64Array(state.numDegrees);
             const minDeg = Math.max(0, Math.floor(centerDeg - totalRadius));
             const maxDeg = Math.min(state.numDegrees - 1, Math.ceil(centerDeg + totalRadius));
 
@@ -823,22 +1029,89 @@
                     state.neighborStrength,
                     state.falloffCurve
                 );
-                state.distances[i] = Math.max(30, state.distances[i] + signedPush * weight);
+                pending[i] = signedPush * weight;
             }
 
-            if (state.smoothingPasses > 0) {
-                applyLaplacianSmoothing(state.distances, state.laplacianWeight, state.smoothingPasses);
-            }
+            const currentR = new Float64Array(p.distances);
+            let collisionOccurred = false;
 
-            // Restrict contraction: when value is increased (not a subtract tap),
-            // a dot's value can NEVER decrease from what it was before this tap
-            if (state.restrictContraction && !isPull) {
+            if (state.enableCollision) {
+                // Iterative redistribution loop:
+                // If a dot would cross enemy territory, don't move it, but redistribute its
+                // value increase to its immediate neighbors until there are no dots that can move.
+                const MAX_PASSES = 60;
+                let pass = 0;
+
+                while (pass < MAX_PASSES) {
+                    pass++;
+                    let anyMoved = false;
+                    const nextPending = new Float64Array(state.numDegrees);
+
+                    for (let i = 0; i < state.numDegrees; i++) {
+                        const inc = pending[i];
+                        if (inc <= 0.005) continue;
+
+                        const maxSafeDelta = findMaxSafeDelta(playerId, i, currentR[i], inc, state.frontierClearance);
+
+                        if (maxSafeDelta > 0.005) {
+                            currentR[i] += maxSafeDelta;
+                            anyMoved = true;
+                        }
+
+                        const excess = inc - maxSafeDelta;
+                        if (excess > 0.01) {
+                            collisionOccurred = true;
+                            // Redistribute unapplied increase to immediate neighbors
+                            if (i === 0) {
+                                nextPending[1] += excess;
+                            } else if (i === state.numDegrees - 1) {
+                                nextPending[state.numDegrees - 2] += excess;
+                            } else {
+                                nextPending[i - 1] += excess * 0.5;
+                                nextPending[i + 1] += excess * 0.5;
+                            }
+                        }
+                    }
+
+                    pending = nextPending;
+                    if (!anyMoved) break; // Terminate when no dots can move
+                }
+            } else {
+                // Direct application without collision
                 for (let i = 0; i < state.numDegrees; i++) {
-                    if (state.distances[i] < prevDistances[i]) {
-                        state.distances[i] = prevDistances[i];
+                    currentR[i] += pending[i];
+                }
+            }
+
+            p.distances.set(currentR);
+
+            // Post-tap smoothing with collision boundary protection
+            if (state.smoothingPasses > 0) {
+                applyLaplacianSmoothing(p.distances, state.laplacianWeight, state.smoothingPasses);
+                if (state.enableCollision) {
+                    for (let i = 0; i < state.numDegrees; i++) {
+                        const pt = getDotPosition(playerId, i);
+                        if (isPointCrossingEnemy(playerId, pt, state.frontierClearance)) {
+                            p.distances[i] = currentR[i]; // Restore pre-smooth collision position
+                        }
                     }
                 }
             }
+
+            // Restrict Contraction: a dot's value can never decrease when another dot is tapped
+            if (state.restrictContraction) {
+                for (let i = 0; i < state.numDegrees; i++) {
+                    if (p.distances[i] < prevDistances[i]) {
+                        p.distances[i] = prevDistances[i];
+                    }
+                }
+            }
+
+            // Update UI collision tag
+            const colRow = document.getElementById('insp-collision-row');
+            colRow.style.display = collisionOccurred ? 'block' : 'none';
+            document.getElementById('stat-collision').innerText = collisionOccurred ? 'Frontline Contact (Redistributing)' : 'Clear';
+            document.getElementById('stat-collision').style.color = collisionOccurred ? 'var(--accent-orange)' : 'var(--accent-green)';
 
             saveHistorySnapshot();
             render();
@@ -850,52 +1123,54 @@
             const dpr = window.devicePixelRatio || 1;
             canvas.width = rect.width * dpr;
             canvas.height = rect.height * dpr;
-            ctx.resetTransform ? ctx.resetTransform() : ctx.setTransform(1,0,0,1,0,0);
+            ctx.resetTransform ? ctx.resetTransform() : ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.scale(dpr, dpr);
 
-            state.hq.x = state.hqOffset;
-            state.hq.y = rect.height - state.hqOffset;
+            const w = rect.width;
+            const h = rect.height;
 
-            document.getElementById('stat-hq').innerText = `Bottom-Left (${state.hq.x}, ${Math.round(state.hq.y)})`;
+            // Player 1: Bottom-Left
+            state.players[0].hq.x = state.hqOffset;
+            state.players[0].hq.y = h - state.hqOffset;
+            state.players[0].corner.x = 0;
+            state.players[0].corner.y = h;
+
+            // Player 2: Top-Right
+            state.players[1].hq.x = w - state.hqOffset;
+            state.players[1].hq.y = state.hqOffset;
+            state.players[1].corner.x = w;
+            state.players[1].corner.y = 0;
+
             render();
         }
 
         // --- Curvature and Statistics Calculation ---
         function updateStats() {
-            let sumRadius = 0;
-            const pts = [];
-
-            for (let i = 0; i < state.numDegrees; i++) {
-                sumRadius += state.distances[i];
-                pts.push(getDotPosition(i));
-            }
-
-            const avgRadius = sumRadius / state.numDegrees;
-            document.getElementById('stat-avg-radius').innerText = `${avgRadius.toFixed(1)} px`;
-
-            let maxTurn = 0;
-            for (let i = 1; i < pts.length - 1; i++) {
-                const v1 = { x: pts[i].x - pts[i - 1].x, y: pts[i].y - pts[i - 1].y };
-                const v2 = { x: pts[i + 1].x - pts[i].x, y: pts[i + 1].y - pts[i].y };
-                const dot = v1.x * v2.x + v1.y * v2.y;
-                const mag1 = Math.hypot(v1.x, v1.y);
-                const mag2 = Math.hypot(v2.x, v2.y);
-                if (mag1 > 0.001 && mag2 > 0.001) {
-                    const cosTheta = Math.max(-1, Math.min(1, dot / (mag1 * mag2)));
-                    const angleDeg = Math.acos(cosTheta) * (180.0 / Math.PI);
-                    if (angleDeg > maxTurn) maxTurn = angleDeg;
+            state.players.forEach((p, idx) => {
+                let sumR = 0;
+                const pts = [];
+                for (let i = 0; i < state.numDegrees; i++) {
+                    sumR += p.distances[i];
+                    pts.push(getDotPosition(idx, i));
                 }
-            }
+                const avgR = sumR / state.numDegrees;
+                document.getElementById(idx === 0 ? 'stat-p1-r' : 'stat-p2-r').innerText = `${avgR.toFixed(1)}px`;
 
-            const turnEl = document.getElementById('stat-max-turn');
-            turnEl.innerText = `${maxTurn.toFixed(2)}°`;
-            if (maxTurn > 10) {
-                turnEl.style.color = 'var(--accent-orange)';
-            } else if (maxTurn > 20) {
-                turnEl.style.color = 'var(--accent-red)';
-            } else {
-                turnEl.style.color = 'var(--accent-green)';
-            }
+                let maxTurn = 0;
+                for (let i = 1; i < pts.length - 1; i++) {
+                    const v1 = { x: pts[i].x - pts[i - 1].x, y: pts[i].y - pts[i - 1].y };
+                    const v2 = { x: pts[i + 1].x - pts[i].x, y: pts[i + 1].y - pts[i].y };
+                    const dot = v1.x * v2.x + v1.y * v2.y;
+                    const mag1 = Math.hypot(v1.x, v1.y);
+                    const mag2 = Math.hypot(v2.x, v2.y);
+                    if (mag1 > 0.001 && mag2 > 0.001) {
+                        const cosTheta = Math.max(-1, Math.min(1, dot / (mag1 * mag2)));
+                        const angleDeg = Math.acos(cosTheta) * (180.0 / Math.PI);
+                        if (angleDeg > maxTurn) maxTurn = angleDeg;
+                    }
+                }
+                document.getElementById(idx === 0 ? 'stat-p1-turn' : 'stat-p2-turn').innerText = `${maxTurn.toFixed(1)}°`;
+            });
         }
 
         // --- Rendering Routine ---
@@ -906,86 +1181,176 @@
 
             ctx.clearRect(0, 0, w, h);
 
-            const hx = state.hq.x;
-            const hy = state.hq.y;
-
-            // 1. Draw Concentric Grid Reference Arcs
+            // 1. Draw Diagonal Neutral Zone Reference Line
             ctx.save();
-            ctx.strokeStyle = 'rgba(48, 54, 61, 0.4)';
-            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(48, 54, 61, 0.35)';
             ctx.setLineDash([4, 6]);
-
-            const maxR = Math.max(...state.distances) + 60;
-            for (let r = 100; r <= maxR; r += 100) {
-                ctx.beginPath();
-                ctx.arc(hx, hy, r, -Math.PI * 0.5, 0, false);
-                ctx.stroke();
-
-                ctx.fillStyle = 'rgba(139, 148, 158, 0.4)';
-                ctx.font = '10px ui-monospace, monospace';
-                ctx.fillText(`${r}px`, hx + r + 4, hy - 4);
-            }
-
-            // Quadrant Axes
-            ctx.setLineDash([]);
-            ctx.strokeStyle = '#30363d';
-            ctx.lineWidth = 1.5;
             ctx.beginPath();
-            ctx.moveTo(hx, hy);
-            ctx.lineTo(hx + maxR + 80, hy);
-            ctx.moveTo(hx, hy);
-            ctx.lineTo(hx, hy - (maxR + 80));
+            ctx.moveTo(0, 0);
+            ctx.lineTo(w, h);
             ctx.stroke();
             ctx.restore();
 
-            // 2. Territory Fill
-            if (state.showFill) {
-                ctx.save();
-                ctx.beginPath();
-                ctx.moveTo(hx, hy);
-                for (let i = 0; i < state.numDegrees; i++) {
-                    const pt = getDotPosition(i);
-                    ctx.lineTo(pt.x, pt.y);
-                }
-                ctx.closePath();
-                const fillGrad = ctx.createRadialGradient(hx, hy, 10, hx, hy, maxR);
-                fillGrad.addColorStop(0, 'rgba(31, 111, 235, 0.28)');
-                fillGrad.addColorStop(0.7, 'rgba(56, 139, 253, 0.12)');
-                fillGrad.addColorStop(1, 'rgba(88, 166, 255, 0.04)');
-                ctx.fillStyle = fillGrad;
-                ctx.fill();
-                ctx.restore();
-            }
+            // 2. Render Both Players
+            state.players.forEach((p, idx) => {
+                const hx = p.hq.x;
+                const hy = p.hq.y;
+                const isP1 = (idx === 0);
+                const maxR = Math.max(...p.distances) + 40;
 
-            // 3. 91 Radial Rays from HQ to each dot
-            if (state.showRays) {
+                // Concentric Range Arcs
                 ctx.save();
-                for (let i = 0; i < state.numDegrees; i++) {
-                    const pt = getDotPosition(i);
-                    const isHovered = (i === state.hoveredDegree);
-
+                ctx.strokeStyle = isP1 ? 'rgba(56, 139, 253, 0.12)' : 'rgba(248, 81, 73, 0.12)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 5]);
+                for (let r = 100; r <= maxR; r += 100) {
                     ctx.beginPath();
-                    ctx.moveTo(hx, hy);
-                    ctx.lineTo(pt.x, pt.y);
-
-                    if (isHovered) {
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-                        ctx.lineWidth = 1.8;
-                    } else if (i % 10 === 0) {
-                        ctx.strokeStyle = 'rgba(88, 166, 255, 0.45)';
-                        ctx.lineWidth = 1.2;
-                    } else {
-                        ctx.strokeStyle = 'rgba(56, 139, 253, 0.16)';
-                        ctx.lineWidth = 1.0;
-                    }
+                    const startAng = isP1 ? -Math.PI * 0.5 : Math.PI * 0.5;
+                    const endAng = isP1 ? 0 : Math.PI;
+                    ctx.arc(hx, hy, r, startAng, endAng, !isP1);
                     ctx.stroke();
                 }
                 ctx.restore();
-            }
 
-            // 4. Falloff Influence Preview
+                // Territory Fill
+                if (state.showFill) {
+                    ctx.save();
+                    const poly = getTerritoryPolygon(idx);
+                    ctx.beginPath();
+                    poly.forEach((pt, i) => {
+                        if (i === 0) ctx.moveTo(pt.x, pt.y);
+                        else ctx.lineTo(pt.x, pt.y);
+                    });
+                    ctx.closePath();
+
+                    const fillGrad = ctx.createRadialGradient(hx, hy, 10, hx, hy, maxR);
+                    if (isP1) {
+                        fillGrad.addColorStop(0, 'rgba(31, 111, 235, 0.28)');
+                        fillGrad.addColorStop(0.7, 'rgba(56, 139, 253, 0.12)');
+                        fillGrad.addColorStop(1, 'rgba(88, 166, 255, 0.04)');
+                    } else {
+                        fillGrad.addColorStop(0, 'rgba(218, 54, 51, 0.28)');
+                        fillGrad.addColorStop(0.7, 'rgba(248, 81, 73, 0.12)');
+                        fillGrad.addColorStop(1, 'rgba(255, 123, 114, 0.04)');
+                    }
+                    ctx.fillStyle = fillGrad;
+                    ctx.fill();
+                    ctx.restore();
+                }
+
+                // 91 Radial Rays
+                if (state.showRays) {
+                    ctx.save();
+                    for (let i = 0; i < state.numDegrees; i++) {
+                        const pt = getDotPosition(idx, i);
+                        const isHovered = (idx === state.activePlayerId && i === state.hoveredDegree);
+
+                        ctx.beginPath();
+                        ctx.moveTo(hx, hy);
+                        ctx.lineTo(pt.x, pt.y);
+
+                        if (isHovered) {
+                            ctx.strokeStyle = '#ffffff';
+                            ctx.lineWidth = 1.8;
+                        } else if (i % 10 === 0) {
+                            ctx.strokeStyle = isP1 ? 'rgba(88, 166, 255, 0.40)' : 'rgba(248, 81, 73, 0.40)';
+                            ctx.lineWidth = 1.2;
+                        } else {
+                            ctx.strokeStyle = isP1 ? 'rgba(56, 139, 253, 0.14)' : 'rgba(248, 81, 73, 0.14)';
+                            ctx.lineWidth = 1.0;
+                        }
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                }
+
+                // Straight Lines Connecting Neighbor Dots
+                if (state.showLines) {
+                    ctx.save();
+                    ctx.beginPath();
+                    for (let i = 0; i < state.numDegrees; i++) {
+                        const pt = getDotPosition(idx, i);
+                        if (i === 0) ctx.moveTo(pt.x, pt.y);
+                        else ctx.lineTo(pt.x, pt.y);
+                    }
+                    ctx.strokeStyle = p.color;
+                    ctx.lineWidth = 2.0;
+                    ctx.shadowColor = p.color;
+                    ctx.shadowBlur = 6;
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                // Ray End Dots
+                if (state.showDots) {
+                    ctx.save();
+                    for (let i = 0; i < state.numDegrees; i++) {
+                        const pt = getDotPosition(idx, i);
+                        const isHovered = (idx === state.activePlayerId && i === state.hoveredDegree);
+                        const isMajor = (i % 10 === 0);
+
+                        ctx.beginPath();
+                        let radius = isMajor ? 3.8 : 2.5;
+                        if (isHovered) radius = 6.0;
+
+                        ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
+
+                        if (isHovered) {
+                            ctx.fillStyle = '#ffffff';
+                            ctx.shadowColor = p.color;
+                            ctx.shadowBlur = 12;
+                        } else if (isMajor) {
+                            ctx.fillStyle = p.dotColor;
+                            ctx.shadowColor = p.color;
+                            ctx.shadowBlur = 4;
+                        } else {
+                            ctx.fillStyle = p.dotColor;
+                            ctx.shadowBlur = 0;
+                        }
+                        ctx.fill();
+
+                        if (state.showDegreeLabels && (isMajor || isHovered)) {
+                            ctx.fillStyle = isHovered ? '#ffffff' : '#8b949e';
+                            ctx.font = '10px ui-monospace, monospace';
+                            const rad = degreeToAngleRad(idx, i);
+                            const labelX = pt.x + 14 * Math.cos(rad);
+                            const labelY = pt.y + 14 * Math.sin(rad);
+                            ctx.fillText(`${i}°`, labelX - 6, labelY + 3);
+                        }
+                    }
+                    ctx.restore();
+                }
+
+                // HQ Base Marker
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(hx, hy, 12, 0, Math.PI * 2);
+                ctx.fillStyle = isP1 ? '#1f6feb' : '#da3633';
+                ctx.fill();
+                ctx.lineWidth = 2.5;
+                ctx.strokeStyle = isP1 ? '#58a6ff' : '#ff7b72';
+                ctx.shadowColor = isP1 ? '#58a6ff' : '#ff7b72';
+                ctx.shadowBlur = 8;
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(hx, hy, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+
+                ctx.fillStyle = '#e6edf3';
+                ctx.font = 'bold 11px ui-monospace, monospace';
+                ctx.shadowBlur = 0;
+                const hqLabelX = isP1 ? hx + 16 : hx - 110;
+                const hqLabelY = isP1 ? hy + 4 : hy + 4;
+                ctx.fillText(isP1 ? 'HQ 1 (Blue)' : 'HQ 2 (Red)', hqLabelX, hqLabelY);
+                ctx.restore();
+            });
+
+            // 3. Hover Preview Contour on Active Player
             if (state.showPreview && state.hoveredDegree >= 0) {
                 ctx.save();
+                const pid = state.activePlayerId;
                 const centerDeg = state.hoveredDegree;
                 const isSubtract = (state.dragButton === 2);
                 const signedPush = isSubtract ? -state.tapDistance : state.tapDistance;
@@ -1007,13 +1372,13 @@
                         state.falloffCurve
                     );
                     const deltaR = signedPush * weight;
-                    const previewR = Math.max(30, state.distances[i] + deltaR);
-                    const pt = getDotPosition(i, previewR);
+                    const previewR = Math.max(40, state.players[pid].distances[i] + deltaR);
+                    const pt = getDotPosition(pid, i, previewR);
                     if (i === minDeg) ctx.moveTo(pt.x, pt.y);
                     else ctx.lineTo(pt.x, pt.y);
                 }
 
-                ctx.strokeStyle = isSubtract ? 'rgba(248, 81, 73, 0.85)' : 'rgba(255, 255, 255, 0.7)';
+                ctx.strokeStyle = isSubtract ? 'rgba(248, 81, 73, 0.9)' : 'rgba(255, 255, 255, 0.85)';
                 ctx.lineWidth = 2;
                 ctx.setLineDash([3, 4]);
                 ctx.stroke();
@@ -1021,126 +1386,72 @@
                 ctx.restore();
             }
 
-            // 5. Straight Lines Connecting Neighbor Dots
-            if (state.showLines) {
-                ctx.save();
-                ctx.beginPath();
-                for (let i = 0; i < state.numDegrees; i++) {
-                    const pt = getDotPosition(i);
-                    if (i === 0) ctx.moveTo(pt.x, pt.y);
-                    else ctx.lineTo(pt.x, pt.y);
-                }
-
-                ctx.strokeStyle = '#58a6ff';
-                ctx.lineWidth = 2.0;
-                ctx.shadowColor = 'rgba(88, 166, 255, 0.6)';
-                ctx.shadowBlur = 6;
-                ctx.stroke();
-                ctx.restore();
-            }
-
-            // 6. Ray End Dots
-            if (state.showDots) {
-                ctx.save();
-                for (let i = 0; i < state.numDegrees; i++) {
-                    const pt = getDotPosition(i);
-                    const isHovered = (i === state.hoveredDegree);
-                    const isMajor = (i % 10 === 0);
-
-                    ctx.beginPath();
-                    let radius = isMajor ? 4.0 : 2.5;
-                    if (isHovered) radius = 6.0;
-
-                    ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
-
-                    if (isHovered) {
-                        ctx.fillStyle = '#ffffff';
-                        ctx.shadowColor = '#58a6ff';
-                        ctx.shadowBlur = 12;
-                    } else if (isMajor) {
-                        ctx.fillStyle = '#79c0ff';
-                        ctx.shadowColor = 'rgba(88, 166, 255, 0.5)';
-                        ctx.shadowBlur = 4;
-                    } else {
-                        ctx.fillStyle = 'rgba(121, 192, 255, 0.85)';
-                        ctx.shadowBlur = 0;
-                    }
-                    ctx.fill();
-
-                    if (state.showDegreeLabels && (isMajor || isHovered)) {
-                        ctx.fillStyle = isHovered ? '#ffffff' : '#8b949e';
-                        ctx.font = '10px ui-monospace, monospace';
-                        const rad = degreeToAngleRad(i);
-                        const labelX = pt.x + 14 * Math.cos(rad);
-                        const labelY = pt.y + 14 * Math.sin(rad);
-                        ctx.fillText(`${i}°`, labelX - 6, labelY + 3);
-                    }
-                }
-                ctx.restore();
-            }
-
-            // 7. HQ Base Marker in Bottom-Left
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(hx, hy, 12, 0, Math.PI * 2);
-            ctx.fillStyle = '#238636';
-            ctx.fill();
-            ctx.lineWidth = 2.5;
-            ctx.strokeStyle = '#3fb950';
-            ctx.shadowColor = '#3fb950';
-            ctx.shadowBlur = 8;
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.arc(hx, hy, 4, 0, Math.PI * 2);
-            ctx.fillStyle = '#ffffff';
-            ctx.fill();
-
-            ctx.fillStyle = '#e6edf3';
-            ctx.font = 'bold 11px ui-monospace, monospace';
-            ctx.shadowBlur = 0;
-            ctx.fillText('HQ (Bottom-Left)', hx + 16, hy + 4);
-            ctx.restore();
-
             updateStats();
         }
 
         // --- Mouse & Touch Interaction ---
-        function getPointerDeg(e) {
+        function getPointerInfo(e) {
             const rect = canvas.getBoundingClientRect();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
             const mx = clientX - rect.left;
             const my = clientY - rect.top;
 
-            const dx = mx - state.hq.x;
-            const dy = my - state.hq.y;
+            // Determine active player
+            let targetPlayer = 0;
+            if (state.targetSelection === '0') targetPlayer = 0;
+            else if (state.targetSelection === '1') targetPlayer = 1;
+            else {
+                // Auto-detect by proximity to HQ or frontier
+                const d1 = Math.hypot(mx - state.players[0].hq.x, my - state.players[0].hq.y);
+                const d2 = Math.hypot(mx - state.players[1].hq.x, my - state.players[1].hq.y);
+                targetPlayer = (d1 <= d2) ? 0 : 1;
+            }
 
+            const p = state.players[targetPlayer];
+            const dx = mx - p.hq.x;
+            const dy = my - p.hq.y;
             let rad = Math.atan2(dy, dx);
 
-            if (rad > 0 && rad <= Math.PI * 0.5) rad = 0;
-            if (rad > Math.PI * 0.5 || rad < -Math.PI) rad = -Math.PI * 0.5;
+            let deg = 0;
+            if (targetPlayer === 0) {
+                // Blue: 0 rad (East) to -PI/2 rad (North)
+                if (rad > 0 && rad <= Math.PI * 0.5) rad = 0;
+                if (rad > Math.PI * 0.5 || rad < -Math.PI) rad = -Math.PI * 0.5;
+                deg = Math.round((-rad / (Math.PI * 0.5)) * 90.0);
+            } else {
+                // Red: PI rad (West) to PI/2 rad (South)
+                if (rad < 0 && rad >= -Math.PI * 0.5) rad = Math.PI;
+                if (rad < -Math.PI * 0.5 || rad > Math.PI) rad = Math.PI * 0.5;
+                const span = (Math.PI - rad) / (Math.PI * 0.5);
+                deg = Math.round(span * 90.0);
+            }
 
-            const deg = Math.round((-rad / (Math.PI * 0.5)) * 90.0);
-            return Math.max(0, Math.min(90, deg));
+            deg = Math.max(0, Math.min(90, deg));
+            return { playerId: targetPlayer, deg, mx, my };
         }
 
         function updateHover(e) {
-            const deg = getPointerDeg(e);
-            state.hoveredDegree = deg;
+            const info = getPointerInfo(e);
+            state.activePlayerId = info.playerId;
+            state.hoveredDegree = info.deg;
 
-            const dist = state.distances[deg];
-            const pt = getDotPosition(deg);
-            document.getElementById('insp-deg').innerText = `${deg}`;
+            const p = state.players[info.playerId];
+            const dist = p.distances[info.deg];
+            const pt = getDotPosition(info.playerId, info.deg);
+
+            document.getElementById('insp-player').innerText = p.name;
+            document.getElementById('insp-player').style.color = p.color;
+            document.getElementById('insp-deg').innerText = `${info.deg}`;
             document.getElementById('insp-dist').innerText = `${dist.toFixed(1)}`;
             document.getElementById('insp-pos').innerText = `(${Math.round(pt.x)}, ${Math.round(pt.y)})`;
 
             const rCore = Math.floor((state.initialSpreadDots - 1) / 2);
-            const coreMin = Math.max(0, deg - rCore);
-            const coreMax = Math.min(state.numDegrees - 1, deg + rCore);
+            const coreMin = Math.max(0, info.deg - rCore);
+            const coreMax = Math.min(state.numDegrees - 1, info.deg + rCore);
             const spread = state.neighborSpread;
-            const minDeg = Math.max(0, deg - rCore - spread);
-            const maxDeg = Math.min(state.numDegrees - 1, deg + rCore + spread);
+            const minDeg = Math.max(0, info.deg - rCore - spread);
+            const maxDeg = Math.min(state.numDegrees - 1, info.deg + rCore + spread);
             document.getElementById('insp-window').innerText = `Core: [${coreMin}°..${coreMax}°] (${state.initialSpreadDots} dots) | Total: [${minDeg}°..${maxDeg}°]`;
 
             render();
@@ -1149,11 +1460,11 @@
         canvas.addEventListener('mousemove', (e) => {
             updateHover(e);
             if (state.isDragging) {
-                const deg = state.hoveredDegree;
-                if (deg !== state.lastInteractedDegree) {
+                const info = getPointerInfo(e);
+                if (info.deg !== state.lastInteractedDegree) {
                     const isSubtract = (state.dragButton === 2 || e.shiftKey || e.altKey);
-                    tapDegree(deg, state.tapDistance * 0.4, isSubtract);
-                    state.lastInteractedDegree = deg;
+                    tapDegree(info.playerId, info.deg, state.tapDistance * 0.4, isSubtract);
+                    state.lastInteractedDegree = info.deg;
                 }
             }
         });
@@ -1176,11 +1487,12 @@
         canvas.addEventListener('mousedown', (e) => {
             e.preventDefault();
             state.isDragging = true;
-            state.dragButton = e.button; // 0 for left (expand), 2 for right (subtract)
-            const deg = getPointerDeg(e);
-            state.lastInteractedDegree = deg;
+            state.dragButton = e.button; // 0 = Left (expand), 2 = Right (subtract)
+            const info = getPointerInfo(e);
+            state.activePlayerId = info.playerId;
+            state.lastInteractedDegree = info.deg;
             const isSubtract = (e.button === 2 || e.shiftKey || e.altKey);
-            tapDegree(deg, state.tapDistance, isSubtract);
+            tapDegree(info.playerId, info.deg, state.tapDistance, isSubtract);
         });
 
         window.addEventListener('mouseup', () => {
@@ -1194,19 +1506,21 @@
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             state.isDragging = true;
-            const deg = getPointerDeg(e);
-            state.hoveredDegree = deg;
-            state.lastInteractedDegree = deg;
-            tapDegree(deg, state.tapDistance);
+            const info = getPointerInfo(e);
+            state.activePlayerId = info.playerId;
+            state.hoveredDegree = info.deg;
+            state.lastInteractedDegree = info.deg;
+            tapDegree(info.playerId, info.deg, state.tapDistance, false);
         }, { passive: false });
 
         canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            const deg = getPointerDeg(e);
-            state.hoveredDegree = deg;
-            if (deg !== state.lastInteractedDegree) {
-                tapDegree(deg, state.tapDistance * 0.4);
-                state.lastInteractedDegree = deg;
+            const info = getPointerInfo(e);
+            state.activePlayerId = info.playerId;
+            state.hoveredDegree = info.deg;
+            if (info.deg !== state.lastInteractedDegree) {
+                tapDegree(info.playerId, info.deg, state.tapDistance * 0.4, false);
+                state.lastInteractedDegree = info.deg;
             }
         }, { passive: false });
 
@@ -1228,6 +1542,33 @@
         });
 
         // --- Controls Event Handlers ---
+        // Target Player Segmented Buttons
+        const playerButtons = document.querySelectorAll('.player-btn');
+        playerButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                playerButtons.forEach(b => b.classList.remove('active', 'red'));
+                btn.classList.add('active');
+                if (btn.dataset.target === '1') btn.classList.add('red');
+                state.targetSelection = btn.dataset.target;
+                render();
+            });
+        });
+
+        // Collision & Redistribution Controls
+        const toggleCollision = document.getElementById('toggle-collision');
+        toggleCollision.addEventListener('change', (e) => {
+            state.enableCollision = e.target.checked;
+        });
+
+        const sliderClearance = document.getElementById('slider-clearance');
+        const lblClearance = document.getElementById('lbl-clearance');
+        sliderClearance.addEventListener('input', (e) => {
+            state.frontierClearance = parseInt(e.target.value, 10);
+            lblClearance.innerText = `${state.frontierClearance} px`;
+            render();
+        });
+
+        // Tap Dynamics Handlers
         const sliderTapDist = document.getElementById('slider-tap-dist');
         const lblTapDist = document.getElementById('lbl-tap-dist');
         sliderTapDist.addEventListener('input', (e) => {
@@ -1236,7 +1577,6 @@
             render();
         });
 
-        // Initial Spread Controls
         const sliderInitialSpread = document.getElementById('slider-initial-spread');
         const lblInitialSpread = document.getElementById('lbl-initial-spread');
         const coreButtons = document.querySelectorAll('.core-btn');
@@ -1293,6 +1633,12 @@
             render();
         });
 
+        const toggleRestrictContraction = document.getElementById('toggle-restrict-contraction');
+        toggleRestrictContraction.addEventListener('change', (e) => {
+            state.restrictContraction = e.target.checked;
+        });
+
+        // Curvature & Smoothing Handlers
         const sliderSmoothing = document.getElementById('slider-smoothing');
         const lblSmoothing = document.getElementById('lbl-smoothing');
         sliderSmoothing.addEventListener('input', (e) => {
@@ -1308,11 +1654,12 @@
         });
 
         document.getElementById('btn-apply-smoothing-now').addEventListener('click', () => {
-            applyLaplacianSmoothing(state.distances, state.laplacianWeight, 1);
+            state.players.forEach(p => applyLaplacianSmoothing(p.distances, state.laplacianWeight, 1));
             saveHistorySnapshot();
             render();
         });
 
+        // Base Geometry Handlers
         const sliderInitRadius = document.getElementById('slider-init-radius');
         const lblInitRadius = document.getElementById('lbl-init-radius');
         sliderInitRadius.addEventListener('input', (e) => {
@@ -1332,44 +1679,21 @@
             resizeCanvas();
         });
 
-        const toggleRestrictContraction = document.getElementById('toggle-restrict-contraction');
-        toggleRestrictContraction.addEventListener('change', (e) => {
-            state.restrictContraction = e.target.checked;
-        });
-
         // Display Toggles
-        document.getElementById('toggle-rays').addEventListener('change', (e) => {
-            state.showRays = e.target.checked;
-            render();
-        });
-        document.getElementById('toggle-dots').addEventListener('change', (e) => {
-            state.showDots = e.target.checked;
-            render();
-        });
-        document.getElementById('toggle-lines').addEventListener('change', (e) => {
-            state.showLines = e.target.checked;
-            render();
-        });
-        document.getElementById('toggle-fill').addEventListener('change', (e) => {
-            state.showFill = e.target.checked;
-            render();
-        });
-        document.getElementById('toggle-preview').addEventListener('change', (e) => {
-            state.showPreview = e.target.checked;
-            render();
-        });
-        document.getElementById('toggle-degree-labels').addEventListener('change', (e) => {
-            state.showDegreeLabels = e.target.checked;
-            render();
-        });
+        document.getElementById('toggle-rays').addEventListener('change', (e) => { state.showRays = e.target.checked; render(); });
+        document.getElementById('toggle-dots').addEventListener('change', (e) => { state.showDots = e.target.checked; render(); });
+        document.getElementById('toggle-lines').addEventListener('change', (e) => { state.showLines = e.target.checked; render(); });
+        document.getElementById('toggle-fill').addEventListener('change', (e) => { state.showFill = e.target.checked; render(); });
+        document.getElementById('toggle-preview').addEventListener('change', (e) => { state.showPreview = e.target.checked; render(); });
+        document.getElementById('toggle-degree-labels').addEventListener('change', (e) => { state.showDegreeLabels = e.target.checked; render(); });
 
         // Presets Handlers
         const presets = {
-            'organic': { tap: 40, core: 3, strength: 0.75, spread: 18, curve: 'gaussian', smooth: 1, mode: 'plateau' },
-            'broad': { tap: 35, core: 5, strength: 0.85, spread: 30, curve: 'cosine', smooth: 2, mode: 'plateau' },
-            'narrow': { tap: 45, core: 1, strength: 0.40, spread: 8, curve: 'gaussian', smooth: 0, mode: 'plateau' },
-            'isolated': { tap: 50, core: 1, strength: 0.00, spread: 1, curve: 'linear', smooth: 0, mode: 'plateau' },
-            'super-smooth': { tap: 35, core: 7, strength: 0.85, spread: 28, curve: 'cosine', smooth: 3, mode: 'plateau' }
+            'user-favorite': { tap: 20, core: 3, strength: 1.00, spread: 10, curve: 'smoothstep', smooth: 1, mode: 'rounded' },
+            'organic': { tap: 25, core: 3, strength: 0.85, spread: 16, curve: 'gaussian', smooth: 1, mode: 'rounded' },
+            'broad': { tap: 20, core: 5, strength: 0.90, spread: 25, curve: 'cosine', smooth: 2, mode: 'plateau' },
+            'focused': { tap: 30, core: 1, strength: 0.50, spread: 8, curve: 'smoothstep', smooth: 0, mode: 'rounded' },
+            'isolated': { tap: 40, core: 1, strength: 0.00, spread: 1, curve: 'linear', smooth: 0, mode: 'plateau' }
         };
 
         document.querySelectorAll('.chip[data-preset]').forEach(chip => {
@@ -1382,7 +1706,7 @@
                 state.neighborSpread = p.spread;
                 state.falloffCurve = p.curve;
                 state.smoothingPasses = p.smooth;
-                state.spreadMode = p.mode || 'plateau';
+                state.spreadMode = p.mode || 'rounded';
 
                 sliderTapDist.value = p.tap;
                 lblTapDist.innerText = `${p.tap} px`;
@@ -1420,12 +1744,9 @@
         resetDistances(state.initialRadius);
         resizeCanvas();
 
-        // Support URL parameters for automated testing and visual captures
-        // e.g.: ?taps=45,45,20&core=5&strength=0.7&spread=18&hover=45
+        // Support URL parameters for testing and captures
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('core')) {
-            setInitialSpread(parseInt(urlParams.get('core'), 10));
-        }
+        if (urlParams.has('core')) setInitialSpread(parseInt(urlParams.get('core'), 10));
         if (urlParams.has('spreadMode')) {
             state.spreadMode = urlParams.get('spreadMode');
             selectSpreadMode.value = state.spreadMode;
@@ -1458,33 +1779,20 @@
             state.restrictContraction = (urlParams.get('restrict') === 'true' || urlParams.get('restrict') === '1');
             toggleRestrictContraction.checked = state.restrictContraction;
         }
-        if (urlParams.has('taps')) {
-            const tapList = urlParams.get('taps').split(',').map(Number);
-            for (const deg of tapList) {
-                tapDegree(deg, state.tapDistance);
-            }
+        if (urlParams.has('collision')) {
+            state.enableCollision = (urlParams.get('collision') === 'true' || urlParams.get('collision') === '1');
+            toggleCollision.checked = state.enableCollision;
         }
-        if (urlParams.has('subtracts')) {
-            const subList = urlParams.get('subtracts').split(',').map(Number);
-            for (const deg of subList) {
-                tapDegree(deg, state.tapDistance, true);
-            }
+        if (urlParams.has('p1taps')) {
+            const tapList = urlParams.get('p1taps').split(',').map(Number);
+            for (const deg of tapList) tapDegree(0, deg, state.tapDistance);
+        }
+        if (urlParams.has('p2taps')) {
+            const tapList = urlParams.get('p2taps').split(',').map(Number);
+            for (const deg of tapList) tapDegree(1, deg, state.tapDistance);
         }
         if (urlParams.has('hover')) {
             state.hoveredDegree = parseInt(urlParams.get('hover'), 10);
-            const dist = state.distances[state.hoveredDegree];
-            const pt = getDotPosition(state.hoveredDegree);
-            document.getElementById('insp-deg').innerText = `${state.hoveredDegree}`;
-            document.getElementById('insp-dist').innerText = `${dist.toFixed(1)}`;
-            document.getElementById('insp-pos').innerText = `(${Math.round(pt.x)}, ${Math.round(pt.y)})`;
-
-            const rCore = Math.floor((state.initialSpreadDots - 1) / 2);
-            const coreMin = Math.max(0, state.hoveredDegree - rCore);
-            const coreMax = Math.min(state.numDegrees - 1, state.hoveredDegree + rCore);
-            const spread = state.neighborSpread;
-            const minDeg = Math.max(0, state.hoveredDegree - rCore - spread);
-            const maxDeg = Math.min(state.numDegrees - 1, state.hoveredDegree + rCore + spread);
-            document.getElementById('insp-window').innerText = `Core: [${coreMin}°..${coreMax}°] (${state.initialSpreadDots} dots) | Total: [${minDeg}°..${maxDeg}°]`;
         }
         render();
     </script>
