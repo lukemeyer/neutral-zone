@@ -431,7 +431,7 @@ phP1.stations.forEach(s => {
     assert(s.targetY >= 0.75 * s.targetX + 0.20, `Station target (${s.targetX}, ${s.targetY}) strictly obeys neutral treaty seam`);
 });
 
-// 26. Test Border Bumping Incremental Distance (Does not shoot past border)
+// 26. Test Border Bumping Incremental Distance & Even Distribution (Zero Clustering)
 const bumpState = createCommanderState();
 const bP1 = bumpState.players[0];
 const angle = -Math.PI * 0.25;
@@ -442,12 +442,22 @@ for (let step = 0; step < 3; step++) {
     const target = calculateLaunchTarget(bP1, angle);
     const launchDist = Math.hypot(target.x - bP1.homePlanet.x, target.y - bP1.homePlanet.y);
     const delta = launchDist - borderDist;
-    assert(Math.abs(delta - 0.5) < 0.05, `Launch target lands ~0.5 past border (delta=${delta.toFixed(3)})`);
+    assert(Math.abs(delta - 2.0) < 0.05, `Launch target lands ~2.0 past border to maintain even spacing (delta=${delta.toFixed(3)})`);
     onStationAdded(bP1, target);
     bP1.stations.forEach(s => { s.x = s.targetX; s.y = s.targetY; });
     assert(borderDist >= prevBorderDist, `Border expands monotonically (${borderDist.toFixed(2)} >= ${prevBorderDist.toFixed(2)})`);
     prevBorderDist = borderDist;
 }
+
+// Check that minimum pairwise distance between all stations is >= 1.9 (no clustering!)
+let minPairDist = Infinity;
+for (let i = 0; i < bP1.stations.length; i++) {
+    for (let j = i + 1; j < bP1.stations.length; j++) {
+        const d = Math.hypot(bP1.stations[i].x - bP1.stations[j].x, bP1.stations[i].y - bP1.stations[j].y);
+        if (d < minPairDist) minPairDist = d;
+    }
+}
+assert(minPairDist >= 1.9, `Even distribution maintained with zero clustering (min pairwise dist: ${minPairDist.toFixed(2)} >= 1.90)`);
 
 // 27. Test Polygon Vertex Ordering & Zero Self-Intersections After Launches
 const bumpPoly = getTerritoryPolygon(bP1.homePlanet, bP1.stations, false);

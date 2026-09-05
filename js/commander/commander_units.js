@@ -564,6 +564,66 @@ export function clampStationToSeam(pt, isP2) {
     };
 }
 
+// Relaxes stations to guarantee even distribution and strictly prevent clustering
+export function relaxStations(stations, isP2) {
+    if (!stations || stations.length <= 1) return;
+    const minSpacing = 1.95;
+    const iterations = 8;
+    const cx = isP2 ? 20 : 0;
+    const cy = isP2 ? 0 : 15;
+
+    for (let it = 0; it < iterations; it++) {
+        for (let i = 0; i < stations.length; i++) {
+            for (let j = i + 1; j < stations.length; j++) {
+                const s1 = stations[i];
+                const s2 = stations[j];
+                const x1 = s1.targetX !== undefined ? s1.targetX : s1.x;
+                const y1 = s1.targetY !== undefined ? s1.targetY : s1.y;
+                const x2 = s2.targetX !== undefined ? s2.targetX : s2.x;
+                const y2 = s2.targetY !== undefined ? s2.targetY : s2.y;
+
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const d = Math.hypot(dx, dy);
+
+                if (d < minSpacing && d > 0.001) {
+                    const push = (minSpacing - d) * 0.35;
+                    const ux = dx / d;
+                    const uy = dy / d;
+
+                    const nx1 = x1 - ux * push;
+                    const ny1 = y1 - uy * push;
+                    const nx2 = x2 + ux * push;
+                    const ny2 = y2 + uy * push;
+
+                    const c1 = clampStationToSeam({ x: nx1, y: ny1 }, isP2);
+                    const c2 = clampStationToSeam({ x: nx2, y: ny2 }, isP2);
+
+                    if (s1.targetX !== undefined) {
+                        s1.targetX = Math.round(c1.x * 1000) / 1000;
+                        s1.targetY = Math.round(c1.y * 1000) / 1000;
+                        s1.angle = Math.atan2(s1.targetY - cy, s1.targetX - cx);
+                    } else {
+                        s1.x = Math.round(c1.x * 1000) / 1000;
+                        s1.y = Math.round(c1.y * 1000) / 1000;
+                        s1.angle = Math.atan2(s1.y - cy, s1.x - cx);
+                    }
+
+                    if (s2.targetX !== undefined) {
+                        s2.targetX = Math.round(c2.x * 1000) / 1000;
+                        s2.targetY = Math.round(c2.y * 1000) / 1000;
+                        s2.angle = Math.atan2(s2.targetY - cy, s2.targetX - cx);
+                    } else {
+                        s2.x = Math.round(c2.x * 1000) / 1000;
+                        s2.y = Math.round(c2.y * 1000) / 1000;
+                        s2.angle = Math.atan2(s2.y - cy, s2.x - cx);
+                    }
+                }
+            }
+        }
+    }
+}
+
 // Calculates where a newly launched station will push the frontier along angle
 export function calculateLaunchTarget(player, angle) {
     const isP2 = player.id === 1;
@@ -573,7 +633,8 @@ export function calculateLaunchTarget(player, angle) {
     const sinA = Math.sin(angle);
 
     const borderDist = getBorderIntersection(player.homePlanet, player.stations, isP2, angle);
-    const targetDist = borderDist + 0.5;
+    // Standard station spacing (~2.0 units) to bump the border out with even distribution
+    const targetDist = borderDist + 2.0;
     const rawX = hx + cosA * targetDist;
     const rawY = hy + sinA * targetDist;
 
@@ -611,8 +672,8 @@ export function onStationAdded(player, impactPos) {
     const clampedNewPos = clampStationToSeam(impactPos, isP2);
 
     // Pull existing stations in a weighted way: closer stations move more, farther stations move less
-    const pullRadius = 9.0;
-    const maxDisplacement = 0.50;
+    const pullRadius = 8.0;
+    const maxDisplacement = 0.35;
 
     if (player.stations) {
         player.stations.forEach(s => {
@@ -654,6 +715,9 @@ export function onStationAdded(player, impactPos) {
     };
     player.stations.push(newStation);
     player.stationCount = player.stations.length;
+
+    // Enforce even distribution across network (prevent clustering)
+    relaxStations(player.stations, isP2);
 }
 
 // Handles physical destruction of a station: remaining stations pull in to fill the gap
@@ -669,7 +733,7 @@ export function onStationDestroyed(player, destroyedStation) {
 
     // Remaining stations move in a weighted way to fill the gap: closer stations move more, farther stations move less
     const fillRadius = 8.0;
-    const maxFillMove = 0.50;
+    const maxFillMove = 0.40;
 
     player.stations.forEach(s => {
         const curX = s.targetX !== undefined ? s.targetX : s.x;
@@ -691,6 +755,9 @@ export function onStationDestroyed(player, destroyedStation) {
             s.angle = Math.atan2(s.targetY - cy, s.targetX - cx);
         }
     });
+
+    // Enforce even distribution as network re-balances
+    relaxStations(player.stations, isP2);
 }
 
 // Recalculates or grows a player's stations without modifying settled positions during aiming
