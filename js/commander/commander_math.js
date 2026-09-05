@@ -73,7 +73,7 @@ export function doPolygonsIntersect(polyA, polyB) {
     return false;
 }
 
-// Check if player can expand stations without overlapping enemy territory
+// Check if player can expand stations without overlapping enemy territory or neutral treaty seam
 export function canExpandStation(player, enemy, targetCount = null) {
     if (!player || !enemy) return true;
     const isP2 = player.id === 1;
@@ -82,9 +82,39 @@ export function canExpandStation(player, enemy, targetCount = null) {
 
     const proposedStations = computeStationPositions(player.homePlanet, count, isP2, steer);
     const proposedPoly = getTerritoryPolygon(player.homePlanet, proposedStations, isP2);
-    const enemyPoly = getTerritoryPolygon(enemy.homePlanet, enemy.stations, enemy.id === 1);
 
-    return !doPolygonsIntersect(proposedPoly, enemyPoly);
+    // 1. Check against enemy's current active territory
+    const enemyCurrentStations = enemy.stations || computeStationPositions(enemy.homePlanet, enemy.stationCount, enemy.id === 1);
+    const enemyCurrentPoly = getTerritoryPolygon(enemy.homePlanet, enemyCurrentStations, enemy.id === 1);
+    if (doPolygonsIntersect(proposedPoly, enemyCurrentPoly)) {
+        return false;
+    }
+
+    // 2. Check against enemy's committed pipeline (pending builds and in-flight stations)
+    const enemyPending = (enemy.buildCooldowns && enemy.buildCooldowns.station > 0 ? 1 : 0) +
+                         (enemy.launchingStations ? enemy.launchingStations.length : 0) +
+                         (enemy.buildQueue ? enemy.buildQueue.filter(b => b.type === 'station').length : 0);
+    if (enemyPending > 0) {
+        const enemyTotalCommitted = (enemy.stationCount || 0) + enemyPending;
+        const enemyCommittedStations = computeStationPositions(enemy.homePlanet, enemyTotalCommitted, enemy.id === 1, enemy.steeringAngle || enemy.launchAngle);
+        const enemyCommittedPoly = getTerritoryPolygon(enemy.homePlanet, enemyCommittedStations, enemy.id === 1);
+        if (doPolygonsIntersect(proposedPoly, enemyCommittedPoly)) {
+            return false;
+        }
+    }
+
+    // 3. Check against central neutral diagonal seam (y = 0.75 * x)
+    for (let pt of proposedPoly) {
+        if (!isP2) {
+            // P1 must stay in y >= 0.75 * x + 0.20
+            if (pt.y < 0.75 * pt.x + 0.20) return false;
+        } else {
+            // P2 must stay in y <= 0.75 * x - 0.20
+            if (pt.y > 0.75 * pt.x - 0.20) return false;
+        }
+    }
+
+    return true;
 }
 
 // Computes station coordinates for N stations around corner Home Planet
@@ -172,19 +202,21 @@ export function computeStationPositions(homePlanet, n, isPlayer2 = false, steeri
                 angle = (ring.minA + ring.maxA) / 2;
             } else {
                 let t = i / (ring.count - 1);
-                // Angular bias weighting if perimeter and steeringAngle is explicitly provided
+                const span = Math.PI * 0.20;
+                const s = Math.max(-1, Math.min(1, (steerDir - defaultAngle) / span));
                 if (ring.isPerimeter && canonicalSteer !== null) {
-                    const bias = Math.max(-1, Math.min(1, (steerDir - defaultAngle) / (Math.PI * 0.2)));
-                    t = t + 0.22 * bias * Math.sin(Math.PI * t);
+                    t = t + 0.35 * s * Math.sin(Math.PI * t);
                 }
                 angle = ring.minA + t * (ring.maxA - ring.minA);
             }
 
-            // Radial reach weighting
+            // Radial reach weighting (Dramatic and clearly visible)
             let effectiveR = ring.r;
             if (ring.isPerimeter && canonicalSteer !== null) {
-                const align = Math.cos(angle - steerDir);
-                effectiveR = ring.r * (1 + 0.18 * align);
+                const span = Math.PI * 0.20;
+                const s = Math.max(-1, Math.min(1, (steerDir - defaultAngle) / span));
+                const u = Math.max(-1, Math.min(1, (angle - defaultAngle) / span));
+                effectiveR = ring.r * (1 + 0.35 * s * u);
             }
 
             const sx = cx + effectiveR * Math.cos(angle);

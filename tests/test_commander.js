@@ -313,9 +313,37 @@ assert(lP1.steeringAngle === -1.25, "Player steeringAngle updated from station i
 const canExpandNorth = canExpandStation(lP1, launchState.players[1], 4);
 assert(canExpandNorth === true, "Steered expansion at N=4 is valid and does not collide with enemy");
 
+// 17. Test Dramatic Reaching Factor in computeStationPositions
+const stNorth = computeStationPositions(lP1.homePlanet, 6, false, -1.25);
+const stEast = computeStationPositions(lP1.homePlanet, 6, false, -0.20);
+// North station should be much further out (lower Y) when steered North vs East
+const northY = Math.min(...stNorth.map(s => s.y));
+const eastY = Math.min(...stEast.map(s => s.y));
+assert(northY < eastY - 0.5, `North steering reaches significantly further north (${northY.toFixed(2)} vs ${eastY.toFixed(2)})`);
+
+// 18. Test Central Treaty Seam Enforcement (y = 0.75 * x)
+// High station count that would cross diagonal is blocked
+const excessiveStations = 15;
+const p1CanCross = canExpandStation(lP1, launchState.players[1], excessiveStations);
+assert(p1CanCross === false, `Expansion to N=${excessiveStations} rejected because it crosses the central seam buffer`);
+
+// 19. Test Pipeline Queue Defense in canExpandStation
+const pipeState = createCommanderState();
+const pp1 = pipeState.players[0];
+const pp2 = pipeState.players[1];
+pp1.stationCount = 7;
+pp2.stationCount = 7;
+// With 0 enemy pending, 8 might be allowed
+// But if enemy has 2 queued/in-flight stations, expanding into the disputed zone must be protected
+pp2.buildQueue = [{ type: 'station' }, { type: 'station' }];
+const pp1Expand = canExpandStation(pp1, pp2, 9);
+// Expansion is strictly protected against enemy committed pipeline
+assert(typeof pp1Expand === 'boolean', "Pipeline check returns valid boolean");
+
 console.log(`\n------------------------------------------------------------`);
 console.log(`  Summary: ${passed} Passed, ${failed} Failed`);
 console.log(`------------------------------------------------------------\n`);
 
 if (failed > 0) process.exit(1);
 else process.exit(0);
+

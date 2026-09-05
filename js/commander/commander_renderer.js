@@ -1,4 +1,4 @@
-import { getTerritoryPolygon } from './commander_math.js';
+import { getTerritoryPolygon, computeStationPositions } from './commander_math.js';
 
 export function renderCommanderGame(ctx, canvas, state) {
     const { players, asteroids, projectiles, particles, mapWidth, mapHeight } = state;
@@ -206,9 +206,26 @@ export function renderCommanderGame(ctx, canvas, state) {
         // Subtle frontier impact reticle ring
         ctx.beginPath();
         ctx.arc(guideScreen.x, guideScreen.y, 6, 0, Math.PI * 2);
-        ctx.strokeStyle = p.accentColor + '88';
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = p.accentColor + 'aa';
+        ctx.lineWidth = 1.8;
         ctx.stroke();
+
+        // Steered Frontier Shape Preview Contour
+        const previewStations = computeStationPositions(p.homePlanet, p.stationCount + 1, p.id === 1, launchAngle);
+        const previewPoly = getTerritoryPolygon(p.homePlanet, previewStations, p.id === 1);
+        if (previewPoly.length >= 3) {
+            const previewScreenPts = previewPoly.map(pt => toScreen(pt.x, pt.y));
+            ctx.beginPath();
+            ctx.setLineDash([4, 6]);
+            ctx.moveTo(previewScreenPts[0].x, previewScreenPts[0].y);
+            for (let k = 1; k < previewScreenPts.length; k++) {
+                ctx.lineTo(previewScreenPts[k].x, previewScreenPts[k].y);
+            }
+            ctx.closePath();
+            ctx.strokeStyle = p.accentColor + '44';
+            ctx.lineWidth = 1.6;
+            ctx.stroke();
+        }
         ctx.restore();
 
         // Solid Trajectory line from HQ center extending 2x HQ radius

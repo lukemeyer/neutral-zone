@@ -1,5 +1,5 @@
 import { createCommanderState } from './commander_state.js';
-import { updateCommanderUnits, queueBuild, COMMANDER_COSTS, COMMANDER_BUILD_TIMES } from './commander_units.js';
+import { updateCommanderUnits, queueBuild, COMMANDER_COSTS, COMMANDER_BUILD_TIMES, updateStationLayout } from './commander_units.js';
 import { updateCommanderAI } from './commander_ai.js';
 import { renderCommanderGame } from './commander_renderer.js';
 import { polygonArea, getTerritoryPolygon, canExpandStation } from './commander_math.js';
@@ -76,9 +76,13 @@ function setupUIHandlers() {
         // Steer launch trajectory with Q / E or ArrowLeft / ArrowRight
         if (e.code === 'KeyQ' || e.code === 'ArrowLeft') {
             p1.launchAngle = Math.max(-Math.PI * 0.47, p1.launchAngle - 0.05);
+            p1.steeringAngle = p1.launchAngle;
+            updateStationLayout(p1);
         }
         if (e.code === 'KeyE' || e.code === 'ArrowRight') {
             p1.launchAngle = Math.min(-Math.PI * 0.03, p1.launchAngle + 0.05);
+            p1.steeringAngle = p1.launchAngle;
+            updateStationLayout(p1);
         }
         if (e.code === 'Space') {
             state.isPaused = !state.isPaused;
@@ -107,6 +111,8 @@ function setupUIHandlers() {
 
         if (angle > -Math.PI * 0.95 && angle < Math.PI * 0.35) {
             p1.launchAngle = Math.max(minA, Math.min(maxA, angle));
+            p1.steeringAngle = p1.launchAngle;
+            updateStationLayout(p1);
         }
     }
 

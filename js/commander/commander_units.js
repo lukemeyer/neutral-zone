@@ -150,9 +150,29 @@ export function updateCommanderUnits(state, dt) {
                         }
                     }
 
-                    // Increment station count & recalculate weighted layout
-                    p.stationCount++;
-                    updateStationLayout(p, { x: ls.targetX, y: ls.targetY });
+                    // Final border overlap check before adding station
+                    const enemy = players.find(ep => ep.id !== p.id);
+                    if (canExpandStation(p, enemy, p.stationCount + 1)) {
+                        p.stationCount++;
+                        updateStationLayout(p, { x: ls.targetX, y: ls.targetY });
+                    } else {
+                        // Expansion blocked by border: refund station energy and alert
+                        p.energy += COMMANDER_COSTS.station;
+                        if (particles) {
+                            for (let k = 0; k < 14; k++) {
+                                particles.push({
+                                    x: p.homePlanet.x,
+                                    y: p.homePlanet.y,
+                                    vx: (Math.random() - 0.5) * 2.5,
+                                    vy: (Math.random() - 0.5) * 2.5,
+                                    color: '#f85149',
+                                    size: 3.0,
+                                    life: 0.6,
+                                    maxLife: 0.6
+                                });
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -609,11 +629,23 @@ export function updateStationLayout(player, spawnPos = null) {
         });
     }
 
-    // Update targets for all stations
+    // Update targets for all stations with border safety clamping
     player.stations.forEach((s, idx) => {
         if (targetPositions[idx]) {
-            s.targetX = targetPositions[idx].x;
-            s.targetY = targetPositions[idx].y;
+            let tx = targetPositions[idx].x;
+            let ty = targetPositions[idx].y;
+
+            // Seam buffer clamp: keep P1 below seam and P2 above seam
+            if (!isP2) {
+                const minY = 0.75 * tx + 0.20;
+                if (ty < minY) ty = minY;
+            } else {
+                const maxY = 0.75 * tx - 0.20;
+                if (ty > maxY) ty = maxY;
+            }
+
+            s.targetX = tx;
+            s.targetY = ty;
             s.isPerimeter = targetPositions[idx].isPerimeter;
             s.angle = targetPositions[idx].angle;
         }
