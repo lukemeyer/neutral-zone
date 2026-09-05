@@ -233,6 +233,47 @@ export function computeStationPositions(homePlanet, n, isPlayer2 = false, steeri
     return stations;
 }
 
+// Monotone chain 2D convex hull algorithm
+function crossProduct2D(o, a, b) {
+    return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+}
+
+export function convexHull(points) {
+    if (points.length <= 2) return [...points];
+
+    const sorted = [...points].sort((a, b) => a.x !== b.x ? a.x - b.x : a.y - b.y);
+
+    const unique = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+        if (Math.abs(sorted[i].x - unique[unique.length - 1].x) > 1e-5 ||
+            Math.abs(sorted[i].y - unique[unique.length - 1].y) > 1e-5) {
+            unique.push(sorted[i]);
+        }
+    }
+    if (unique.length <= 2) return unique;
+
+    const lower = [];
+    for (let p of unique) {
+        while (lower.length >= 2 && crossProduct2D(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+            lower.pop();
+        }
+        lower.push(p);
+    }
+
+    const upper = [];
+    for (let i = unique.length - 1; i >= 0; i--) {
+        const p = unique[i];
+        while (upper.length >= 2 && crossProduct2D(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
+            upper.pop();
+        }
+        upper.push(p);
+    }
+
+    lower.pop();
+    upper.pop();
+    return lower.concat(upper);
+}
+
 // Builds territory polygon filling the entire 90 degree corner
 export function getTerritoryPolygon(homePlanet, stations, isPlayer2 = false) {
     if (!stations || stations.length === 0) {
@@ -242,40 +283,118 @@ export function getTerritoryPolygon(homePlanet, stations, isPlayer2 = false) {
     // Auto-detect player 2 if isPlayer2 flag isn't explicitly passed
     const isP2 = isPlayer2 || (homePlanet && homePlanet.x > 10) || (stations[0] && stations[0].x > 10);
 
-    const outerStations = stations.filter(s => s.isPerimeter);
-    const activeOuter = outerStations.length > 0 ? outerStations : stations;
-
     if (!isP2) {
-        // P1 Corner is (0, 15)
-        const sorted = [...activeOuter].sort((a, b) => a.angle - b.angle);
-        const leftR = Math.hypot(sorted[0].x, 15 - sorted[0].y);
-        const bottomR = Math.hypot(sorted[sorted.length - 1].x, 15 - sorted[sorted.length - 1].y);
+        // Corner is (0, 15). Calculate station polar angles from corner.
+        let minAngle = Infinity;
+        let maxAngle = -Infinity;
+        let leftStation = null;
+        let bottomStation = null;
+
+        stations.forEach(s => {
+            const curX = s.targetX !== undefined ? s.targetX : s.x;
+            const curY = s.targetY !== undefined ? s.targetY : s.y;
+            const ang = Math.atan2(curY - 15, curX);
+            if (ang < minAngle) {
+                minAngle = ang;
+                leftStation = { x: curX, y: curY };
+            }
+            if (ang > maxAngle) {
+                maxAngle = ang;
+                bottomStation = { x: curX, y: curY };
+            }
+        });
+
+        const leftR = leftStation ? Math.max(3.2, Math.hypot(leftStation.x, 15 - leftStation.y)) : 3.2;
+        const bottomR = bottomStation ? Math.max(3.2, Math.hypot(bottomStation.x, 15 - bottomStation.y)) : 3.2;
 
         const leftWallPoint = { x: 0, y: Math.max(0, Math.round((15 - leftR) * 1000) / 1000) };
         const bottomWallPoint = { x: Math.min(20, Math.round(bottomR * 1000) / 1000), y: 15 };
 
-        const poly = [
+        const allPoints = [
             { x: 0, y: 15 },
-            leftWallPoint
+            leftWallPoint,
+            ...stations.map(s => ({
+                x: s.targetX !== undefined ? s.targetX : s.x,
+                y: s.targetY !== undefined ? s.targetY : s.y
+            })),
+            bottomWallPoint
         ];
-        sorted.forEach(s => poly.push({ x: s.x, y: s.y }));
-        poly.push(bottomWallPoint);
-        return poly;
+
+        const hull = convexHull(allPoints);
+        const cornerIdx = hull.findIndex(p => Math.abs(p.x - 0) < 1e-4 && Math.abs(p.y - 15) < 1e-4);
+        if (cornerIdx === -1) return hull;
+
+        const ordered = [];
+        for (let i = 0; i < hull.length; i++) {
+            ordered.push(hull[(cornerIdx + i) % hull.length]);
+        }
+        // Ensure canonical winding: corner (0, 15) -> left wall (0, y) -> frontier -> bottom wall (x, 15)
+        if (ordered.length >= 2 && ordered[1].x !== 0) {
+            const rev = [ordered[0]];
+            for (let i = ordered.length - 1; i >= 1; i--) rev.push(ordered[i]);
+            return rev;
+        }
+        return ordered;
     } else {
         // P2 Corner is (20, 0)
         // Canonical reflection from P1
-        const p1Poly = getTerritoryPolygon(null, stations.map(s => ({
-            ...s,
-            x: 20 - s.x,
-            y: 15 - s.y,
-            angle: s.angle - Math.PI
-        })), false);
+        const reflectedStations = stations.map(s => {
+            const rx = 20 - (s.targetX !== undefined ? s.targetX : s.x);
+            const ry = 15 - (s.targetY !== undefined ? s.targetY : s.y);
+            return {
+                ...s,
+                x: rx,
+                y: ry,
+                targetX: rx,
+                targetY: ry
+            };
+        });
+        const p1Poly = getTerritoryPolygon(null, reflectedStations, false);
 
         return p1Poly.map(pt => ({
             x: Math.round((20 - pt.x) * 1000) / 1000,
             y: Math.round((15 - pt.y) * 1000) / 1000
         }));
     }
+}
+
+// Finds distance from HQ to current territory border along angle
+export function getBorderIntersection(homePlanet, stations, isPlayer2, angle) {
+    if (!homePlanet) return 2.0;
+    const isP2 = isPlayer2 !== undefined ? isPlayer2 : homePlanet.x > 10;
+    const hx = homePlanet.x;
+    const hy = homePlanet.y;
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+
+    const poly = getTerritoryPolygon(homePlanet, stations, isP2);
+    if (!poly || poly.length < 3) return 2.0;
+
+    let borderDist = null;
+    let minT = Infinity;
+
+    for (let i = 0; i < poly.length; i++) {
+        const p1 = poly[i];
+        const p2 = poly[(i + 1) % poly.length];
+
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const denom = dx * sinA - dy * cosA;
+
+        if (Math.abs(denom) > 1e-6) {
+            const t = ((hx - p1.x) * dy - (hy - p1.y) * dx) / denom;
+            const u = ((p1.y - hy) * cosA - (p1.x - hx) * sinA) / denom;
+
+            if (t > 0.05 && u >= -0.01 && u <= 1.01) {
+                if (t < minT) {
+                    minT = t;
+                    borderDist = t;
+                }
+            }
+        }
+    }
+
+    return borderDist !== null ? borderDist : 2.0;
 }
 
 // Asymmetrical asteroid field layout with mathematically equal radial distances from HQ

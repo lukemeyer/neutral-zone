@@ -1,4 +1,4 @@
-import { computeStationPositions, getTerritoryPolygon, polygonArea, isPointInFan, getAsteroidLayout, doPolygonsIntersect, canExpandStation } from '../js/commander/commander_math.js';
+import { computeStationPositions, getTerritoryPolygon, getBorderIntersection, polygonArea, isPointInFan, getAsteroidLayout, doPolygonsIntersect, doLineSegmentsIntersect, canExpandStation } from '../js/commander/commander_math.js';
 import { createCommanderState } from '../js/commander/commander_state.js';
 import { queueBuild, updateCommanderUnits, calculateLaunchTarget, onStationAdded, onStationDestroyed } from '../js/commander/commander_units.js';
 
@@ -417,7 +417,7 @@ assert(movedNorth > movedEast, `Northern station moved significantly more than e
 // 24. Test Weighted Gap-Filling on Station Destroyed (Closer move more, farther move less)
 const deadStation = phP1.stations[0];
 const neighborStation = phP1.stations[1]; // closest survivor
-const farStation = phP1.stations[phP1.stations.length - 1]; // farthest survivor
+const farStation = sEast; // farthest survivor (easternmost station)
 const prevNeighborPos = { x: neighborStation.targetX, y: neighborStation.targetY };
 const prevFarPos = { x: farStation.targetX, y: farStation.targetY };
 
@@ -430,6 +430,46 @@ assert(neighborShift >= farShift, `Nearby survivor moved more to fill gap than d
 phP1.stations.forEach(s => {
     assert(s.targetY >= 0.75 * s.targetX + 0.20, `Station target (${s.targetX}, ${s.targetY}) strictly obeys neutral treaty seam`);
 });
+
+// 26. Test Border Bumping Incremental Distance (Does not shoot past border)
+const bumpState = createCommanderState();
+const bP1 = bumpState.players[0];
+const angle = -Math.PI * 0.25;
+let prevBorderDist = 0;
+for (let step = 0; step < 3; step++) {
+    const poly = getTerritoryPolygon(bP1.homePlanet, bP1.stations, false);
+    const borderDist = getBorderIntersection(bP1.homePlanet, bP1.stations, false, angle);
+    const target = calculateLaunchTarget(bP1, angle);
+    const launchDist = Math.hypot(target.x - bP1.homePlanet.x, target.y - bP1.homePlanet.y);
+    const delta = launchDist - borderDist;
+    assert(Math.abs(delta - 0.5) < 0.05, `Launch target lands ~0.5 past border (delta=${delta.toFixed(3)})`);
+    onStationAdded(bP1, target);
+    bP1.stations.forEach(s => { s.x = s.targetX; s.y = s.targetY; });
+    assert(borderDist >= prevBorderDist, `Border expands monotonically (${borderDist.toFixed(2)} >= ${prevBorderDist.toFixed(2)})`);
+    prevBorderDist = borderDist;
+}
+
+// 27. Test Polygon Vertex Ordering & Zero Self-Intersections After Launches
+const bumpPoly = getTerritoryPolygon(bP1.homePlanet, bP1.stations, false);
+assert(bumpPoly.length >= 4, `Territory polygon has at least 4 vertices (${bumpPoly.length})`);
+assert(bumpPoly[0].x === 0 && bumpPoly[0].y === 15, "First vertex is corner (0, 15)");
+assert(bumpPoly[1].x === 0, "Second vertex is on left wall (x=0)");
+assert(bumpPoly[bumpPoly.length - 1].y === 15, "Last vertex is on bottom wall (y=15)");
+// Check that no non-adjacent edges intersect (zero self-intersections)
+let selfIntersects = false;
+for (let i = 0; i < bumpPoly.length; i++) {
+    const a1 = bumpPoly[i];
+    const a2 = bumpPoly[(i + 1) % bumpPoly.length];
+    for (let j = i + 2; j < bumpPoly.length; j++) {
+        if ((j + 1) % bumpPoly.length === i) continue; // adjacent
+        const b1 = bumpPoly[j];
+        const b2 = bumpPoly[(j + 1) % bumpPoly.length];
+        if (doLineSegmentsIntersect(a1, a2, b1, b2)) {
+            selfIntersects = true;
+        }
+    }
+}
+assert(!selfIntersects, "Territory polygon has zero self-intersections after multiple collinear launches");
 
 console.log(`\n------------------------------------------------------------`);
 console.log(`  Summary: ${passed} Passed, ${failed} Failed`);

@@ -1,4 +1,4 @@
-import { computeStationPositions, getTerritoryPolygon, isPointInFan, canExpandStation } from './commander_math.js';
+import { computeStationPositions, getTerritoryPolygon, getBorderIntersection, isPointInFan, canExpandStation } from './commander_math.js';
 
 export const COMMANDER_COSTS = {
     station: 50,
@@ -572,31 +572,8 @@ export function calculateLaunchTarget(player, angle) {
     const cosA = Math.cos(angle);
     const sinA = Math.sin(angle);
 
-    // Find the current frontier reach in direction of angle
-    let maxProj = 1.8; // Minimum baseline distance from HQ
-    if (player.stations && player.stations.length > 0) {
-        player.stations.forEach(s => {
-            const sx = s.targetX !== undefined ? s.targetX : s.x;
-            const sy = s.targetY !== undefined ? s.targetY : s.y;
-            const dx = sx - hx;
-            const dy = sy - hy;
-            const dist = Math.hypot(dx, dy);
-            if (dist > 0.1) {
-                const sAngle = Math.atan2(dy, dx);
-                let diff = Math.abs(sAngle - angle);
-                while (diff > Math.PI) diff = Math.abs(diff - Math.PI * 2);
-                if (diff < Math.PI * 0.35) { // within ~60 degrees
-                    const proj = dx * cosA + dy * sinA;
-                    if (proj > maxProj) {
-                        maxProj = proj;
-                    }
-                }
-            }
-        });
-    }
-
-    // Push outward by 1.25 units past existing stations
-    const targetDist = maxProj + 1.25;
+    const borderDist = getBorderIntersection(player.homePlanet, player.stations, isP2, angle);
+    const targetDist = borderDist + 0.5;
     const rawX = hx + cosA * targetDist;
     const rawY = hy + sinA * targetDist;
 
@@ -635,7 +612,7 @@ export function onStationAdded(player, impactPos) {
 
     // Pull existing stations in a weighted way: closer stations move more, farther stations move less
     const pullRadius = 9.0;
-    const maxDisplacement = 0.75;
+    const maxDisplacement = 0.50;
 
     if (player.stations) {
         player.stations.forEach(s => {
@@ -655,6 +632,7 @@ export function onStationAdded(player, impactPos) {
                 const clamped = clampStationToSeam({ x: nx, y: ny }, isP2);
                 s.targetX = Math.round(clamped.x * 1000) / 1000;
                 s.targetY = Math.round(clamped.y * 1000) / 1000;
+                s.angle = Math.atan2(s.targetY - cy, s.targetX - cx);
             }
         });
     } else {
@@ -681,6 +659,8 @@ export function onStationAdded(player, impactPos) {
 // Handles physical destruction of a station: remaining stations pull in to fill the gap
 export function onStationDestroyed(player, destroyedStation) {
     const isP2 = player.id === 1;
+    const cx = isP2 ? 20 : 0;
+    const cy = isP2 ? 0 : 15;
     const deadX = destroyedStation.targetX !== undefined ? destroyedStation.targetX : destroyedStation.x;
     const deadY = destroyedStation.targetY !== undefined ? destroyedStation.targetY : destroyedStation.y;
 
@@ -689,7 +669,7 @@ export function onStationDestroyed(player, destroyedStation) {
 
     // Remaining stations move in a weighted way to fill the gap: closer stations move more, farther stations move less
     const fillRadius = 8.0;
-    const maxFillMove = 0.65;
+    const maxFillMove = 0.50;
 
     player.stations.forEach(s => {
         const curX = s.targetX !== undefined ? s.targetX : s.x;
@@ -708,6 +688,7 @@ export function onStationDestroyed(player, destroyedStation) {
             const clamped = clampStationToSeam({ x: nx, y: ny }, isP2);
             s.targetX = Math.round(clamped.x * 1000) / 1000;
             s.targetY = Math.round(clamped.y * 1000) / 1000;
+            s.angle = Math.atan2(s.targetY - cy, s.targetX - cx);
         }
     });
 }
