@@ -190,7 +190,8 @@ export function renderCommanderGame(ctx, canvas, state) {
         const arrowScreen = toScreen(arrowEndX, arrowEndY);
 
         // Aiming guide ray extending outward toward the prospective frontier impact point
-        const targetPos = calculateLaunchTarget(p, launchAngle);
+        const enemy = players.find(ep => ep.id !== p.id);
+        const targetPos = calculateLaunchTarget(p, launchAngle, enemy);
         const guideScreen = toScreen(targetPos.x, targetPos.y);
 
         ctx.save();

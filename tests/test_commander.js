@@ -502,6 +502,45 @@ for (let i = 0; i < bumpPoly.length; i++) {
 }
 assert(!selfIntersects, "Territory polygon has zero self-intersections after multiple collinear launches");
 
+// 28. Test Head-to-Head Expansion Overlap Prevention & Frontline Clearance
+const h2hState = createCommanderState();
+const hP1 = h2hState.players[0];
+const hP2 = h2hState.players[1];
+hP1.launchAngle = Math.atan2(7.5 - hP1.homePlanet.y, 10.0 - hP1.homePlanet.x);
+hP2.launchAngle = Math.atan2(7.5 - hP2.homePlanet.y, 10.0 - hP2.homePlanet.x);
+
+for (let step = 0; step < 8; step++) {
+    const t1 = calculateLaunchTarget(hP1, hP1.launchAngle, hP2);
+    onStationAdded(hP1, t1, hP2);
+    hP1.stations.forEach(s => { s.x = s.targetX; s.y = s.targetY; });
+
+    const t2 = calculateLaunchTarget(hP2, hP2.launchAngle, hP1);
+    onStationAdded(hP2, t2, hP1);
+    hP2.stations.forEach(s => { s.x = s.targetX; s.y = s.targetY; });
+
+    const polyP1 = getTerritoryPolygon(hP1.homePlanet, hP1.stations, false);
+    const polyP2 = getTerritoryPolygon(hP2.homePlanet, hP2.stations, true);
+    assert(!doPolygonsIntersect(polyP1, polyP2), `Territories do not intersect at expansion step ${step} (P1=${hP1.stations.length}, P2=${hP2.stations.length})`);
+}
+
+// Check station clearance: no station inside opponent territory, minimum buffer between opposing stations
+const finalPolyP1 = getTerritoryPolygon(hP1.homePlanet, hP1.stations, false);
+const finalPolyP2 = getTerritoryPolygon(hP2.homePlanet, hP2.stations, true);
+hP1.stations.forEach((s, idx) => {
+    assert(!isPointInFan(s, finalPolyP2), `P1 station ${idx} is strictly outside P2 territory`);
+});
+hP2.stations.forEach((s, idx) => {
+    assert(!isPointInFan(s, finalPolyP1), `P2 station ${idx} is strictly outside P1 territory`);
+});
+let minOpposingDist = Infinity;
+for (let s1 of hP1.stations) {
+    for (let s2 of hP2.stations) {
+        const d = Math.hypot(s1.x - s2.x, s1.y - s2.y);
+        if (d < minOpposingDist) minOpposingDist = d;
+    }
+}
+assert(minOpposingDist >= 1.35, `Opposing stations maintain minimum clearance (${minOpposingDist.toFixed(2)} >= 1.35)`);
+
 console.log(`\n------------------------------------------------------------`);
 console.log(`  Summary: ${passed} Passed, ${failed} Failed`);
 console.log(`------------------------------------------------------------\n`);
