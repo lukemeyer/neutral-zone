@@ -142,9 +142,8 @@ export function updateCommanderUnits(state, dt) {
                         }
                     }
 
-                    // Add station to network and update layout (density scales cleanly along border)
-                    p.stationCount++;
-                    updateStationLayout(p, { x: ls.targetX, y: ls.targetY });
+                    // Impulse push and pull: new station pushes outward, pulling existing stations in a weighted way
+                    onStationAdded(p, { x: ls.targetX, y: ls.targetY });
                 }
             }
         }
@@ -511,10 +510,8 @@ export function updateCommanderUnits(state, dt) {
                     s.health -= pr.damage;
                     hit = true;
                     if (s.health <= 0) {
-                        // Station destroyed! Organic contraction!
-                        enemy.stations = enemy.stations.filter(st => st !== s);
-                        enemy.stationCount = Math.max(1, enemy.stations.length);
-                        updateStationLayout(enemy);
+                        // Station destroyed! Impulse gap-filling pull
+                        onStationDestroyed(enemy, s);
                     }
                     break;
                 }
@@ -547,20 +544,72 @@ export function updateCommanderUnits(state, dt) {
     }
 }
 
+// Clamps a coordinate to the neutral diagonal treaty seam (y = 0.75 * x)
+export function clampStationToSeam(pt, isP2) {
+    let x = pt.x;
+    let y = pt.y;
+    const buffer = 0.25;
+    if (!isP2) {
+        // P1 must stay in y >= 0.75 * x + buffer
+        const minY = 0.75 * x + buffer;
+        if (y < minY) y = minY;
+    } else {
+        // P2 must stay in y <= 0.75 * x - buffer
+        const maxY = 0.75 * x - buffer;
+        if (y > maxY) y = maxY;
+    }
+    return {
+        x: Math.max(0.5, Math.min(19.5, x)),
+        y: Math.max(0.5, Math.min(14.5, y))
+    };
+}
+
+// Calculates where a newly launched station will push the frontier along angle
+export function calculateLaunchTarget(player, angle) {
+    const isP2 = player.id === 1;
+    const hx = player.homePlanet.x;
+    const hy = player.homePlanet.y;
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+
+    // Find the current frontier reach in direction of angle
+    let maxProj = 1.8; // Minimum baseline distance from HQ
+    if (player.stations && player.stations.length > 0) {
+        player.stations.forEach(s => {
+            const sx = s.targetX !== undefined ? s.targetX : s.x;
+            const sy = s.targetY !== undefined ? s.targetY : s.y;
+            const dx = sx - hx;
+            const dy = sy - hy;
+            const dist = Math.hypot(dx, dy);
+            if (dist > 0.1) {
+                const sAngle = Math.atan2(dy, dx);
+                let diff = Math.abs(sAngle - angle);
+                while (diff > Math.PI) diff = Math.abs(diff - Math.PI * 2);
+                if (diff < Math.PI * 0.35) { // within ~60 degrees
+                    const proj = dx * cosA + dy * sinA;
+                    if (proj > maxProj) {
+                        maxProj = proj;
+                    }
+                }
+            }
+        });
+    }
+
+    // Push outward by 1.25 units past existing stations
+    const targetDist = maxProj + 1.25;
+    const rawX = hx + cosA * targetDist;
+    const rawY = hy + sinA * targetDist;
+
+    return clampStationToSeam({ x: rawX, y: rawY }, isP2);
+}
+
 // Launches a newly constructed station along the HQ trajectory line
 export function launchStation(player, state = null) {
     if (!player.launchingStations) player.launchingStations = [];
     const isP2 = player.id === 1;
     const launchAngle = player.launchAngle !== undefined ? player.launchAngle : (isP2 ? Math.PI * 0.75 : -Math.PI * 0.25);
 
-    // Outer radius for the next station count
-    const nextCount = player.stationCount + 1;
-    const rOuter = nextCount === 1 ? 3.2 : 3.6 + 0.9 * (nextCount - 2);
-
-    // Trajectory flight distance out to the frontier
-    const flightDist = Math.max(2.0, rOuter - 1.2);
-    const targetX = player.homePlanet.x + Math.cos(launchAngle) * flightDist;
-    const targetY = player.homePlanet.y + Math.sin(launchAngle) * flightDist;
+    const targetPos = calculateLaunchTarget(player, launchAngle);
 
     player.launchingStations.push({
         id: (isP2 ? 100 : 0) + player.stationCount,
@@ -568,58 +617,124 @@ export function launchStation(player, state = null) {
         y: player.homePlanet.y,
         startX: player.homePlanet.x,
         startY: player.homePlanet.y,
-        targetX,
-        targetY,
+        targetX: targetPos.x,
+        targetY: targetPos.y,
         angle: launchAngle,
         progress: 0,
         speed: 1.5 // ~0.66s travel time
     });
 }
 
-// Recalculates smooth target radial coordinates for a player's stations
+// Handles physical addition of a new station: pushes frontier out and pulls existing stations
+export function onStationAdded(player, impactPos) {
+    const isP2 = player.id === 1;
+    const cx = isP2 ? 20 : 0;
+    const cy = isP2 ? 0 : 15;
+
+    const clampedNewPos = clampStationToSeam(impactPos, isP2);
+
+    // Pull existing stations in a weighted way: closer stations move more, farther stations move less
+    const pullRadius = 9.0;
+    const maxDisplacement = 0.75;
+
+    if (player.stations) {
+        player.stations.forEach(s => {
+            const curX = s.targetX !== undefined ? s.targetX : s.x;
+            const curY = s.targetY !== undefined ? s.targetY : s.y;
+            const d = Math.hypot(clampedNewPos.x - curX, clampedNewPos.y - curY);
+            if (d < pullRadius && d > 0.01) {
+                const w = Math.pow(1 - d / pullRadius, 2);
+                const moveDist = maxDisplacement * w;
+
+                const dx = (clampedNewPos.x - curX) / d;
+                const dy = (clampedNewPos.y - curY) / d;
+
+                let nx = curX + dx * moveDist;
+                let ny = curY + dy * moveDist;
+
+                const clamped = clampStationToSeam({ x: nx, y: ny }, isP2);
+                s.targetX = Math.round(clamped.x * 1000) / 1000;
+                s.targetY = Math.round(clamped.y * 1000) / 1000;
+            }
+        });
+    } else {
+        player.stations = [];
+    }
+
+    const newStation = {
+        id: (isP2 ? 100 : 0) + player.stations.length,
+        x: clampedNewPos.x,
+        y: clampedNewPos.y,
+        targetX: Math.round(clampedNewPos.x * 1000) / 1000,
+        targetY: Math.round(clampedNewPos.y * 1000) / 1000,
+        health: 250,
+        maxHealth: 250,
+        cooldown: 0,
+        range: 2.5,
+        isPerimeter: true,
+        angle: Math.atan2(clampedNewPos.y - cy, clampedNewPos.x - cx)
+    };
+    player.stations.push(newStation);
+    player.stationCount = player.stations.length;
+}
+
+// Handles physical destruction of a station: remaining stations pull in to fill the gap
+export function onStationDestroyed(player, destroyedStation) {
+    const isP2 = player.id === 1;
+    const deadX = destroyedStation.targetX !== undefined ? destroyedStation.targetX : destroyedStation.x;
+    const deadY = destroyedStation.targetY !== undefined ? destroyedStation.targetY : destroyedStation.y;
+
+    player.stations = player.stations.filter(s => s !== destroyedStation);
+    player.stationCount = Math.max(0, player.stations.length);
+
+    // Remaining stations move in a weighted way to fill the gap: closer stations move more, farther stations move less
+    const fillRadius = 8.0;
+    const maxFillMove = 0.65;
+
+    player.stations.forEach(s => {
+        const curX = s.targetX !== undefined ? s.targetX : s.x;
+        const curY = s.targetY !== undefined ? s.targetY : s.y;
+        const d = Math.hypot(deadX - curX, deadY - curY);
+        if (d < fillRadius && d > 0.01) {
+            const w = Math.pow(1 - d / fillRadius, 2);
+            const moveDist = maxFillMove * w;
+
+            const dx = (deadX - curX) / d;
+            const dy = (deadY - curY) / d;
+
+            let nx = curX + dx * moveDist;
+            let ny = curY + dy * moveDist;
+
+            const clamped = clampStationToSeam({ x: nx, y: ny }, isP2);
+            s.targetX = Math.round(clamped.x * 1000) / 1000;
+            s.targetY = Math.round(clamped.y * 1000) / 1000;
+        }
+    });
+}
+
+// Recalculates or grows a player's stations without modifying settled positions during aiming
 export function updateStationLayout(player, spawnPos = null) {
     const isP2 = player.id === 1;
-    const steer = player.steeringAngle !== undefined ? player.steeringAngle : (player.launchAngle || null);
-    const targetPositions = computeStationPositions(player.homePlanet, player.stationCount, isP2, steer);
-
-    // Sync or grow station list
-    while (player.stations.length < player.stationCount) {
-        const idx = player.stations.length;
-        const newPos = targetPositions[idx] || { x: player.homePlanet.x, y: player.homePlanet.y, isPerimeter: true, angle: 0 };
-        player.stations.push({
+    if (!player.stations || player.stations.length === 0) {
+        const defaultPositions = computeStationPositions(player.homePlanet, player.stationCount, isP2, player.launchAngle);
+        player.stations = defaultPositions.map((pos, idx) => ({
             id: (isP2 ? 100 : 0) + idx,
-            x: spawnPos ? spawnPos.x : player.homePlanet.x, // spawn at impact coordinate or home
-            y: spawnPos ? spawnPos.y : player.homePlanet.y,
-            targetX: newPos.x,
-            targetY: newPos.y,
+            x: pos.x,
+            y: pos.y,
+            targetX: pos.x,
+            targetY: pos.y,
             health: 250,
             maxHealth: 250,
             cooldown: 0,
             range: 2.5,
-            isPerimeter: newPos.isPerimeter,
-            angle: newPos.angle
-        });
+            isPerimeter: pos.isPerimeter,
+            angle: pos.angle
+        }));
+        return;
     }
-
-    // Update targets for all stations with border safety clamping
-    player.stations.forEach((s, idx) => {
-        if (targetPositions[idx]) {
-            let tx = targetPositions[idx].x;
-            let ty = targetPositions[idx].y;
-
-            // Seam buffer clamp: keep P1 below seam and P2 above seam
-            if (!isP2) {
-                const minY = 0.75 * tx + 0.20;
-                if (ty < minY) ty = minY;
-            } else {
-                const maxY = 0.75 * tx - 0.20;
-                if (ty > maxY) ty = maxY;
-            }
-
-            s.targetX = tx;
-            s.targetY = ty;
-            s.isPerimeter = targetPositions[idx].isPerimeter;
-            s.angle = targetPositions[idx].angle;
-        }
-    });
+    while (player.stations.length < player.stationCount) {
+        const defaultAngle = isP2 ? Math.PI * 0.75 : -Math.PI * 0.25;
+        const target = spawnPos || calculateLaunchTarget(player, player.launchAngle !== undefined ? player.launchAngle : defaultAngle);
+        onStationAdded(player, target);
+    }
 }

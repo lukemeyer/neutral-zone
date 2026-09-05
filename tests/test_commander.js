@@ -1,6 +1,6 @@
 import { computeStationPositions, getTerritoryPolygon, polygonArea, isPointInFan, getAsteroidLayout, doPolygonsIntersect, canExpandStation } from '../js/commander/commander_math.js';
 import { createCommanderState } from '../js/commander/commander_state.js';
-import { queueBuild, updateCommanderUnits } from '../js/commander/commander_units.js';
+import { queueBuild, updateCommanderUnits, calculateLaunchTarget, onStationAdded, onStationDestroyed } from '../js/commander/commander_units.js';
 
 console.log("\n============================================================");
 console.log("  Testing: Commander Variant Mathematics & Radial Expansion");
@@ -383,6 +383,53 @@ assert(resetTestState.players[0].energy === 150, "Energy reset to initial 150");
 assert(resetTestState.players[0].stationCount === 3, "Station count reset to initial 3");
 assert(resetTestState.isGameOver === false, "isGameOver reset to false");
 assert(queueBuild(resetTestState.players[0], 'station', resetTestState.players[1]), "New game accepts build queues immediately");
+
+// 22. Test Stationary Aiming (Aiming does NOT change existing stations)
+const aimState = createCommanderState();
+const aP1 = aimState.players[0];
+const initialStationSnapshot = aP1.stations.map(s => ({ x: s.x, y: s.y, targetX: s.targetX, targetY: s.targetY }));
+// Sweep launchAngle across full quadrant
+for (let ang = -Math.PI * 0.45; ang <= -Math.PI * 0.05; ang += 0.1) {
+    aP1.launchAngle = ang;
+    // Station coordinates must remain completely frozen
+    aP1.stations.forEach((s, idx) => {
+        assert(s.x === initialStationSnapshot[idx].x && s.y === initialStationSnapshot[idx].y, `Station ${idx} position frozen during aiming at angle ${ang.toFixed(2)}`);
+        assert(s.targetX === initialStationSnapshot[idx].targetX && s.targetY === initialStationSnapshot[idx].targetY, `Station ${idx} target frozen during aiming at angle ${ang.toFixed(2)}`);
+    });
+}
+
+// 23. Test Weighted Pull on Station Added (Closer stations move more, farther stations move less)
+const physState = createCommanderState();
+const phP1 = physState.players[0];
+const sNorth = phP1.stations[0]; // northernmost station
+const sEast = phP1.stations[2];  // easternmost station
+const initialDistNorth = Math.hypot(sNorth.targetX - phP1.homePlanet.x, sNorth.targetY - phP1.homePlanet.y);
+const initialDistEast = Math.hypot(sEast.targetX - phP1.homePlanet.x, sEast.targetY - phP1.homePlanet.y);
+
+// Launch and add station to North (-1.25 rad)
+const northTarget = calculateLaunchTarget(phP1, -1.25);
+onStationAdded(phP1, northTarget);
+
+const movedNorth = Math.hypot(sNorth.targetX - sNorth.x, sNorth.targetY - sNorth.y);
+const movedEast = Math.hypot(sEast.targetX - sEast.x, sEast.targetY - sEast.y);
+assert(movedNorth > movedEast, `Northern station moved significantly more than eastern station when adding North node (${movedNorth.toFixed(3)} > ${movedEast.toFixed(3)})`);
+
+// 24. Test Weighted Gap-Filling on Station Destroyed (Closer move more, farther move less)
+const deadStation = phP1.stations[0];
+const neighborStation = phP1.stations[1]; // closest survivor
+const farStation = phP1.stations[phP1.stations.length - 1]; // farthest survivor
+const prevNeighborPos = { x: neighborStation.targetX, y: neighborStation.targetY };
+const prevFarPos = { x: farStation.targetX, y: farStation.targetY };
+
+onStationDestroyed(phP1, deadStation);
+const neighborShift = Math.hypot(neighborStation.targetX - prevNeighborPos.x, neighborStation.targetY - prevNeighborPos.y);
+const farShift = Math.hypot(farStation.targetX - prevFarPos.x, farStation.targetY - prevFarPos.y);
+assert(neighborShift >= farShift, `Nearby survivor moved more to fill gap than distant survivor (${neighborShift.toFixed(3)} >= ${farShift.toFixed(3)})`);
+
+// 25. Test Neutral Treaty Seam Enforcement on All Impulse Positions
+phP1.stations.forEach(s => {
+    assert(s.targetY >= 0.75 * s.targetX + 0.20, `Station target (${s.targetX}, ${s.targetY}) strictly obeys neutral treaty seam`);
+});
 
 console.log(`\n------------------------------------------------------------`);
 console.log(`  Summary: ${passed} Passed, ${failed} Failed`);

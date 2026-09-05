@@ -1,4 +1,5 @@
-import { getTerritoryPolygon, computeStationPositions } from './commander_math.js';
+import { getTerritoryPolygon } from './commander_math.js';
+import { calculateLaunchTarget } from './commander_units.js';
 
 export function renderCommanderGame(ctx, canvas, state) {
     const { players, asteroids, projectiles, particles, mapWidth, mapHeight } = state;
@@ -188,11 +189,9 @@ export function renderCommanderGame(ctx, canvas, state) {
         const arrowEndY = p.homePlanet.y + Math.sin(launchAngle) * trajLen;
         const arrowScreen = toScreen(arrowEndX, arrowEndY);
 
-        // Aiming guide ray extending outward toward the frontier
-        const guideDist = Math.max(3.2, 3.6 + 0.9 * (p.stationCount - 1));
-        const guideTargetX = p.homePlanet.x + Math.cos(launchAngle) * guideDist;
-        const guideTargetY = p.homePlanet.y + Math.sin(launchAngle) * guideDist;
-        const guideScreen = toScreen(guideTargetX, guideTargetY);
+        // Aiming guide ray extending outward toward the prospective frontier impact point
+        const targetPos = calculateLaunchTarget(p, launchAngle);
+        const guideScreen = toScreen(targetPos.x, targetPos.y);
 
         ctx.save();
         ctx.setLineDash([3, 5]);
@@ -203,16 +202,27 @@ export function renderCommanderGame(ctx, canvas, state) {
         ctx.lineTo(guideScreen.x, guideScreen.y);
         ctx.stroke();
 
-        // Subtle frontier impact reticle ring
+        // Frontier impact reticle ring
         ctx.beginPath();
         ctx.arc(guideScreen.x, guideScreen.y, 6, 0, Math.PI * 2);
-        ctx.strokeStyle = p.accentColor + 'aa';
+        ctx.strokeStyle = p.accentColor + 'cc';
         ctx.lineWidth = 1.8;
         ctx.stroke();
 
-        // Steered Frontier Shape Preview Contour
-        const previewStations = computeStationPositions(p.homePlanet, p.stationCount + 1, p.id === 1, launchAngle);
-        const previewPoly = getTerritoryPolygon(p.homePlanet, previewStations, p.id === 1);
+        // Steered Frontier Shape Preview Contour (without moving existing stations)
+        const isP2 = p.id === 1;
+        const cx = isP2 ? 20 : 0;
+        const cy = isP2 ? 0 : 15;
+        const previewStations = [
+            ...p.stations,
+            {
+                x: targetPos.x,
+                y: targetPos.y,
+                isPerimeter: true,
+                angle: Math.atan2(targetPos.y - cy, targetPos.x - cx)
+            }
+        ];
+        const previewPoly = getTerritoryPolygon(p.homePlanet, previewStations, isP2);
         if (previewPoly.length >= 3) {
             const previewScreenPts = previewPoly.map(pt => toScreen(pt.x, pt.y));
             ctx.beginPath();

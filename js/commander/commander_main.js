@@ -94,12 +94,10 @@ function setupUIHandlers() {
         if (e.code === 'KeyQ' || e.code === 'ArrowLeft') {
             p1.launchAngle = Math.max(-Math.PI * 0.47, p1.launchAngle - 0.05);
             p1.steeringAngle = p1.launchAngle;
-            updateStationLayout(p1);
         }
         if (e.code === 'KeyE' || e.code === 'ArrowRight') {
             p1.launchAngle = Math.min(-Math.PI * 0.03, p1.launchAngle + 0.05);
             p1.steeringAngle = p1.launchAngle;
-            updateStationLayout(p1);
         }
         if (e.code === 'Space') {
             state.isPaused = !state.isPaused;
@@ -130,7 +128,6 @@ function setupUIHandlers() {
         if (angle > -Math.PI * 0.95 && angle < Math.PI * 0.35) {
             p1.launchAngle = Math.max(minA, Math.min(maxA, angle));
             p1.steeringAngle = p1.launchAngle;
-            updateStationLayout(p1);
         }
     }
 
