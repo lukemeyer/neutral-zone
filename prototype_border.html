@@ -217,6 +217,40 @@
             margin-top: 8px;
         }
 
+        .btn-segmented {
+            display: flex;
+            background: #21262d;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 2px;
+            gap: 2px;
+            margin-bottom: 8px;
+        }
+
+        .btn-segmented button {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 6px 0;
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-segmented button:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .btn-segmented button.active {
+            background: #1f6feb;
+            color: #ffffff;
+            box-shadow: 0 0 6px rgba(88, 166, 255, 0.5);
+        }
+
         button.btn {
             background: #21262d;
             border: 1px solid var(--border-color);
@@ -402,6 +436,31 @@
 
                 <div class="control-group">
                     <div class="control-label-row">
+                        <span class="name">Initial Value Spread</span>
+                        <span class="val" id="lbl-initial-spread">3 dots</span>
+                    </div>
+                    <div class="btn-segmented" id="group-initial-spread">
+                        <button type="button" class="core-btn" data-dots="1">1</button>
+                        <button type="button" class="core-btn active" data-dots="3">3</button>
+                        <button type="button" class="core-btn" data-dots="5">5</button>
+                        <button type="button" class="core-btn" data-dots="7">7</button>
+                    </div>
+                    <input type="range" id="slider-initial-spread" min="1" max="11" value="3" step="2">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label-row">
+                        <span class="name">Spread Profile</span>
+                    </div>
+                    <select id="select-spread-mode">
+                        <option value="plateau" selected>Full Crest (All K dots move together)</option>
+                        <option value="rounded">Rounded Crest (Smooth arc cap across K dots)</option>
+                        <option value="distributed">Distributed (Shared across K dots)</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label-row">
                         <span class="name">Neighbor Strength</span>
                         <span class="val" id="lbl-neighbor-strength">0.70</span>
                     </div>
@@ -565,6 +624,8 @@
 
             // Interactive Controls
             tapDistance: 40,
+            initialSpreadDots: 3, // 1, 3, 5, 7 dots to spread the initial value across
+            spreadMode: 'plateau', // 'plateau' (full crest), 'rounded', 'distributed'
             neighborStrength: 0.70,
             neighborSpread: 18,
             falloffCurve: 'gaussian',
@@ -697,24 +758,63 @@
             }
         }
 
+        // --- Tap Weight Formulation (Initial Spread across K dots + Neighbor Falloff) ---
+        function calculateTapWeight(deltaDeg, initialDots, spreadMode, neighborSpread, neighborStrength, falloffCurve) {
+            const rCore = Math.floor((initialDots - 1) / 2);
+
+            if (spreadMode === 'plateau') {
+                // Full Crest: All K dots receive full initial value (1.0), falloff applies outside the K dots
+                if (deltaDeg <= rCore) {
+                    return 1.0;
+                }
+                const deltaOut = deltaDeg - rCore;
+                const inf = calculateInfluence(deltaOut, neighborSpread, falloffCurve);
+                return inf * neighborStrength;
+            } else if (spreadMode === 'rounded') {
+                // Rounded Crest: Smooth cosine curve across the K dots, meeting falloff at core boundary
+                if (deltaDeg <= rCore) {
+                    if (rCore === 0) return 1.0;
+                    const t = deltaDeg / (rCore + 1);
+                    return Math.cos(Math.PI * 0.25 * t);
+                }
+                const deltaOut = deltaDeg - rCore;
+                const edgeVal = Math.cos(Math.PI * 0.25 * (rCore / (rCore + 1)));
+                const inf = calculateInfluence(deltaOut, neighborSpread, falloffCurve);
+                return edgeVal * inf * neighborStrength;
+            } else if (spreadMode === 'distributed') {
+                // Distributed: Initial value divided/shared across K dots, then neighbor falloff
+                const baseShare = 1.0 / Math.max(1, initialDots);
+                if (deltaDeg <= rCore) {
+                    return baseShare;
+                }
+                const deltaOut = deltaDeg - rCore;
+                const inf = calculateInfluence(deltaOut, neighborSpread, falloffCurve);
+                return baseShare * inf * neighborStrength;
+            }
+            return 1.0;
+        }
+
         // --- Tap Interaction ---
         function tapDegree(centerDeg, pushAmount = state.tapDistance, isPull = false) {
             if (centerDeg < 0 || centerDeg >= state.numDegrees) return;
 
-            const spread = state.neighborSpread;
-            const strength = state.neighborStrength;
-            const curve = state.falloffCurve;
+            const rCore = Math.floor((state.initialSpreadDots - 1) / 2);
+            const totalRadius = rCore + state.neighborSpread;
             const signedPush = isPull ? -pushAmount : pushAmount;
 
-            const minDeg = Math.max(0, Math.floor(centerDeg - spread));
-            const maxDeg = Math.min(state.numDegrees - 1, Math.ceil(centerDeg + spread));
+            const minDeg = Math.max(0, Math.floor(centerDeg - totalRadius));
+            const maxDeg = Math.min(state.numDegrees - 1, Math.ceil(centerDeg + totalRadius));
 
             for (let i = minDeg; i <= maxDeg; i++) {
                 const deltaDeg = Math.abs(i - centerDeg);
-                const influence = calculateInfluence(deltaDeg, spread, curve);
-
-                // Seamless blend: at strength=1, peak is continuous with neighbors; at strength=0, only tapped dot moves
-                const weight = (1.0 - strength) * (i === centerDeg ? 1.0 : 0.0) + strength * influence;
+                const weight = calculateTapWeight(
+                    deltaDeg,
+                    state.initialSpreadDots,
+                    state.spreadMode,
+                    state.neighborSpread,
+                    state.neighborStrength,
+                    state.falloffCurve
+                );
                 state.distances[i] = Math.max(30, state.distances[i] + signedPush * weight);
             }
 
@@ -873,15 +973,23 @@
                 const strength = state.neighborStrength;
                 const curve = state.falloffCurve;
                 const push = state.tapDistance;
+                const rCore = Math.floor((state.initialSpreadDots - 1) / 2);
+                const totalRadius = rCore + state.neighborSpread;
 
-                const minDeg = Math.max(0, Math.floor(centerDeg - spread));
-                const maxDeg = Math.min(state.numDegrees - 1, Math.ceil(centerDeg + spread));
+                const minDeg = Math.max(0, Math.floor(centerDeg - totalRadius));
+                const maxDeg = Math.min(state.numDegrees - 1, Math.ceil(centerDeg + totalRadius));
 
                 ctx.beginPath();
                 for (let i = minDeg; i <= maxDeg; i++) {
                     const deltaDeg = Math.abs(i - centerDeg);
-                    const influence = calculateInfluence(deltaDeg, spread, curve);
-                    const weight = (1.0 - strength) * (i === centerDeg ? 1.0 : 0.0) + strength * influence;
+                    const weight = calculateTapWeight(
+                        deltaDeg,
+                        state.initialSpreadDots,
+                        state.spreadMode,
+                        state.neighborSpread,
+                        state.neighborStrength,
+                        state.falloffCurve
+                    );
                     const deltaR = push * weight;
                     const previewR = state.distances[i] + deltaR;
                     const pt = getDotPosition(i, previewR);
@@ -1011,10 +1119,13 @@
             document.getElementById('insp-dist').innerText = `${dist.toFixed(1)}`;
             document.getElementById('insp-pos').innerText = `(${Math.round(pt.x)}, ${Math.round(pt.y)})`;
 
+            const rCore = Math.floor((state.initialSpreadDots - 1) / 2);
+            const coreMin = Math.max(0, deg - rCore);
+            const coreMax = Math.min(state.numDegrees - 1, deg + rCore);
             const spread = state.neighborSpread;
-            const minDeg = Math.max(0, deg - spread);
-            const maxDeg = Math.min(state.numDegrees - 1, deg + spread);
-            document.getElementById('insp-window').innerText = `[${minDeg}° .. ${maxDeg}°] (±${spread}°)`;
+            const minDeg = Math.max(0, deg - rCore - spread);
+            const maxDeg = Math.min(state.numDegrees - 1, deg + rCore + spread);
+            document.getElementById('insp-window').innerText = `Core: [${coreMin}°..${coreMax}°] (${state.initialSpreadDots} dots) | Total: [${minDeg}°..${maxDeg}°]`;
 
             render();
         }
@@ -1095,6 +1206,41 @@
         sliderTapDist.addEventListener('input', (e) => {
             state.tapDistance = parseFloat(e.target.value);
             lblTapDist.innerText = `${state.tapDistance} px`;
+            render();
+        });
+
+        // Initial Spread Controls
+        const sliderInitialSpread = document.getElementById('slider-initial-spread');
+        const lblInitialSpread = document.getElementById('lbl-initial-spread');
+        const coreButtons = document.querySelectorAll('.core-btn');
+
+        function setInitialSpread(dots) {
+            state.initialSpreadDots = dots;
+            sliderInitialSpread.value = dots;
+            lblInitialSpread.innerText = `${dots} dot${dots === 1 ? '' : 's'}`;
+            coreButtons.forEach(btn => {
+                if (parseInt(btn.dataset.dots, 10) === dots) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            render();
+        }
+
+        coreButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                setInitialSpread(parseInt(btn.dataset.dots, 10));
+            });
+        });
+
+        sliderInitialSpread.addEventListener('input', (e) => {
+            setInitialSpread(parseInt(e.target.value, 10));
+        });
+
+        const selectSpreadMode = document.getElementById('select-spread-mode');
+        selectSpreadMode.addEventListener('change', (e) => {
+            state.spreadMode = e.target.value;
             render();
         });
 
@@ -1187,11 +1333,11 @@
 
         // Presets Handlers
         const presets = {
-            'organic': { tap: 40, strength: 0.70, spread: 18, curve: 'gaussian', smooth: 1 },
-            'broad': { tap: 35, strength: 0.90, spread: 35, curve: 'cosine', smooth: 2 },
-            'narrow': { tap: 50, strength: 0.35, spread: 8, curve: 'gaussian', smooth: 0 },
-            'isolated': { tap: 60, strength: 0.00, spread: 1, curve: 'linear', smooth: 0 },
-            'super-smooth': { tap: 30, strength: 0.85, spread: 28, curve: 'cosine', smooth: 3 }
+            'organic': { tap: 40, core: 3, strength: 0.75, spread: 18, curve: 'gaussian', smooth: 1, mode: 'plateau' },
+            'broad': { tap: 35, core: 5, strength: 0.85, spread: 30, curve: 'cosine', smooth: 2, mode: 'plateau' },
+            'narrow': { tap: 45, core: 1, strength: 0.40, spread: 8, curve: 'gaussian', smooth: 0, mode: 'plateau' },
+            'isolated': { tap: 50, core: 1, strength: 0.00, spread: 1, curve: 'linear', smooth: 0, mode: 'plateau' },
+            'super-smooth': { tap: 35, core: 7, strength: 0.85, spread: 28, curve: 'cosine', smooth: 3, mode: 'plateau' }
         };
 
         document.querySelectorAll('.chip[data-preset]').forEach(chip => {
@@ -1204,9 +1350,12 @@
                 state.neighborSpread = p.spread;
                 state.falloffCurve = p.curve;
                 state.smoothingPasses = p.smooth;
+                state.spreadMode = p.mode || 'plateau';
 
                 sliderTapDist.value = p.tap;
                 lblTapDist.innerText = `${p.tap} px`;
+
+                setInitialSpread(p.core || 1);
 
                 sliderNeighborStrength.value = p.strength;
                 lblNeighborStrength.innerText = p.strength.toFixed(2);
@@ -1215,6 +1364,7 @@
                 lblNeighborSpread.innerText = `±${p.spread}°`;
 
                 selectFalloff.value = p.curve;
+                selectSpreadMode.value = state.spreadMode;
 
                 sliderSmoothing.value = p.smooth;
                 lblSmoothing.innerText = `${p.smooth} pass${p.smooth === 1 ? '' : 'es'}`;
@@ -1239,8 +1389,15 @@
         resizeCanvas();
 
         // Support URL parameters for automated testing and visual captures
-        // e.g.: ?taps=45,45,20&strength=0.7&spread=18&hover=45
+        // e.g.: ?taps=45,45,20&core=5&strength=0.7&spread=18&hover=45
         const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('core')) {
+            setInitialSpread(parseInt(urlParams.get('core'), 10));
+        }
+        if (urlParams.has('spreadMode')) {
+            state.spreadMode = urlParams.get('spreadMode');
+            selectSpreadMode.value = state.spreadMode;
+        }
         if (urlParams.has('strength')) {
             state.neighborStrength = parseFloat(urlParams.get('strength'));
             sliderNeighborStrength.value = state.neighborStrength;
@@ -1278,10 +1435,14 @@
             document.getElementById('insp-deg').innerText = `${state.hoveredDegree}`;
             document.getElementById('insp-dist').innerText = `${dist.toFixed(1)}`;
             document.getElementById('insp-pos').innerText = `(${Math.round(pt.x)}, ${Math.round(pt.y)})`;
+
+            const rCore = Math.floor((state.initialSpreadDots - 1) / 2);
+            const coreMin = Math.max(0, state.hoveredDegree - rCore);
+            const coreMax = Math.min(state.numDegrees - 1, state.hoveredDegree + rCore);
             const spread = state.neighborSpread;
-            const minDeg = Math.max(0, state.hoveredDegree - spread);
-            const maxDeg = Math.min(state.numDegrees - 1, state.hoveredDegree + spread);
-            document.getElementById('insp-window').innerText = `[${minDeg}° .. ${maxDeg}°] (±${spread}°)`;
+            const minDeg = Math.max(0, state.hoveredDegree - rCore - spread);
+            const maxDeg = Math.min(state.numDegrees - 1, state.hoveredDegree + rCore + spread);
+            document.getElementById('insp-window').innerText = `Core: [${coreMin}°..${coreMax}°] (${state.initialSpreadDots} dots) | Total: [${minDeg}°..${maxDeg}°]`;
         }
         render();
     </script>
