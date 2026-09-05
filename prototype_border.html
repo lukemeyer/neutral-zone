@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Border Mechanics Prototype | Neutral Zone</title>
+    <style>
+        :root {
+            --bg-color: #0b0e14;
+            --panel-bg: rgba(22, 27, 34, 0.94);
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent-blue: #58a6ff;
+            --accent-cyan: #39c5cf;
+            --accent-green: #3fb950;
+            --accent-orange: #d29922;
+            --accent-red: #f85149;
+            --ray-color: rgba(56, 139, 253, 0.18);
+            --line-color: #58a6ff;
+            --dot-color: #79c0ff;
+            --dot-hover: #ffffff;
+            --hq-color: #238636;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Header */
+        header {
+            height: 48px;
+            background: #161b22;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            user-select: none;
+            z-index: 10;
+        }
+
+        .header-title {
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-title .tag {
+            font-size: 11px;
+            font-weight: 500;
+            background: rgba(56, 139, 253, 0.15);
+            color: var(--accent-blue);
+            border: 1px solid rgba(56, 139, 253, 0.4);
+            padding: 2px 7px;
+            border-radius: 12px;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            color: var(--text-secondary);
+        }
+
+        .header-stats span b {
+            color: var(--text-primary);
+        }
+
+        /* Main Workspace Layout */
+        #workspace {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Canvas Viewport */
+        #viewport {
+            flex: 1;
+            position: relative;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Floating Controls Sidebar */
+        #controls-sidebar {
+            width: 340px;
+            height: 100%;
+            background: var(--panel-bg);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            user-select: none;
+            z-index: 20;
+            backdrop-filter: blur(12px);
+        }
+
+        .sidebar-section {
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sidebar-section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .control-group {
+            margin-bottom: 14px;
+        }
+
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+
+        .control-label-row span.name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .control-label-row span.val {
+            font-family: ui-monospace, monospace;
+            font-weight: 600;
+            color: var(--accent-blue);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: #21262d;
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            border: 2px solid #ffffff;
+            cursor: pointer;
+            box-shadow: 0 0 6px rgba(88, 166, 255, 0.6);
+            transition: transform 0.1s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        select {
+            width: 100%;
+            background: #21262d;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        select:focus {
+            border-color: var(--accent-blue);
+        }
+
+        /* Buttons */
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        button.btn {
+            background: #21262d;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+
+        button.btn:hover:not(:disabled) {
+            background: #30363d;
+            border-color: #8b949e;
+        }
+
+        button.btn.primary {
+            background: #1f6feb;
+            border-color: var(--accent-blue);
+            color: #ffffff;
+        }
+
+        button.btn.primary:hover {
+            background: #388bfd;
+        }
+
+        button.btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Checkboxes */
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+
+        .toggle-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .toggle-row input[type="checkbox"] {
+            accent-color: var(--accent-blue);
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
+        }
+
+        /* Preset Chips */
+        .chip-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .chip {
+            background: #21262d;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 11px;
+            padding: 4px 9px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .chip:hover {
+            color: var(--text-primary);
+            border-color: var(--accent-blue);
+            background: rgba(88, 166, 255, 0.1);
+        }
+
+        /* Inspector / Tooltip */
+        #hud-inspector {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: rgba(22, 27, 34, 0.88);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+            pointer-events: none;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        #hud-inspector span.highlight {
+            color: var(--accent-blue);
+            font-weight: bold;
+        }
+
+        #hud-inspector span.coord {
+            color: #79c0ff;
+        }
+
+        /* Instructions Banner */
+        #hint-banner {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            background: rgba(22, 27, 34, 0.88);
+            border: 1px solid rgba(88, 166, 255, 0.3);
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 12px;
+            color: var(--text-primary);
+            pointer-events: none;
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #hint-banner .key {
+            background: #21262d;
+            border: 1px solid var(--border-color);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-family: ui-monospace, monospace;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-title">
+            <span>⭐</span>
+            <span>Border Mechanics Prototype</span>
+            <span class="tag">Isolated Lab</span>
+        </div>
+        <div class="header-stats">
+            <span>HQ: <b id="stat-hq">Bottom-Left (80, H-80)</b></span>
+            <span>Degrees: <b>0° to 90° (91 rays)</b></span>
+            <span>Max Turn: <b id="stat-max-turn">0.00°</b></span>
+            <span>Avg Radius: <b id="stat-avg-radius">280.0 px</b></span>
+        </div>
+    </header>
+
+    <div id="workspace">
+        <div id="viewport">
+            <canvas id="prototype-canvas"></canvas>
+
+            <div id="hud-inspector">
+                <div>Hover: <span id="insp-deg" class="highlight">--</span>° | Dist from HQ: <span id="insp-dist" class="highlight">--</span> px</div>
+                <div>Position: <span id="insp-pos" class="coord">(--, --)</span></div>
+                <div>Influence Window: <span id="insp-window">--</span></div>
+            </div>
+
+            <div id="hint-banner">
+                <span>👉 <b>Tap or drag</b> on any dot to expand the border outward. Use controls to tune tap distance & neighbor propagation.</span>
+            </div>
+        </div>
+
+        <aside id="controls-sidebar">
+            <!-- Tap & Distance Controls -->
+            <div class="sidebar-section">
+                <div class="section-title">
+                    <span>Tap Dynamics</span>
+                    <span style="color:var(--accent-blue)">Primary</span>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label-row">
+                        <span class="name">Tap Distance (ΔR)</span>
+                        <span class="val" id="lbl-tap-dist">40 px</span>
+                    </div>
+                    <input type="range" id="slider-tap-dist" min="5" max="150" value="40" step="1">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label-row">
+                        <span class="name">Neighbor Strength</span>
+                        <span class="val" id="lbl-neighbor-strength">0.70</span>
+                    </div>
+                    <input type="range" id="slider-neighbor-strength" min="0.0" max="1.0" value="0.70" step="0.01">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label-row">
+                        <span class="name">Neighbor Spread</span>
+                        <span class="val" id="lbl-neighbor-spread">±18°</span>
+                    </div>
+                    <input type="range" id="slider-neighbor-spread" min="1" max="45" value="18" step="1">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label-row">
+                        <span class="name">Falloff Curve</span>
+                    </div>
+                    <select id="select-falloff">
+                        <option value="gaussian" selected>Gaussian (Bell curve)</option>
+                        <option value="cosine">Cosine / Hann Window</option>
+                        <option value="linear">Linear Triangular</option>
+                        <option value="smoothstep">Hermite / Smoothstep</option>
+                        <option value="exponential">Exponential Decay</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Smoothing & Filtering -->
+            <div class="sidebar-section">
+                <div class="section-title">
+                    <span>Curvature & Smoothing</span>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label-row">
+                        <span class="name">Post-Tap Smoothing Passes</span>
+                        <span class="val" id="lbl-smoothing">1 pass</span>
+                    </div>
+                    <input type="range" id="slider-smoothing" min="0" max="5" value="1" step="1">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label-row">
+                        <span class="name">Laplacian Weight (λ)</span>
+                        <span class="val" id="lbl-laplacian-weight">0.18</span>
+                    </div>
+                    <input type="range" id="slider-laplacian-weight" min="0.05" max="0.45" value="0.18" step="0.01">
+                </div>
+
+                <div class="control-group">
+                    <button class="btn" id="btn-apply-smoothing-now" style="width: 100%; margin-top: 4px;">
+                        <span>✨ Smooth Border Now</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Base Geometry -->
+            <div class="sidebar-section">
+                <div class="section-title">
+                    <span>Base Geometry</span>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label-row">
+                        <span class="name">Initial Arc Radius</span>
+                        <span class="val" id="lbl-init-radius">280 px</span>
+                    </div>
+                    <input type="range" id="slider-init-radius" min="100" max="500" value="280" step="5">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label-row">
+                        <span class="name">HQ Corner Offset</span>
+                        <span class="val" id="lbl-hq-offset">80 px</span>
+                    </div>
+                    <input type="range" id="slider-hq-offset" min="30" max="180" value="80" step="5">
+                </div>
+            </div>
+
+            <!-- Presets -->
+            <div class="sidebar-section">
+                <div class="section-title">
+                    <span>Quick Presets</span>
+                </div>
+                <div class="chip-container">
+                    <span class="chip" data-preset="organic">Organic Swell</span>
+                    <span class="chip" data-preset="broad">Broad Arc Growth</span>
+                    <span class="chip" data-preset="narrow">Focused Push</span>
+                    <span class="chip" data-preset="isolated">Single Dot Only</span>
+                    <span class="chip" data-preset="super-smooth">Super Smooth</span>
+                </div>
+            </div>
+
+            <!-- Visual Toggles -->
+            <div class="sidebar-section">
+                <div class="section-title">
+                    <span>Display Elements</span>
+                </div>
+
+                <label class="toggle-row">
+                    <input type="checkbox" id="toggle-rays" checked>
+                    <span>Show 91 Radial Rays</span>
+                </label>
+
+                <label class="toggle-row">
+                    <input type="checkbox" id="toggle-dots" checked>
+                    <span>Show Ray End Dots</span>
+                </label>
+
+                <label class="toggle-row">
+                    <input type="checkbox" id="toggle-lines" checked>
+                    <span>Show Neighbor Straight Lines</span>
+                </label>
+
+                <label class="toggle-row">
+                    <input type="checkbox" id="toggle-fill" checked>
+                    <span>Show Shaded Territory Fill</span>
+                </label>
+
+                <label class="toggle-row">
+                    <input type="checkbox" id="toggle-preview" checked>
+                    <span>Show Influence Falloff Preview</span>
+                </label>
+
+                <label class="toggle-row">
+                    <input type="checkbox" id="toggle-degree-labels">
+                    <span>Show Degree Numbers along Arc</span>
+                </label>
+            </div>
+
+            <!-- Actions: Reset / Undo / Redo -->
+            <div class="sidebar-section">
+                <div class="section-title">
+                    <span>Actions</span>
+                </div>
+
+                <div class="btn-grid">
+                    <button class="btn" id="btn-undo" title="Undo (Cmd+Z)">↩️ Undo</button>
+                    <button class="btn" id="btn-redo" title="Redo (Cmd+Shift+Z)">↪️ Redo</button>
+                </div>
+
+                <button class="btn primary" id="btn-reset" style="width:100%; margin-top: 8px;">
+                    <span>🔄 Reset to Initial Arc</span>
+                </button>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        // --- State Initialization ---
+        const canvas = document.getElementById('prototype-canvas');
+        const ctx = canvas.getContext('2d');
+
+        const state = {
+            numDegrees: 91, // 0..90 degrees in bottom-left quadrant
+            distances: new Float64Array(91), // radius at each degree (0 = +X / right, 90 = -Y / up)
+            initialRadius: 280,
+            hqOffset: 80,
+            hq: { x: 80, y: 0 }, // calculated in resizeCanvas
+
+            // Interactive Controls
+            tapDistance: 40,
+            neighborStrength: 0.70,
+            neighborSpread: 18,
+            falloffCurve: 'gaussian',
+            smoothingPasses: 1,
+            laplacianWeight: 0.18,
+
+            // Display options
+            showRays: true,
+            showDots: true,
+            showLines: true,
+            showFill: true,
+            showPreview: true,
+            showDegreeLabels: false,
+
+            // Interaction tracking
+            hoveredDegree: -1,
+            isDragging: false,
+            lastInteractedDegree: -1,
+
+            // History for Undo/Redo
+            history: [],
+            historyIndex: -1
+        };
+
+        // Initialize distances array to circular arc
+        function resetDistances(radius = state.initialRadius) {
+            for (let i = 0; i < state.numDegrees; i++) {
+                state.distances[i] = radius;
+            }
+            saveHistorySnapshot();
+        }
+
+        // Save history snapshot for Undo/Redo
+        function saveHistorySnapshot() {
+            // Truncate redo tree if we branched
+            if (state.historyIndex < state.history.length - 1) {
+                state.history = state.history.slice(0, state.historyIndex + 1);
+            }
+            state.history.push(new Float64Array(state.distances));
+            state.historyIndex = state.history.length - 1;
+            updateUndoRedoUI();
+        }
+
+        function undo() {
+            if (state.historyIndex > 0) {
+                state.historyIndex--;
+                state.distances.set(state.history[state.historyIndex]);
+                updateUndoRedoUI();
+                render();
+            }
+        }
+
+        function redo() {
+            if (state.historyIndex < state.history.length - 1) {
+                state.historyIndex++;
+                state.distances.set(state.history[state.historyIndex]);
+                updateUndoRedoUI();
+                render();
+            }
+        }
+
+        function updateUndoRedoUI() {
+            document.getElementById('btn-undo').disabled = state.historyIndex <= 0;
+            document.getElementById('btn-redo').disabled = state.historyIndex >= state.history.length - 1;
+        }
+
+        // --- Angle & Coordinate Math ---
+        // Angle convention:
+        // deg 0  = 0 rad = directly East (along horizontal right wall)
+        // deg 90 = -PI/2 rad = directly North (along vertical left wall)
+        function degreeToAngleRad(deg) {
+            return - (deg / 90.0) * (Math.PI * 0.5);
+        }
+
+        function getDotPosition(deg, r = state.distances[deg]) {
+            const rad = degreeToAngleRad(deg);
+            return {
+                x: state.hq.x + r * Math.cos(rad),
+                y: state.hq.y + r * Math.sin(rad)
+            };
+        }
+
+        // --- Falloff Formulation ---
+        function calculateInfluence(deltaDeg, spread, curveType) {
+            if (deltaDeg === 0) return 1.0;
+            if (deltaDeg > spread) return 0.0;
+
+            const norm = deltaDeg / spread; // 0..1
+
+            switch (curveType) {
+                case 'gaussian': {
+                    const sigma = spread / 2.5;
+                    return Math.exp(-0.5 * Math.pow(deltaDeg / sigma, 2));
+                }
+                case 'cosine': {
+                    return 0.5 * (1.0 + Math.cos(Math.PI * norm));
+                }
+                case 'linear': {
+                    return Math.max(0.0, 1.0 - norm);
+                }
+                case 'smoothstep': {
+                    const x = norm;
+                    return 1.0 - (3 * x * x - 2 * x * x * x);
+                }
+                case 'exponential': {
+                    return Math.exp(-3.0 * norm);
+                }
+                default:
+                    return Math.max(0.0, 1.0 - norm);
+            }
+        }
+
+        // --- Laplacian Smoothing ---
+        function applyLaplacianSmoothing(array, weight = state.laplacianWeight, iterations = state.smoothingPasses) {
+            const n = array.length;
+            let current = new Float64Array(array);
+
+            for (let it = 0; it < iterations; it++) {
+                const next = new Float64Array(n);
+                for (let i = 0; i < n; i++) {
+                    const prev = i > 0 ? current[i - 1] : current[i];
+                    const succ = i < n - 1 ? current[i + 1] : current[i];
+                    next[i] = current[i] * (1.0 - 2.0 * weight) + (prev + succ) * weight;
+                }
+                current = next;
+            }
+
+            for (let i = 0; i < n; i++) {
+                array[i] = current[i];
+            }
+        }
+
+        // --- Tap Interaction ---
+        function tapDegree(centerDeg, pushAmount = state.tapDistance, isPull = false) {
+            if (centerDeg < 0 || centerDeg >= state.numDegrees) return;
+
+            const spread = state.neighborSpread;
+            const strength = state.neighborStrength;
+            const curve = state.falloffCurve;
+            const signedPush = isPull ? -pushAmount : pushAmount;
+
+            const minDeg = Math.max(0, Math.floor(centerDeg - spread));
+            const maxDeg = Math.min(state.numDegrees - 1, Math.ceil(centerDeg + spread));
+
+            for (let i = minDeg; i <= maxDeg; i++) {
+                const deltaDeg = Math.abs(i - centerDeg);
+                const influence = calculateInfluence(deltaDeg, spread, curve);
+
+                // Seamless blend: at strength=1, peak is continuous with neighbors; at strength=0, only tapped dot moves
+                const weight = (1.0 - strength) * (i === centerDeg ? 1.0 : 0.0) + strength * influence;
+                state.distances[i] = Math.max(30, state.distances[i] + signedPush * weight);
+            }
+
+            if (state.smoothingPasses > 0) {
+                applyLaplacianSmoothing(state.distances, state.laplacianWeight, state.smoothingPasses);
+            }
+
+            saveHistorySnapshot();
+            render();
+        }
+
+        // --- Canvas Resizing ---
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.resetTransform ? ctx.resetTransform() : ctx.setTransform(1,0,0,1,0,0);
+            ctx.scale(dpr, dpr);
+
+            state.hq.x = state.hqOffset;
+            state.hq.y = rect.height - state.hqOffset;
+
+            document.getElementById('stat-hq').innerText = `Bottom-Left (${state.hq.x}, ${Math.round(state.hq.y)})`;
+            render();
+        }
+
+        // --- Curvature and Statistics Calculation ---
+        function updateStats() {
+            let sumRadius = 0;
+            const pts = [];
+
+            for (let i = 0; i < state.numDegrees; i++) {
+                sumRadius += state.distances[i];
+                pts.push(getDotPosition(i));
+            }
+
+            const avgRadius = sumRadius / state.numDegrees;
+            document.getElementById('stat-avg-radius').innerText = `${avgRadius.toFixed(1)} px`;
+
+            let maxTurn = 0;
+            for (let i = 1; i < pts.length - 1; i++) {
+                const v1 = { x: pts[i].x - pts[i - 1].x, y: pts[i].y - pts[i - 1].y };
+                const v2 = { x: pts[i + 1].x - pts[i].x, y: pts[i + 1].y - pts[i].y };
+                const dot = v1.x * v2.x + v1.y * v2.y;
+                const mag1 = Math.hypot(v1.x, v1.y);
+                const mag2 = Math.hypot(v2.x, v2.y);
+                if (mag1 > 0.001 && mag2 > 0.001) {
+                    const cosTheta = Math.max(-1, Math.min(1, dot / (mag1 * mag2)));
+                    const angleDeg = Math.acos(cosTheta) * (180.0 / Math.PI);
+                    if (angleDeg > maxTurn) maxTurn = angleDeg;
+                }
+            }
+
+            const turnEl = document.getElementById('stat-max-turn');
+            turnEl.innerText = `${maxTurn.toFixed(2)}°`;
+            if (maxTurn > 10) {
+                turnEl.style.color = 'var(--accent-orange)';
+            } else if (maxTurn > 20) {
+                turnEl.style.color = 'var(--accent-red)';
+            } else {
+                turnEl.style.color = 'var(--accent-green)';
+            }
+        }
+
+        // --- Rendering Routine ---
+        function render() {
+            const rect = canvas.getBoundingClientRect();
+            const w = rect.width;
+            const h = rect.height;
+
+            ctx.clearRect(0, 0, w, h);
+
+            const hx = state.hq.x;
+            const hy = state.hq.y;
+
+            // 1. Draw Concentric Grid Reference Arcs
+            ctx.save();
+            ctx.strokeStyle = 'rgba(48, 54, 61, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 6]);
+
+            const maxR = Math.max(...state.distances) + 60;
+            for (let r = 100; r <= maxR; r += 100) {
+                ctx.beginPath();
+                ctx.arc(hx, hy, r, -Math.PI * 0.5, 0, false);
+                ctx.stroke();
+
+                ctx.fillStyle = 'rgba(139, 148, 158, 0.4)';
+                ctx.font = '10px ui-monospace, monospace';
+                ctx.fillText(`${r}px`, hx + r + 4, hy - 4);
+            }
+
+            // Quadrant Axes
+            ctx.setLineDash([]);
+            ctx.strokeStyle = '#30363d';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(hx, hy);
+            ctx.lineTo(hx + maxR + 80, hy);
+            ctx.moveTo(hx, hy);
+            ctx.lineTo(hx, hy - (maxR + 80));
+            ctx.stroke();
+            ctx.restore();
+
+            // 2. Territory Fill
+            if (state.showFill) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(hx, hy);
+                for (let i = 0; i < state.numDegrees; i++) {
+                    const pt = getDotPosition(i);
+                    ctx.lineTo(pt.x, pt.y);
+                }
+                ctx.closePath();
+                const fillGrad = ctx.createRadialGradient(hx, hy, 10, hx, hy, maxR);
+                fillGrad.addColorStop(0, 'rgba(31, 111, 235, 0.28)');
+                fillGrad.addColorStop(0.7, 'rgba(56, 139, 253, 0.12)');
+                fillGrad.addColorStop(1, 'rgba(88, 166, 255, 0.04)');
+                ctx.fillStyle = fillGrad;
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 3. 91 Radial Rays from HQ to each dot
+            if (state.showRays) {
+                ctx.save();
+                for (let i = 0; i < state.numDegrees; i++) {
+                    const pt = getDotPosition(i);
+                    const isHovered = (i === state.hoveredDegree);
+
+                    ctx.beginPath();
+                    ctx.moveTo(hx, hy);
+                    ctx.lineTo(pt.x, pt.y);
+
+                    if (isHovered) {
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+                        ctx.lineWidth = 1.8;
+                    } else if (i % 10 === 0) {
+                        ctx.strokeStyle = 'rgba(88, 166, 255, 0.45)';
+                        ctx.lineWidth = 1.2;
+                    } else {
+                        ctx.strokeStyle = 'rgba(56, 139, 253, 0.16)';
+                        ctx.lineWidth = 1.0;
+                    }
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+
+            // 4. Falloff Influence Preview
+            if (state.showPreview && state.hoveredDegree >= 0) {
+                ctx.save();
+                const centerDeg = state.hoveredDegree;
+                const spread = state.neighborSpread;
+                const strength = state.neighborStrength;
+                const curve = state.falloffCurve;
+                const push = state.tapDistance;
+
+                const minDeg = Math.max(0, Math.floor(centerDeg - spread));
+                const maxDeg = Math.min(state.numDegrees - 1, Math.ceil(centerDeg + spread));
+
+                ctx.beginPath();
+                for (let i = minDeg; i <= maxDeg; i++) {
+                    const deltaDeg = Math.abs(i - centerDeg);
+                    const influence = calculateInfluence(deltaDeg, spread, curve);
+                    const weight = (1.0 - strength) * (i === centerDeg ? 1.0 : 0.0) + strength * influence;
+                    const deltaR = push * weight;
+                    const previewR = state.distances[i] + deltaR;
+                    const pt = getDotPosition(i, previewR);
+                    if (i === minDeg) ctx.moveTo(pt.x, pt.y);
+                    else ctx.lineTo(pt.x, pt.y);
+                }
+
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([3, 4]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.restore();
+            }
+
+            // 5. Straight Lines Connecting Neighbor Dots
+            if (state.showLines) {
+                ctx.save();
+                ctx.beginPath();
+                for (let i = 0; i < state.numDegrees; i++) {
+                    const pt = getDotPosition(i);
+                    if (i === 0) ctx.moveTo(pt.x, pt.y);
+                    else ctx.lineTo(pt.x, pt.y);
+                }
+
+                ctx.strokeStyle = '#58a6ff';
+                ctx.lineWidth = 2.0;
+                ctx.shadowColor = 'rgba(88, 166, 255, 0.6)';
+                ctx.shadowBlur = 6;
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // 6. Ray End Dots
+            if (state.showDots) {
+                ctx.save();
+                for (let i = 0; i < state.numDegrees; i++) {
+                    const pt = getDotPosition(i);
+                    const isHovered = (i === state.hoveredDegree);
+                    const isMajor = (i % 10 === 0);
+
+                    ctx.beginPath();
+                    let radius = isMajor ? 4.0 : 2.5;
+                    if (isHovered) radius = 6.0;
+
+                    ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
+
+                    if (isHovered) {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.shadowColor = '#58a6ff';
+                        ctx.shadowBlur = 12;
+                    } else if (isMajor) {
+                        ctx.fillStyle = '#79c0ff';
+                        ctx.shadowColor = 'rgba(88, 166, 255, 0.5)';
+                        ctx.shadowBlur = 4;
+                    } else {
+                        ctx.fillStyle = 'rgba(121, 192, 255, 0.85)';
+                        ctx.shadowBlur = 0;
+                    }
+                    ctx.fill();
+
+                    if (state.showDegreeLabels && (isMajor || isHovered)) {
+                        ctx.fillStyle = isHovered ? '#ffffff' : '#8b949e';
+                        ctx.font = '10px ui-monospace, monospace';
+                        const rad = degreeToAngleRad(i);
+                        const labelX = pt.x + 14 * Math.cos(rad);
+                        const labelY = pt.y + 14 * Math.sin(rad);
+                        ctx.fillText(`${i}°`, labelX - 6, labelY + 3);
+                    }
+                }
+                ctx.restore();
+            }
+
+            // 7. HQ Base Marker in Bottom-Left
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(hx, hy, 12, 0, Math.PI * 2);
+            ctx.fillStyle = '#238636';
+            ctx.fill();
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = '#3fb950';
+            ctx.shadowColor = '#3fb950';
+            ctx.shadowBlur = 8;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(hx, hy, 4, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+
+            ctx.fillStyle = '#e6edf3';
+            ctx.font = 'bold 11px ui-monospace, monospace';
+            ctx.shadowBlur = 0;
+            ctx.fillText('HQ (Bottom-Left)', hx + 16, hy + 4);
+            ctx.restore();
+
+            updateStats();
+        }
+
+        // --- Mouse & Touch Interaction ---
+        function getPointerDeg(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const mx = clientX - rect.left;
+            const my = clientY - rect.top;
+
+            const dx = mx - state.hq.x;
+            const dy = my - state.hq.y;
+
+            let rad = Math.atan2(dy, dx);
+
+            if (rad > 0 && rad <= Math.PI * 0.5) rad = 0;
+            if (rad > Math.PI * 0.5 || rad < -Math.PI) rad = -Math.PI * 0.5;
+
+            const deg = Math.round((-rad / (Math.PI * 0.5)) * 90.0);
+            return Math.max(0, Math.min(90, deg));
+        }
+
+        function updateHover(e) {
+            const deg = getPointerDeg(e);
+            state.hoveredDegree = deg;
+
+            const dist = state.distances[deg];
+            const pt = getDotPosition(deg);
+            document.getElementById('insp-deg').innerText = `${deg}`;
+            document.getElementById('insp-dist').innerText = `${dist.toFixed(1)}`;
+            document.getElementById('insp-pos').innerText = `(${Math.round(pt.x)}, ${Math.round(pt.y)})`;
+
+            const spread = state.neighborSpread;
+            const minDeg = Math.max(0, deg - spread);
+            const maxDeg = Math.min(state.numDegrees - 1, deg + spread);
+            document.getElementById('insp-window').innerText = `[${minDeg}° .. ${maxDeg}°] (±${spread}°)`;
+
+            render();
+        }
+
+        canvas.addEventListener('mousemove', (e) => {
+            updateHover(e);
+            if (state.isDragging) {
+                const deg = state.hoveredDegree;
+                if (deg !== state.lastInteractedDegree) {
+                    tapDegree(deg, state.tapDistance * 0.4);
+                    state.lastInteractedDegree = deg;
+                }
+            }
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            state.hoveredDegree = -1;
+            state.isDragging = false;
+            document.getElementById('insp-deg').innerText = '--';
+            document.getElementById('insp-dist').innerText = '--';
+            document.getElementById('insp-pos').innerText = '(--, --)';
+            document.getElementById('insp-window').innerText = '--';
+            render();
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            state.isDragging = true;
+            const deg = getPointerDeg(e);
+            state.lastInteractedDegree = deg;
+            tapDegree(deg, state.tapDistance);
+        });
+
+        window.addEventListener('mouseup', () => {
+            state.isDragging = false;
+            state.lastInteractedDegree = -1;
+        });
+
+        // Touch support
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            state.isDragging = true;
+            const deg = getPointerDeg(e);
+            state.hoveredDegree = deg;
+            state.lastInteractedDegree = deg;
+            tapDegree(deg, state.tapDistance);
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const deg = getPointerDeg(e);
+            state.hoveredDegree = deg;
+            if (deg !== state.lastInteractedDegree) {
+                tapDegree(deg, state.tapDistance * 0.4);
+                state.lastInteractedDegree = deg;
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            state.isDragging = false;
+            state.lastInteractedDegree = -1;
+        });
+
+        // Keyboard Shortcuts
+        window.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) redo();
+                else undo();
+            } else if (e.key.toLowerCase() === 'r' && !e.metaKey && !e.ctrlKey) {
+                resetDistances();
+                render();
+            }
+        });
+
+        // --- Controls Event Handlers ---
+        const sliderTapDist = document.getElementById('slider-tap-dist');
+        const lblTapDist = document.getElementById('lbl-tap-dist');
+        sliderTapDist.addEventListener('input', (e) => {
+            state.tapDistance = parseFloat(e.target.value);
+            lblTapDist.innerText = `${state.tapDistance} px`;
+            render();
+        });
+
+        const sliderNeighborStrength = document.getElementById('slider-neighbor-strength');
+        const lblNeighborStrength = document.getElementById('lbl-neighbor-strength');
+        sliderNeighborStrength.addEventListener('input', (e) => {
+            state.neighborStrength = parseFloat(e.target.value);
+            lblNeighborStrength.innerText = state.neighborStrength.toFixed(2);
+            render();
+        });
+
+        const sliderNeighborSpread = document.getElementById('slider-neighbor-spread');
+        const lblNeighborSpread = document.getElementById('lbl-neighbor-spread');
+        sliderNeighborSpread.addEventListener('input', (e) => {
+            state.neighborSpread = parseInt(e.target.value, 10);
+            lblNeighborSpread.innerText = `±${state.neighborSpread}°`;
+            render();
+        });
+
+        const selectFalloff = document.getElementById('select-falloff');
+        selectFalloff.addEventListener('change', (e) => {
+            state.falloffCurve = e.target.value;
+            render();
+        });
+
+        const sliderSmoothing = document.getElementById('slider-smoothing');
+        const lblSmoothing = document.getElementById('lbl-smoothing');
+        sliderSmoothing.addEventListener('input', (e) => {
+            state.smoothingPasses = parseInt(e.target.value, 10);
+            lblSmoothing.innerText = `${state.smoothingPasses} pass${state.smoothingPasses === 1 ? '' : 'es'}`;
+        });
+
+        const sliderLaplacianWeight = document.getElementById('slider-laplacian-weight');
+        const lblLaplacianWeight = document.getElementById('lbl-laplacian-weight');
+        sliderLaplacianWeight.addEventListener('input', (e) => {
+            state.laplacianWeight = parseFloat(e.target.value);
+            lblLaplacianWeight.innerText = state.laplacianWeight.toFixed(2);
+        });
+
+        document.getElementById('btn-apply-smoothing-now').addEventListener('click', () => {
+            applyLaplacianSmoothing(state.distances, state.laplacianWeight, 1);
+            saveHistorySnapshot();
+            render();
+        });
+
+        const sliderInitRadius = document.getElementById('slider-init-radius');
+        const lblInitRadius = document.getElementById('lbl-init-radius');
+        sliderInitRadius.addEventListener('input', (e) => {
+            state.initialRadius = parseFloat(e.target.value);
+            lblInitRadius.innerText = `${state.initialRadius} px`;
+        });
+        sliderInitRadius.addEventListener('change', () => {
+            resetDistances(state.initialRadius);
+            render();
+        });
+
+        const sliderHqOffset = document.getElementById('slider-hq-offset');
+        const lblHqOffset = document.getElementById('lbl-hq-offset');
+        sliderHqOffset.addEventListener('input', (e) => {
+            state.hqOffset = parseFloat(e.target.value);
+            lblHqOffset.innerText = `${state.hqOffset} px`;
+            resizeCanvas();
+        });
+
+        // Display Toggles
+        document.getElementById('toggle-rays').addEventListener('change', (e) => {
+            state.showRays = e.target.checked;
+            render();
+        });
+        document.getElementById('toggle-dots').addEventListener('change', (e) => {
+            state.showDots = e.target.checked;
+            render();
+        });
+        document.getElementById('toggle-lines').addEventListener('change', (e) => {
+            state.showLines = e.target.checked;
+            render();
+        });
+        document.getElementById('toggle-fill').addEventListener('change', (e) => {
+            state.showFill = e.target.checked;
+            render();
+        });
+        document.getElementById('toggle-preview').addEventListener('change', (e) => {
+            state.showPreview = e.target.checked;
+            render();
+        });
+        document.getElementById('toggle-degree-labels').addEventListener('change', (e) => {
+            state.showDegreeLabels = e.target.checked;
+            render();
+        });
+
+        // Presets Handlers
+        const presets = {
+            'organic': { tap: 40, strength: 0.70, spread: 18, curve: 'gaussian', smooth: 1 },
+            'broad': { tap: 35, strength: 0.90, spread: 35, curve: 'cosine', smooth: 2 },
+            'narrow': { tap: 50, strength: 0.35, spread: 8, curve: 'gaussian', smooth: 0 },
+            'isolated': { tap: 60, strength: 0.00, spread: 1, curve: 'linear', smooth: 0 },
+            'super-smooth': { tap: 30, strength: 0.85, spread: 28, curve: 'cosine', smooth: 3 }
+        };
+
+        document.querySelectorAll('.chip[data-preset]').forEach(chip => {
+            chip.addEventListener('click', () => {
+                const p = presets[chip.dataset.preset];
+                if (!p) return;
+
+                state.tapDistance = p.tap;
+                state.neighborStrength = p.strength;
+                state.neighborSpread = p.spread;
+                state.falloffCurve = p.curve;
+                state.smoothingPasses = p.smooth;
+
+                sliderTapDist.value = p.tap;
+                lblTapDist.innerText = `${p.tap} px`;
+
+                sliderNeighborStrength.value = p.strength;
+                lblNeighborStrength.innerText = p.strength.toFixed(2);
+
+                sliderNeighborSpread.value = p.spread;
+                lblNeighborSpread.innerText = `±${p.spread}°`;
+
+                selectFalloff.value = p.curve;
+
+                sliderSmoothing.value = p.smooth;
+                lblSmoothing.innerText = `${p.smooth} pass${p.smooth === 1 ? '' : 'es'}`;
+
+                render();
+            });
+        });
+
+        // Action Buttons
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            resetDistances();
+            render();
+        });
+        document.getElementById('btn-undo').addEventListener('click', undo);
+        document.getElementById('btn-redo').addEventListener('click', redo);
+
+        // Window resize
+        window.addEventListener('resize', resizeCanvas);
+
+        // Start up
+        resetDistances(state.initialRadius);
+        resizeCanvas();
+
+        // Support URL parameters for automated testing and visual captures
+        // e.g.: ?taps=45,45,20&strength=0.7&spread=18&hover=45
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('strength')) {
+            state.neighborStrength = parseFloat(urlParams.get('strength'));
+            sliderNeighborStrength.value = state.neighborStrength;
+            lblNeighborStrength.innerText = state.neighborStrength.toFixed(2);
+        }
+        if (urlParams.has('tapDist')) {
+            state.tapDistance = parseFloat(urlParams.get('tapDist'));
+            sliderTapDist.value = state.tapDistance;
+            lblTapDist.innerText = `${state.tapDistance} px`;
+        }
+        if (urlParams.has('spread')) {
+            state.neighborSpread = parseInt(urlParams.get('spread'), 10);
+            sliderNeighborSpread.value = state.neighborSpread;
+            lblNeighborSpread.innerText = `±${state.neighborSpread}°`;
+        }
+        if (urlParams.has('curve')) {
+            state.falloffCurve = urlParams.get('curve');
+            selectFalloff.value = state.falloffCurve;
+        }
+        if (urlParams.has('smooth')) {
+            state.smoothingPasses = parseInt(urlParams.get('smooth'), 10);
+            sliderSmoothing.value = state.smoothingPasses;
+            lblSmoothing.innerText = `${state.smoothingPasses} pass${state.smoothingPasses === 1 ? '' : 'es'}`;
+        }
+        if (urlParams.has('taps')) {
+            const tapList = urlParams.get('taps').split(',').map(Number);
+            for (const deg of tapList) {
+                tapDegree(deg, state.tapDistance);
+            }
+        }
+        if (urlParams.has('hover')) {
+            state.hoveredDegree = parseInt(urlParams.get('hover'), 10);
+            const dist = state.distances[state.hoveredDegree];
+            const pt = getDotPosition(state.hoveredDegree);
+            document.getElementById('insp-deg').innerText = `${state.hoveredDegree}`;
+            document.getElementById('insp-dist').innerText = `${dist.toFixed(1)}`;
+            document.getElementById('insp-pos').innerText = `(${Math.round(pt.x)}, ${Math.round(pt.y)})`;
+            const spread = state.neighborSpread;
+            const minDeg = Math.max(0, state.hoveredDegree - spread);
+            const maxDeg = Math.min(state.numDegrees - 1, state.hoveredDegree + spread);
+            document.getElementById('insp-window').innerText = `[${minDeg}° .. ${maxDeg}°] (±${spread}°)`;
+        }
+        render();
+    </script>
+</body>
+</html>

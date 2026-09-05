@@ -1,6 +1,6 @@
-import { computeStationPositions, getTerritoryPolygon, getBorderIntersection, polygonArea, isPointInFan, getAsteroidLayout, doPolygonsIntersect, doLineSegmentsIntersect, canExpandStation } from '../js/commander/commander_math.js';
+import { computeStationPositions, getTerritoryPolygon, getBorderIntersection, polygonArea, isPointInFan, getAsteroidLayout, doPolygonsIntersect, doLineSegmentsIntersect, canExpandStation, closeBorder, smoothBorder } from '../js/commander/commander_math.js';
 import { createCommanderState } from '../js/commander/commander_state.js';
-import { queueBuild, updateCommanderUnits, calculateLaunchTarget, onStationAdded, onStationDestroyed, isPolygonSafe } from '../js/commander/commander_units.js';
+import { queueBuild, updateCommanderUnits, calculateLaunchTarget, onStationAdded, onStationDestroyed, isPolygonSafe, launchStation, STATION_LAUNCH_DISTANCE } from '../js/commander/commander_units.js';
 
 console.log("\n============================================================");
 console.log("  Testing: Commander Variant Mathematics & Radial Expansion");
@@ -43,8 +43,9 @@ for (let n = 1; n <= 12; n++) {
     assert(area > prevArea, `Station count ${n} increases territory area (${area.toFixed(1)} > ${prevArea.toFixed(1)})`);
     prevArea = area;
 
-    // Corner (0, 15) must be contained in P1 territory
-    assert(poly[0].x === 0 && poly[0].y === 15, `P1 territory polygon covers 90-degree corner (0, 15) at N=${n}`);
+    // Border is strictly the 91 permanent points covering the 90-degree corner
+    assert(poly.length === 91, `P1 border consists of strictly 91 permanent points at N=${n}`);
+    assert(isPointInFan({ x: 0, y: 15 }, poly), `P1 territory covers 90-degree corner (0, 15) at N=${n}`);
 
     // Check all connection lengths <= 4.5
     for (let s of stations) {
@@ -81,7 +82,8 @@ for (let i = 0; i < 5; i++) {
 
 // Check P2 90-degree corner coverage at (20, 0)
 const p2Poly = getTerritoryPolygon(p2Home, p2Stations, true);
-assert(p2Poly[0].x === 20 && p2Poly[0].y === 0, "P2 territory polygon covers 90-degree corner (20, 0)");
+assert(p2Poly.length === 91, `P2 border consists of strictly 91 permanent points (${p2Poly.length} === 91)`);
+assert(isPointInFan({ x: 20, y: 0 }, p2Poly), "P2 territory covers 90-degree corner (20, 0)");
 
 // 4. Test Concentric Asteroid Envelopment & Asymmetric Map Generation
 const asteroids = getAsteroidLayout();
@@ -470,37 +472,32 @@ for (let step = 0; step < 3; step++) {
     prevBorderDist = borderDist;
 }
 
-// Check that minimum pairwise distance between all stations is >= 1.9 (no clustering!)
-let minPairDist = Infinity;
-for (let i = 0; i < bP1.stations.length; i++) {
-    for (let j = i + 1; j < bP1.stations.length; j++) {
-        const d = Math.hypot(bP1.stations[i].x - bP1.stations[j].x, bP1.stations[i].y - bP1.stations[j].y);
-        if (d < minPairDist) minPairDist = d;
-    }
-}
-assert(minPairDist >= 1.9, `Even distribution maintained with zero clustering (min pairwise dist: ${minPairDist.toFixed(2)} >= 1.90)`);
+// Stations maintain their pinned border positions independently without distance repulsion
+assert(bP1.stations.length === 6, `Player has 6 stations established on the border`);
+bP1.stations.forEach((s, idx) => {
+    assert(s.x >= 0.5 && s.x <= 19.5 && s.y >= 0.5 && s.y <= 14.5, `Station ${idx} is within map boundaries`);
+});
 
-// 27. Test Polygon Vertex Ordering & Zero Self-Intersections After Launches
+// 27. Test Border Is Strictly the 91 Permanent Points & Zero Self-Intersections After Launches
 const bumpPoly = getTerritoryPolygon(bP1.homePlanet, bP1.stations, false);
-assert(bumpPoly.length >= 4, `Territory polygon has at least 4 vertices (${bumpPoly.length})`);
-assert(bumpPoly[0].x === 0 && bumpPoly[0].y === 15, "First vertex is corner (0, 15)");
-assert(bumpPoly[1].x === 0, "Second vertex is on left wall (x=0)");
-assert(bumpPoly[bumpPoly.length - 1].y === 15, "Last vertex is on bottom wall (y=15)");
+assert(bumpPoly.length === 91, `Border is strictly the 91 permanent points (${bumpPoly.length} === 91)`);
+
 // Check that no non-adjacent edges intersect (zero self-intersections)
+const closedBump = closeBorder(bumpPoly);
 let selfIntersects = false;
-for (let i = 0; i < bumpPoly.length; i++) {
-    const a1 = bumpPoly[i];
-    const a2 = bumpPoly[(i + 1) % bumpPoly.length];
-    for (let j = i + 2; j < bumpPoly.length; j++) {
-        if ((j + 1) % bumpPoly.length === i) continue; // adjacent
-        const b1 = bumpPoly[j];
-        const b2 = bumpPoly[(j + 1) % bumpPoly.length];
+for (let i = 0; i < closedBump.length; i++) {
+    const a1 = closedBump[i];
+    const a2 = closedBump[(i + 1) % closedBump.length];
+    for (let j = i + 2; j < closedBump.length; j++) {
+        if ((j + 1) % closedBump.length === i) continue; // adjacent
+        const b1 = closedBump[j];
+        const b2 = closedBump[(j + 1) % closedBump.length];
         if (doLineSegmentsIntersect(a1, a2, b1, b2)) {
             selfIntersects = true;
         }
     }
 }
-assert(!selfIntersects, "Territory polygon has zero self-intersections after multiple collinear launches");
+assert(!selfIntersects, "Border polygon has zero self-intersections after multiple collinear launches");
 
 // 28. Test Head-to-Head Expansion Overlap Prevention & Frontline Clearance
 const h2hState = createCommanderState();
@@ -609,14 +606,15 @@ assert(uPoly.length >= 6, `Concave territory polygon created with ${uPoly.length
 const hasValley = uPoly.some(pt => Math.hypot(pt.x - 4.0, pt.y - 11.0) < 0.01);
 assert(hasValley, "Recessed valley station is included in territory boundary creating concave shape");
 
+const closedU = closeBorder(uPoly);
 let uSelfIntersects = false;
-for (let i = 0; i < uPoly.length; i++) {
-    const a1 = uPoly[i];
-    const a2 = uPoly[(i + 1) % uPoly.length];
-    for (let j = i + 2; j < uPoly.length; j++) {
-        if ((j + 1) % uPoly.length === i) continue;
-        const b1 = uPoly[j];
-        const b2 = uPoly[(j + 1) % uPoly.length];
+for (let i = 0; i < closedU.length; i++) {
+    const a1 = closedU[i];
+    const a2 = closedU[(i + 1) % closedU.length];
+    for (let j = i + 2; j < closedU.length; j++) {
+        if ((j + 1) % closedU.length === i) continue;
+        const b1 = closedU[j];
+        const b2 = closedU[(j + 1) % closedU.length];
         if (doLineSegmentsIntersect(a1, a2, b1, b2)) {
             uSelfIntersects = true;
         }
@@ -707,6 +705,94 @@ sP1.stations.forEach((s, idx) => {
     const actualR = Math.hypot(s.targetX - sP1.homePlanet.x, s.targetY - sP1.homePlanet.y);
     assert(Math.abs(actualR - expectedBorderR) < 0.02, `Station ${idx} remains strictly on the frontier border curve (dist=${actualR.toFixed(2)}, border=${expectedBorderR.toFixed(2)})`);
 });
+
+// 33. Test Constant Station Launch Distance from Border (Not Scaled by Distance from HQ)
+const cstState = createCommanderState();
+const kP1 = cstState.players[0];
+const cAngle = -Math.PI * 0.25;
+const cosA = Math.cos(cAngle);
+const sinA = Math.sin(cAngle);
+const hx = kP1.homePlanet.x;
+const hy = kP1.homePlanet.y;
+
+assert(STATION_LAUNCH_DISTANCE === 2.0, `Constant station launch distance is 2.0 (${STATION_LAUNCH_DISTANCE})`);
+
+for (let step = 1; step <= 4; step++) {
+    const borderDist = getBorderIntersection(kP1.homePlanet, kP1.borderDistances, false, cAngle);
+    const borderPt = { x: hx + cosA * borderDist, y: hy + sinA * borderDist };
+    const target = calculateLaunchTarget(kP1, cAngle);
+    const distFromBorder = Math.hypot(target.x - borderPt.x, target.y - borderPt.y);
+
+    assert(Math.abs(distFromBorder - STATION_LAUNCH_DISTANCE) < 0.05,
+        `Step ${step}: Launch target is constant distance from border (${distFromBorder.toFixed(3)} ~ ${STATION_LAUNCH_DISTANCE}) when border distance from HQ is ${borderDist.toFixed(2)}`);
+
+    // Verify launchStation spawns in-flight station at the frontier border
+    launchStation(kP1);
+    assert(kP1.launchingStations.length > 0, `Step ${step}: launchStation creates in-flight station`);
+    const ls = kP1.launchingStations.pop();
+    const startDistFromHQ = Math.hypot(ls.startX - hx, ls.startY - hy);
+    const totalFlightDist = Math.hypot(ls.targetX - ls.startX, ls.targetY - ls.startY);
+
+    assert(Math.abs(startDistFromHQ - borderDist) < 0.05,
+        `Step ${step}: Station launches directly from frontier border (startDist=${startDistFromHQ.toFixed(3)} ~ border=${borderDist.toFixed(3)})`);
+    assert(Math.abs(totalFlightDist - STATION_LAUNCH_DISTANCE) < 0.05,
+        `Step ${step}: Total flight distance is constant (${totalFlightDist.toFixed(3)} ~ ${STATION_LAUNCH_DISTANCE}), not expanding with distance from HQ`);
+
+    onStationAdded(kP1, target);
+}
+
+// 34. Test Organic 91-Point Border & Station Independence
+const orgState = createCommanderState();
+const oP1 = orgState.players[0];
+const oBorder = getTerritoryPolygon(oP1.homePlanet, oP1.borderDistances, false);
+
+assert(oBorder.length === 91, `Border consists strictly of the 91 permanent points (${oBorder.length} === 91)`);
+
+// Test organic smoothness: no sharp corners along the 91 points
+let maxTurnDeg = 0;
+let totalTurnDeg = 0;
+for (let i = 1; i < oBorder.length - 1; i++) {
+    const v1 = { x: oBorder[i].x - oBorder[i - 1].x, y: oBorder[i].y - oBorder[i - 1].y };
+    const v2 = { x: oBorder[i + 1].x - oBorder[i].x, y: oBorder[i + 1].y - oBorder[i].y };
+    const dot = v1.x * v2.x + v1.y * v2.y;
+    const m1 = Math.hypot(v1.x, v1.y);
+    const m2 = Math.hypot(v2.x, v2.y);
+    const cosT = Math.max(-1, Math.min(1, dot / (m1 * m2)));
+    const turn = Math.acos(cosT) * (180 / Math.PI);
+    if (turn > maxTurnDeg) maxTurnDeg = turn;
+    totalTurnDeg += turn;
+}
+const avgTurnDeg = totalTurnDeg / (oBorder.length - 2);
+assert(maxTurnDeg < 5.0, `Border has organic feeling with zero sharp corners (max turn angle: ${maxTurnDeg.toFixed(2)}° < 5.0°)`);
+assert(avgTurnDeg < 2.0, `Border has continuous smooth curvature (avg turn angle: ${avgTurnDeg.toFixed(2)}° < 2.0°)`);
+
+// Test Station Independence: stations maintain their launch angles independently without pairwise distance repulsion
+const preAngle0 = oP1.stations[0].angle;
+const preAngle1 = oP1.stations[1].angle;
+const preAngle2 = oP1.stations[2].angle;
+
+// Launch a new station at station 1 angle
+const closeLaunchTarget = calculateLaunchTarget(oP1, preAngle1);
+onStationAdded(oP1, closeLaunchTarget);
+
+assert(Math.abs(oP1.stations[0].angle - preAngle0) < 0.001, `Station 0 angle unchanged without inter-station distance repulsion`);
+assert(Math.abs(oP1.stations[1].angle - preAngle1) < 0.001, `Station 1 angle unchanged without inter-station distance repulsion`);
+assert(Math.abs(oP1.stations[2].angle - preAngle2) < 0.001, `Station 2 angle unchanged without inter-station distance repulsion`);
+
+// Verify smoothBorder preserves organic curvature even after asymmetric expansion
+const postBorder = getTerritoryPolygon(oP1.homePlanet, oP1.borderDistances, false);
+let postMaxTurn = 0;
+for (let i = 1; i < postBorder.length - 1; i++) {
+    const v1 = { x: postBorder[i].x - postBorder[i - 1].x, y: postBorder[i].y - postBorder[i - 1].y };
+    const v2 = { x: postBorder[i + 1].x - postBorder[i].x, y: postBorder[i + 1].y - postBorder[i].y };
+    const dot = v1.x * v2.x + v1.y * v2.y;
+    const m1 = Math.hypot(v1.x, v1.y);
+    const m2 = Math.hypot(v2.x, v2.y);
+    const cosT = Math.max(-1, Math.min(1, dot / (m1 * m2)));
+    const turn = Math.acos(cosT) * (180 / Math.PI);
+    if (turn > postMaxTurn) postMaxTurn = turn;
+}
+assert(postMaxTurn < 6.0, `Border retains organic smoothness with no sharp corners after launch expansion (max turn: ${postMaxTurn.toFixed(2)}° < 6.0°)`);
 
 console.log(`\n------------------------------------------------------------`);
 console.log(`  Summary: ${passed} Passed, ${failed} Failed`);

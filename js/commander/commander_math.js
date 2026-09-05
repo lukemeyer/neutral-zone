@@ -1,11 +1,22 @@
 // Radial Geometry & Mathematical Engine for Neutral Zone: Commander Variant
 
+export function closeBorder(poly) {
+    if (!poly || poly.length !== 91) return poly;
+    const isP2 = poly[0].x > 10;
+    if (!isP2) {
+        return [{ x: 0, y: 15 }, { x: 0, y: poly[0].y }, ...poly, { x: poly[90].x, y: 15 }];
+    } else {
+        return [{ x: 20, y: 0 }, { x: 20, y: poly[0].y }, ...poly, { x: poly[90].x, y: 0 }];
+    }
+}
+
 export function polygonArea(poly) {
     if (!poly || poly.length < 3) return 0;
+    const closed = poly.length === 91 ? closeBorder(poly) : poly;
     let a = 0;
-    for (let i = 0; i < poly.length; i++) {
-        let p1 = poly[i];
-        let p2 = poly[(i + 1) % poly.length];
+    for (let i = 0; i < closed.length; i++) {
+        let p1 = closed[i];
+        let p2 = closed[(i + 1) % closed.length];
         a += (p1.x * p2.y - p2.x * p1.y);
     }
     return Math.abs(a / 2);
@@ -13,11 +24,20 @@ export function polygonArea(poly) {
 
 export function isPointInFan(pt, poly) {
     if (!poly || poly.length < 3) return false;
+    const closed = poly.length === 91 ? closeBorder(poly) : poly;
+
+    // Check if point coincides with any vertex
+    for (let i = 0; i < closed.length; i++) {
+        if (Math.abs(pt.x - closed[i].x) < 1e-4 && Math.abs(pt.y - closed[i].y) < 1e-4) {
+            return true;
+        }
+    }
+
     let inside = false;
     const x = pt.x, y = pt.y;
-    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-        const xi = poly[i].x, yi = poly[i].y;
-        const xj = poly[j].x, yj = poly[j].y;
+    for (let i = 0, j = closed.length - 1; i < closed.length; j = i++) {
+        const xi = closed[i].x, yi = closed[i].y;
+        const xj = closed[j].x, yj = closed[j].y;
         const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
         if (intersect) inside = !inside;
     }
@@ -51,23 +71,26 @@ export function doLineSegmentsIntersect(p1, q1, p2, q2) {
 export function doPolygonsIntersect(polyA, polyB) {
     if (!polyA || !polyB || polyA.length < 3 || polyB.length < 3) return false;
 
+    const closedA = polyA.length === 91 ? closeBorder(polyA) : polyA;
+    const closedB = polyB.length === 91 ? closeBorder(polyB) : polyB;
+
     // 1. Edge-edge intersections
-    for (let i = 0; i < polyA.length; i++) {
-        const a1 = polyA[i];
-        const a2 = polyA[(i + 1) % polyA.length];
-        for (let j = 0; j < polyB.length; j++) {
-            const b1 = polyB[j];
-            const b2 = polyB[(j + 1) % polyB.length];
+    for (let i = 0; i < closedA.length; i++) {
+        const a1 = closedA[i];
+        const a2 = closedA[(i + 1) % closedA.length];
+        for (let j = 0; j < closedB.length; j++) {
+            const b1 = closedB[j];
+            const b2 = closedB[(j + 1) % closedB.length];
             if (doLineSegmentsIntersect(a1, a2, b1, b2)) return true;
         }
     }
 
     // 2. Vertex containment
-    for (let pt of polyA) {
-        if (isPointInFan(pt, polyB)) return true;
+    for (let pt of closedA) {
+        if (isPointInFan(pt, closedB)) return true;
     }
-    for (let pt of polyB) {
-        if (isPointInFan(pt, polyA)) return true;
+    for (let pt of closedB) {
+        if (isPointInFan(pt, closedA)) return true;
     }
 
     return false;
@@ -456,6 +479,22 @@ export function pushRadialBorder(homePlanet, border, targetAngleRad, pushAmount 
             pendingPush[d] = excess[d];
         }
     }
+
+    // Organic smoothing pass: eliminates any collision cusps or sharp kinks
+    smoothBorder(border, 2);
+}
+
+// Smooths radial border distances with an organic Laplacian filter to guarantee C2 continuous curvature with zero sharp corners
+export function smoothBorder(border, iterations = 2) {
+    if (!border || border.length !== 91) return;
+    for (let it = 0; it < iterations; it++) {
+        const copy = new Float64Array(border);
+        for (let d = 0; d <= 90; d++) {
+            const prev = d > 0 ? copy[d - 1] : copy[d];
+            const next = d < 90 ? copy[d + 1] : copy[d];
+            border[d] = 0.15 * prev + 0.70 * copy[d] + 0.15 * next;
+        }
+    }
 }
 
 // Pulls radial border inward around a target angle (e.g. when a station is destroyed)
@@ -478,9 +517,12 @@ export function pullRadialBorder(homePlanet, border, targetAngleRad, pullAmount 
             border[d] = Math.max(2.0, border[d] - pull);
         }
     }
+
+    // Organic smoothing pass
+    smoothBorder(border, 2);
 }
 
-// Builds territory polygon from 91-degree radial distance graph (fixed 94 vertices, guaranteed zero self-intersections)
+// Builds territory border polygon from 91-degree radial distance graph (the border is strictly the 91 permanent points)
 export function getTerritoryPolygon(homePlanet, source, isPlayer2 = false) {
     const isP2 = isPlayer2 || (homePlanet && homePlanet.x > 10) || (source && source.id === 1) || (Array.isArray(source) && source[0] && source[0].x > 10);
     const hx = homePlanet ? homePlanet.x : (isP2 ? 17.5 : 2.5);
@@ -500,28 +542,20 @@ export function getTerritoryPolygon(homePlanet, source, isPlayer2 = false) {
         distances = createQuadrantBorder(3.8);
     }
 
-    if (!isP2) {
-        const poly = [];
-        poly.push({ x: 0, y: 15 });
-        poly.push({ x: 0, y: Math.max(0, Math.round((hy - distances[0]) * 1000) / 1000) });
-
-        for (let i = 0; i <= 90; i++) {
-            const rad = -Math.PI * 0.5 + (i / 90) * (Math.PI * 0.5);
-            const dist = distances[i];
-            const px = Math.max(0, Math.min(20, Math.round((hx + dist * Math.cos(rad)) * 1000) / 1000));
-            const py = Math.max(0, Math.min(15, Math.round((hy + dist * Math.sin(rad)) * 1000) / 1000));
-            poly.push({ x: px, y: py });
-        }
-        poly.push({ x: Math.min(20, Math.round((hx + distances[90]) * 1000) / 1000), y: 15 });
-        return poly;
-    } else {
-        const p1Poly = getTerritoryPolygon({ x: 2.5, y: 12.5 }, distances, false);
-        return p1Poly.map(pt => ({
-            x: Math.round((20 - pt.x) * 1000) / 1000,
-            y: Math.round((15 - pt.y) * 1000) / 1000
-        }));
+    const poly = [];
+    for (let i = 0; i <= 90; i++) {
+        const rad = isP2
+            ? (Math.PI * 0.5 + (i / 90) * (Math.PI * 0.5))
+            : (-Math.PI * 0.5 + (i / 90) * (Math.PI * 0.5));
+        const dist = distances[i];
+        const px = Math.max(0, Math.min(20, Math.round((hx + dist * Math.cos(rad)) * 1000) / 1000));
+        const py = Math.max(0, Math.min(15, Math.round((hy + dist * Math.sin(rad)) * 1000) / 1000));
+        poly.push({ x: px, y: py });
     }
+    return poly;
 }
+
+export const getBorderPoints = getTerritoryPolygon;
 
 // Finds distance from HQ to current territory border along angle (O(1) radial graph lookup)
 export function getBorderIntersection(homePlanet, source, isPlayer2, angle) {

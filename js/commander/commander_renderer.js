@@ -1,4 +1,4 @@
-import { getTerritoryPolygon } from './commander_math.js';
+import { getTerritoryPolygon, getBorderIntersection } from './commander_math.js';
 import { calculateLaunchTarget } from './commander_units.js';
 
 export function renderCommanderGame(ctx, canvas, state) {
@@ -54,54 +54,47 @@ export function renderCommanderGame(ctx, canvas, state) {
 
     // 3. Draw Solid 90-Degree Corner Fan Territories
     players.forEach(p => {
-        const poly = getTerritoryPolygon(p.homePlanet, p.borderDistances || p.stations, p.id === 1);
-        if (poly.length >= 3) {
+        const isP2 = p.id === 1;
+        const poly = getTerritoryPolygon(p.homePlanet, p.borderDistances || p.stations, isP2);
+        if (poly.length === 91) {
             const screenPoly = poly.map(pt => toScreen(pt.x, pt.y));
 
-            ctx.beginPath();
-            ctx.moveTo(screenPoly[0].x, screenPoly[0].y);
-            for (let i = 1; i < screenPoly.length; i++) {
-                ctx.lineTo(screenPoly[i].x, screenPoly[i].y);
-            }
-            ctx.closePath();
+            // Shaded Territory Fill behind the 91-point border
+            const cornerScreen = toScreen(isP2 ? 20 : 0, isP2 ? 0 : 15);
+            const wallStartScreen = toScreen(isP2 ? 20 : 0, poly[0].y);
+            const wallEndScreen = toScreen(poly[90].x, isP2 ? 0 : 15);
 
-            // Vibrant territory fill
+            ctx.beginPath();
+            ctx.moveTo(cornerScreen.x, cornerScreen.y);
+            ctx.lineTo(wallStartScreen.x, wallStartScreen.y);
+            for (let i = 0; i < screenPoly.length - 1; i++) {
+                const p0 = screenPoly[i];
+                const p1 = screenPoly[i + 1];
+                const midX = (p0.x + p1.x) / 2;
+                const midY = (p0.y + p1.y) / 2;
+                ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
+            }
+            ctx.lineTo(screenPoly[screenPoly.length - 1].x, screenPoly[screenPoly.length - 1].y);
+            ctx.lineTo(wallEndScreen.x, wallEndScreen.y);
+            ctx.closePath();
             ctx.fillStyle = p.territoryColor;
             ctx.fill();
 
-            // Glowing boundary perimeter
+            // Glowing boundary perimeter: the border is ONLY the 91 permanent points (organic, no sharp corners)
+            ctx.beginPath();
+            ctx.moveTo(screenPoly[0].x, screenPoly[0].y);
+            for (let i = 0; i < screenPoly.length - 1; i++) {
+                const p0 = screenPoly[i];
+                const p1 = screenPoly[i + 1];
+                const midX = (p0.x + p1.x) / 2;
+                const midY = (p0.y + p1.y) / 2;
+                ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
+            }
+            ctx.lineTo(screenPoly[screenPoly.length - 1].x, screenPoly[screenPoly.length - 1].y);
             ctx.strokeStyle = p.color;
             ctx.lineWidth = 2.5;
             ctx.stroke();
         }
-
-        // Draw internal energy grid lines between stations
-        p.stations.forEach(s1 => {
-            // Line back to Home
-            if (Math.hypot(s1.x - p.homePlanet.x, s1.y - p.homePlanet.y) <= 4.5) {
-                const pA = toScreen(p.homePlanet.x, p.homePlanet.y);
-                const pB = toScreen(s1.x, s1.y);
-                ctx.beginPath();
-                ctx.moveTo(pA.x, pA.y);
-                ctx.lineTo(pB.x, pB.y);
-                ctx.strokeStyle = p.color + '44';
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
-            }
-            // Lines to nearby peer stations
-            p.stations.forEach(s2 => {
-                if (s1.id < s2.id && Math.hypot(s1.x - s2.x, s1.y - s2.y) <= 4.2) {
-                    const pA = toScreen(s1.x, s1.y);
-                    const pB = toScreen(s2.x, s2.y);
-                    ctx.beginPath();
-                    ctx.moveTo(pA.x, pA.y);
-                    ctx.lineTo(pB.x, pB.y);
-                    ctx.strokeStyle = p.color + '66';
-                    ctx.lineWidth = 1.8;
-                    ctx.stroke();
-                }
-            });
-        });
     });
 
     // 4. Draw Asteroids (Only active with resources > 0)
@@ -189,54 +182,51 @@ export function renderCommanderGame(ctx, canvas, state) {
         const arrowEndY = p.homePlanet.y + Math.sin(launchAngle) * trajLen;
         const arrowScreen = toScreen(arrowEndX, arrowEndY);
 
+        // Frontier border intersection point along launch angle
+        const isP2 = p.id === 1;
+        const borderDist = getBorderIntersection(p.homePlanet, p.borderDistances || p.stations, isP2, launchAngle);
+        const borderX = p.homePlanet.x + Math.cos(launchAngle) * borderDist;
+        const borderY = p.homePlanet.y + Math.sin(launchAngle) * borderDist;
+        const borderScreen = toScreen(borderX, borderY);
+
         // Aiming guide ray extending outward toward the prospective frontier impact point
         const enemy = players.find(ep => ep.id !== p.id);
         const targetPos = calculateLaunchTarget(p, launchAngle, enemy);
         const guideScreen = toScreen(targetPos.x, targetPos.y);
 
         ctx.save();
-        ctx.setLineDash([3, 5]);
-        ctx.strokeStyle = p.accentColor + '55';
-        ctx.lineWidth = 1.5;
+        // Inner trajectory line from HQ arrow to border
+        ctx.setLineDash([2, 6]);
+        ctx.strokeStyle = p.accentColor + '33';
+        ctx.lineWidth = 1.0;
         ctx.beginPath();
         ctx.moveTo(arrowScreen.x, arrowScreen.y);
+        ctx.lineTo(borderScreen.x, borderScreen.y);
+        ctx.stroke();
+
+        // Frontier launch ray: constant distance from border frontier into space
+        ctx.setLineDash([3, 4]);
+        ctx.strokeStyle = p.accentColor + '99';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(borderScreen.x, borderScreen.y);
         ctx.lineTo(guideScreen.x, guideScreen.y);
         ctx.stroke();
+
+        // Frontier border launch origin dot
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(borderScreen.x, borderScreen.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = p.accentColor;
+        ctx.fill();
 
         // Frontier impact reticle ring
         ctx.beginPath();
         ctx.arc(guideScreen.x, guideScreen.y, 6, 0, Math.PI * 2);
-        ctx.strokeStyle = p.accentColor + 'cc';
+        ctx.strokeStyle = p.accentColor + 'ee';
         ctx.lineWidth = 1.8;
         ctx.stroke();
 
-        // Steered Frontier Shape Preview Contour (without moving existing stations)
-        const isP2 = p.id === 1;
-        const cx = isP2 ? 20 : 0;
-        const cy = isP2 ? 0 : 15;
-        const previewStations = [
-            ...p.stations,
-            {
-                x: targetPos.x,
-                y: targetPos.y,
-                isPerimeter: true,
-                angle: Math.atan2(targetPos.y - cy, targetPos.x - cx)
-            }
-        ];
-        const previewPoly = getTerritoryPolygon(p.homePlanet, previewStations, isP2);
-        if (previewPoly.length >= 3) {
-            const previewScreenPts = previewPoly.map(pt => toScreen(pt.x, pt.y));
-            ctx.beginPath();
-            ctx.setLineDash([4, 6]);
-            ctx.moveTo(previewScreenPts[0].x, previewScreenPts[0].y);
-            for (let k = 1; k < previewScreenPts.length; k++) {
-                ctx.lineTo(previewScreenPts[k].x, previewScreenPts[k].y);
-            }
-            ctx.closePath();
-            ctx.strokeStyle = p.accentColor + '44';
-            ctx.lineWidth = 1.6;
-            ctx.stroke();
-        }
         ctx.restore();
 
         // Solid Trajectory line from HQ center extending 2x HQ radius
