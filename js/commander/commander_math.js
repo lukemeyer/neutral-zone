@@ -196,18 +196,11 @@ export function computeStationPositions(homePlanet, n, isPlayer2 = false, steeri
                 effectiveR = ring.r * (1 + 0.35 * s * u);
             }
 
-            // Overlap protection / seam clamp at angle:
-            // Line y = 0.75 * x + buffer (buffer = 0.30)
-            const denom = 0.75 * Math.cos(angle) - Math.sin(angle);
-            if (denom > 0) {
-                const rMax = 14.70 / denom;
-                if (effectiveR > rMax) {
-                    effectiveR = rMax;
-                }
-            }
-
-            const sx = cx + effectiveR * Math.cos(angle);
-            const sy = cy + effectiveR * Math.sin(angle);
+            // Clamped to map boundaries ([0.5, 19.5] x [0.5, 14.5]) without middle-line restriction
+            const rawX = cx + effectiveR * Math.cos(angle);
+            const rawY = cy + effectiveR * Math.sin(angle);
+            const sx = Math.max(0.5, Math.min(19.5, rawX));
+            const sy = Math.max(0.5, Math.min(14.5, rawY));
 
             stations.push({
                 id: id++,

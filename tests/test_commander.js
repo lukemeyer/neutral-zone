@@ -426,9 +426,30 @@ const neighborShift = Math.hypot(neighborStation.targetX - prevNeighborPos.x, ne
 const farShift = Math.hypot(farStation.targetX - prevFarPos.x, farStation.targetY - prevFarPos.y);
 assert(neighborShift >= farShift, `Nearby survivor moved more to fill gap than distant survivor (${neighborShift.toFixed(3)} >= ${farShift.toFixed(3)})`);
 
-// 25. Test Neutral Treaty Seam Enforcement on All Impulse Positions
+// 25. Test Stations Can Cross the Middle Line into Contested Territory
 phP1.stations.forEach(s => {
-    assert(s.targetY >= 0.75 * s.targetX + 0.20, `Station target (${s.targetX}, ${s.targetY}) strictly obeys neutral treaty seam`);
+    assert(s.targetX >= 0.5 && s.targetX <= 19.5 && s.targetY >= 0.5 && s.targetY <= 14.5,
+        `Station target (${s.targetX}, ${s.targetY}) is within valid map bounds`);
+});
+
+// Launch stations towards the enemy half across the diagonal middle line (y = 0.75 * x)
+const crossState = createCommanderState();
+const cP1 = crossState.players[0];
+const midlineAngle = -0.6435; // direct ray towards (20, 0)
+let crossedMidline = false;
+for (let step = 0; step < 5; step++) {
+    const target = calculateLaunchTarget(cP1, midlineAngle);
+    onStationAdded(cP1, target);
+    cP1.stations.forEach(s => { s.x = s.targetX; s.y = s.targetY; });
+    if (target.y < 0.75 * target.x) {
+        crossedMidline = true;
+    }
+}
+assert(crossedMidline, "Stations can freely cross the diagonal middle line into contested territory");
+const crossedStations = cP1.stations.filter(s => s.y < 0.75 * s.x);
+assert(crossedStations.length >= 1, `At least 1 station established across the middle line (${crossedStations.length} crossed)`);
+crossedStations.forEach(s => {
+    assert(s.x >= 0.5 && s.x <= 19.5 && s.y >= 0.5 && s.y <= 14.5, `Crossed station at (${s.x}, ${s.y}) respects map boundaries`);
 });
 
 // 26. Test Border Bumping Incremental Distance & Even Distribution (Zero Clustering)

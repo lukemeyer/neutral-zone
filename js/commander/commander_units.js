@@ -544,25 +544,14 @@ export function updateCommanderUnits(state, dt) {
     }
 }
 
-// Clamps a coordinate to the neutral diagonal treaty seam (y = 0.75 * x)
-export function clampStationToSeam(pt, isP2) {
-    let x = pt.x;
-    let y = pt.y;
-    const buffer = 0.25;
-    if (!isP2) {
-        // P1 must stay in y >= 0.75 * x + buffer
-        const minY = 0.75 * x + buffer;
-        if (y < minY) y = minY;
-    } else {
-        // P2 must stay in y <= 0.75 * x - buffer
-        const maxY = 0.75 * x - buffer;
-        if (y > maxY) y = maxY;
-    }
+// Clamps a coordinate to valid map boundaries ([0.5, 19.5] x [0.5, 14.5]) without middle-line restrictions
+export function clampStationToSeam(pt, isP2 = false) {
     return {
-        x: Math.max(0.5, Math.min(19.5, x)),
-        y: Math.max(0.5, Math.min(14.5, y))
+        x: Math.max(0.5, Math.min(19.5, pt.x)),
+        y: Math.max(0.5, Math.min(14.5, pt.y))
     };
 }
+export const clampStationToBounds = clampStationToSeam;
 
 // Relaxes stations to guarantee even distribution and strictly prevent clustering
 export function relaxStations(stations, isP2) {
