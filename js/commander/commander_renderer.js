@@ -1,4 +1,4 @@
-import { getTerritoryPolygon, getBorderIntersection, degreeToAngleRad, angleRadToDegree } from './commander_math.js';
+import { getTerritoryPolygon, getClosedTerritoryPolygon, getBorderIntersection, degreeToAngleRad, angleRadToDegree, calculateTapWeight } from './commander_math.js';
 import { calculateLaunchTarget } from './commander_units.js';
 
 export function renderCommanderGame(ctx, canvas, state) {
@@ -52,60 +52,105 @@ export function renderCommanderGame(ctx, canvas, state) {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // 3. Draw Solid 90-Degree Corner Fan Territories
+    // 3. Draw Prototype Radial Territory System (Rays, Dots, Straight Lines, Gradient Fill)
     players.forEach(p => {
         const isP2 = p.id === 1;
-        const poly = getTerritoryPolygon(p.homePlanet, p.borderDistances || p.stations, isP2);
-        if (poly.length === 91) {
-            const screenPoly = poly.map(pt => toScreen(pt.x, pt.y));
+        const frontierPts = getTerritoryPolygon(p.homePlanet, p.borderDistances || p.stations, isP2);
+        const closedPoly = getClosedTerritoryPolygon(p.homePlanet, p.borderDistances || p.stations, isP2);
+        const hpScreen = toScreen(p.homePlanet.x, p.homePlanet.y);
+        const maxR = (p.borderDistances ? Math.max(...p.borderDistances) : 3.8) + 1.5;
 
-            // Shaded Territory Fill behind the 91-point border
+        // 3a. Shaded Territory Fill with Radial Gradient from HQ
+        ctx.save();
+        ctx.beginPath();
+        closedPoly.forEach((pt, idx) => {
+            const s = toScreen(pt.x, pt.y);
+            if (idx === 0) ctx.moveTo(s.x, s.y);
+            else ctx.lineTo(s.x, s.y);
+        });
+        ctx.closePath();
+
+        const fillGrad = ctx.createRadialGradient(hpScreen.x, hpScreen.y, 8, hpScreen.x, hpScreen.y, maxR * scX);
+        if (!isP2) {
+            fillGrad.addColorStop(0, 'rgba(31, 111, 235, 0.20)');
+            fillGrad.addColorStop(0.7, 'rgba(56, 139, 253, 0.08)');
+            fillGrad.addColorStop(1, 'rgba(88, 166, 255, 0.02)');
+        } else {
+            fillGrad.addColorStop(0, 'rgba(218, 54, 51, 0.20)');
+            fillGrad.addColorStop(0.7, 'rgba(248, 81, 73, 0.08)');
+            fillGrad.addColorStop(1, 'rgba(255, 123, 114, 0.02)');
+        }
+        ctx.fillStyle = fillGrad;
+        ctx.fill();
+        ctx.restore();
+
+        // 3b. The 91 Radial Rays from HQ
+        ctx.save();
+        for (let i = 0; i <= 90; i++) {
+            const dotScreen = toScreen(frontierPts[i].x, frontierPts[i].y);
+            const isAimed = (!isP2 && i === p.aimDegree);
+            const isMajor = (i % 10 === 0);
+
             ctx.beginPath();
-            ctx.moveTo(screenPoly[0].x, screenPoly[0].y);
-            for (let i = 0; i < screenPoly.length - 1; i++) {
-                const p0 = screenPoly[i];
-                const p1 = screenPoly[i + 1];
-                const midX = (p0.x + p1.x) / 2;
-                const midY = (p0.y + p1.y) / 2;
-                ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
-            }
-            ctx.lineTo(screenPoly[screenPoly.length - 1].x, screenPoly[screenPoly.length - 1].y);
+            ctx.moveTo(hpScreen.x, hpScreen.y);
+            ctx.lineTo(dotScreen.x, dotScreen.y);
 
-            if (!isP2) {
-                const leftWall = toScreen(0, poly[90].y);
-                const corner = toScreen(0, 15);
-                const bottomWall = toScreen(poly[0].x, 15);
-                ctx.lineTo(leftWall.x, leftWall.y);
-                ctx.lineTo(corner.x, corner.y);
-                ctx.lineTo(bottomWall.x, bottomWall.y);
+            if (isAimed) {
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.8;
+            } else if (isMajor) {
+                ctx.strokeStyle = !isP2 ? 'rgba(88, 166, 255, 0.38)' : 'rgba(248, 81, 73, 0.38)';
+                ctx.lineWidth = 1.2;
             } else {
-                const rightWall = toScreen(20, poly[90].y);
-                const corner = toScreen(20, 0);
-                const topWall = toScreen(poly[0].x, 0);
-                ctx.lineTo(rightWall.x, rightWall.y);
-                ctx.lineTo(corner.x, corner.y);
-                ctx.lineTo(topWall.x, topWall.y);
+                ctx.strokeStyle = !isP2 ? 'rgba(56, 139, 253, 0.12)' : 'rgba(248, 81, 73, 0.12)';
+                ctx.lineWidth = 0.8;
             }
-
-            ctx.closePath();
-            ctx.fillStyle = p.territoryColor;
-            ctx.fill();
-
-            // Glowing boundary perimeter: the border is ONLY the 91 permanent points (organic, no sharp corners)
-            ctx.beginPath();
-            ctx.moveTo(screenPoly[0].x, screenPoly[0].y);
-            for (let i = 0; i < screenPoly.length - 1; i++) {
-                const p0 = screenPoly[i];
-                const p1 = screenPoly[i + 1];
-                const midX = (p0.x + p1.x) / 2;
-                const midY = (p0.y + p1.y) / 2;
-                ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
-            }
-            ctx.lineTo(screenPoly[screenPoly.length - 1].x, screenPoly[screenPoly.length - 1].y);
-            ctx.strokeStyle = p.color;
-            ctx.lineWidth = 2.5;
             ctx.stroke();
         }
+        ctx.restore();
+
+        // 3c. Straight Lines Connecting Neighbor Dots
+        ctx.save();
+        ctx.beginPath();
+        for (let i = 0; i <= 90; i++) {
+            const s = toScreen(frontierPts[i].x, frontierPts[i].y);
+            if (i === 0) ctx.moveTo(s.x, s.y);
+            else ctx.lineTo(s.x, s.y);
+        }
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 2.2;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 6;
+        ctx.stroke();
+        ctx.restore();
+
+        // 3d. 91 Ray End Dots on the Border
+        ctx.save();
+        for (let i = 0; i <= 90; i++) {
+            const s = toScreen(frontierPts[i].x, frontierPts[i].y);
+            const isAimed = (!isP2 && i === p.aimDegree);
+            const isMajor = (i % 10 === 0);
+
+            ctx.beginPath();
+            let radius = isMajor ? 3.5 : 2.2;
+            if (isAimed) radius = 5.5;
+
+            ctx.arc(s.x, s.y, radius, 0, Math.PI * 2);
+            if (isAimed) {
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = p.color;
+                ctx.shadowBlur = 10;
+            } else if (isMajor) {
+                ctx.fillStyle = p.accentColor || p.color;
+                ctx.shadowColor = p.color;
+                ctx.shadowBlur = 3;
+            } else {
+                ctx.fillStyle = p.accentColor || p.color;
+                ctx.shadowBlur = 0;
+            }
+            ctx.fill();
+        }
+        ctx.restore();
     });
 
     // 4. Draw Asteroids (Only active with resources > 0)
@@ -233,6 +278,35 @@ export function renderCommanderGame(ctx, canvas, state) {
             ctx.textAlign = 'center';
             ctx.fillText(`Occupied -> ${targetPos.degree}°`, guideScreen.x, guideScreen.y - 12);
         }
+
+        // Prototype Aiming Influence Preview Contour along the frontier
+        const landingDeg = targetPos.degree !== undefined ? targetPos.degree : aimDeg;
+        const rCore = 1;
+        const neighborSpread = 10;
+        const totalRadius = rCore + neighborSpread;
+        const minDeg = Math.max(0, landingDeg - totalRadius);
+        const maxDeg = Math.min(90, landingDeg + totalRadius);
+
+        ctx.save();
+        ctx.beginPath();
+        for (let i = minDeg; i <= maxDeg; i++) {
+            const deltaDeg = Math.abs(i - landingDeg);
+            const weight = calculateTapWeight(deltaDeg, 3, 'rounded', neighborSpread, 1.0, 'smoothstep');
+            const pushAmt = 1.4;
+            const curR = (p.borderDistances ? p.borderDistances[i] : 3.8);
+            const previewR = curR + pushAmt * weight;
+            const rad = degreeToAngleRad(isP2 ? 1 : 0, i);
+            const px = p.homePlanet.x + previewR * Math.cos(rad);
+            const py = p.homePlanet.y + previewR * Math.sin(rad);
+            const ptScreen = toScreen(px, py);
+            if (i === minDeg) ctx.moveTo(ptScreen.x, ptScreen.y);
+            else ctx.lineTo(ptScreen.x, ptScreen.y);
+        }
+        ctx.strokeStyle = isSlid ? 'rgba(240, 136, 62, 0.95)' : 'rgba(255, 255, 255, 0.9)';
+        ctx.lineWidth = 2.2;
+        ctx.setLineDash([3, 4]);
+        ctx.stroke();
+        ctx.restore();
 
         // Frontier border launch origin dot
         ctx.setLineDash([]);

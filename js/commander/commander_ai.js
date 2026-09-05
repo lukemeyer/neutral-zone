@@ -42,22 +42,49 @@ export function updateCommanderAI(state, dt) {
         ai.stance = 'patrol';
     }
 
-    // 3. Dynamic Launch Trajectory Steering toward uncaptured resources
+    // 3. Intelligent Frontier Steering & Sector Expansion
     const uncaptured = asteroids.filter(a => a.resources > 0 && !isPointInFan(a, aiPoly));
+    const borderDistances = ai.borderDistances;
+
+    let targetDegree = null;
     if (uncaptured.length > 0) {
-        let best = null;
-        let minDist = Infinity;
-        uncaptured.forEach(a => {
+        const sorted = [...uncaptured].map(a => {
             const d = Math.hypot(a.x - ai.homePlanet.x, a.y - ai.homePlanet.y);
-            if (d < minDist) {
-                minDist = d;
-                best = a;
-            }
+            const ang = Math.atan2(a.y - ai.homePlanet.y, a.x - ai.homePlanet.x);
+            const deg = Math.max(0, Math.min(90, angleRadToDegree(1, ang)));
+            const currentR = borderDistances ? borderDistances[deg] : 3.8;
+            return { asteroid: a, dist: d, deg, currentR };
+        }).sort((a, b) => a.dist - b.dist);
+
+        // Filter for asteroids that aren't already excessively pushed toward or crowded with stations
+        const viable = sorted.filter(cand => {
+            if (cand.currentR > cand.dist + 1.0) return false;
+            const nearbyStations = ai.stations ? ai.stations.filter(s => Math.abs(s.degree - cand.deg) < 9) : [];
+            return nearbyStations.length < 2;
         });
-        if (best) {
-            let angle = Math.atan2(best.y - ai.homePlanet.y, best.x - ai.homePlanet.x);
-            ai.aimDegree = angleRadToDegree(1, angle);
-            ai.launchAngle = degreeToAngleRad(1, ai.aimDegree);
+
+        if (viable.length > 0) {
+            targetDegree = viable[0].deg;
         }
+    }
+
+    // Fallback: balance underdeveloped frontier sectors to maintain a coherent organic front
+    if (targetDegree === null && borderDistances) {
+        let minR = Infinity;
+        let bestDeg = 45;
+        const sampleDegrees = [15, 30, 45, 60, 75];
+        for (let d of sampleDegrees) {
+            const r = borderDistances[d];
+            if (r < minR) {
+                minR = r;
+                bestDeg = d;
+            }
+        }
+        targetDegree = bestDeg;
+    }
+
+    if (targetDegree !== null) {
+        ai.aimDegree = Math.max(0, Math.min(90, targetDegree));
+        ai.launchAngle = degreeToAngleRad(1, ai.aimDegree);
     }
 }

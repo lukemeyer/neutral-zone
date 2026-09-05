@@ -7,9 +7,9 @@ export const COMMANDER_COSTS = {
 };
 
 export const COMMANDER_BUILD_TIMES = {
-    station: 5.0,
-    miner: 6.0,
-    fighter: 8.0
+    station: 1.5,
+    miner: 5.0,
+    fighter: 6.0
 };
 
 // Queue expansion or unit (max 3 per unit type, enforces no overlapping territory)
@@ -167,8 +167,8 @@ export function updateCommanderUnits(state, dt) {
 
     players.forEach(p => {
         const enemy = players.find(ep => ep.id !== p.id);
-        const myPoly = getTerritoryPolygon(p.homePlanet, p.stations, p.id === 1);
-        const enemyPoly = getTerritoryPolygon(enemy.homePlanet, enemy.stations, enemy.id === 1);
+        const myPoly = getTerritoryPolygon(p.homePlanet, p.borderDistances || p.stations, p.id === 1);
+        const enemyPoly = getTerritoryPolygon(enemy.homePlanet, enemy.borderDistances || enemy.stations, enemy.id === 1);
 
         // Find captured asteroids inside friendly territory (and NOT in enemy territory)
         const capturedAsteroids = asteroids.filter(a => {
@@ -664,29 +664,37 @@ export function calculateLaunchTarget(player, targetDegOrAngle = null, enemy = n
     }
     aimDeg = Math.max(0, Math.min(90, aimDeg));
 
-    // Occupied dot detection: check if existing station is too close along border
-    let landingDegree = aimDeg;
-    const isOccupied = player.stations && player.stations.some(s => {
-        const sDeg = s.degree !== undefined ? s.degree : angleRadToDegree(isP2 ? 1 : 0, s.angle);
-        return Math.round(sDeg) === landingDegree;
-    });
+    // Occupied dot and opposing station clearance detection: slide to nearest open degree
+    function isDegreeBlocked(deg) {
+        if (player.stations && player.stations.some(s => {
+            const sDeg = s.degree !== undefined ? s.degree : angleRadToDegree(isP2 ? 1 : 0, s.angle);
+            return Math.round(sDeg) === deg;
+        })) return true;
 
-    if (isOccupied) {
-        // Collide and slide to the nearest free adjacent degree
+        if (enemy && enemy.stations) {
+            const testRad = degreeToAngleRad(isP2 ? 1 : 0, deg);
+            const curR = getBorderDistanceAtDegree(player.borderDistances, deg);
+            const testX = hx + (curR + STATION_LAUNCH_DISTANCE) * Math.cos(testRad);
+            const testY = hy + (curR + STATION_LAUNCH_DISTANCE) * Math.sin(testRad);
+            for (let es of enemy.stations) {
+                const ex = es.targetX !== undefined ? es.targetX : es.x;
+                const ey = es.targetY !== undefined ? es.targetY : es.y;
+                if (Math.hypot(testX - ex, testY - ey) < 1.05) return true;
+            }
+        }
+        return false;
+    }
+
+    let landingDegree = aimDeg;
+    if (isDegreeBlocked(aimDeg)) {
         for (let offset = 1; offset <= 45; offset++) {
             let found = false;
             for (const sign of [1, -1]) {
                 const testDeg = aimDeg + sign * offset;
-                if (testDeg >= 0 && testDeg <= 90) {
-                    const occ = player.stations.some(s => {
-                        const sDeg = s.degree !== undefined ? s.degree : angleRadToDegree(isP2 ? 1 : 0, s.angle);
-                        return Math.round(sDeg) === testDeg;
-                    });
-                    if (!occ) {
-                        landingDegree = testDeg;
-                        found = true;
-                        break;
-                    }
+                if (testDeg >= 0 && testDeg <= 90 && !isDegreeBlocked(testDeg)) {
+                    landingDegree = testDeg;
+                    found = true;
+                    break;
                 }
             }
             if (found) break;

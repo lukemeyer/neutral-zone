@@ -90,6 +90,18 @@ function setupUIHandlers() {
         if (e.code === 'Digit1' || e.code === 'KeyP') setStance('patrol');
         if (e.code === 'Digit2' || e.code === 'KeyD') setStance('defend');
         if (e.code === 'Digit3' || e.code === 'KeyA') setStance('attack');
+        if (e.code === 'KeyS') {
+            const p2 = getP2();
+            if (p1 && p2) queueBuild(p1, 'station', p2);
+        }
+        if (e.code === 'KeyM') {
+            const p2 = getP2();
+            if (p1 && p2) queueBuild(p1, 'miner', p2);
+        }
+        if (e.code === 'KeyF') {
+            const p2 = getP2();
+            if (p1 && p2) queueBuild(p1, 'fighter', p2);
+        }
         // Steer launch trajectory with Q / E or ArrowLeft / ArrowRight (by 1 degree)
         if (e.code === 'KeyQ' || e.code === 'ArrowLeft') {
             p1.aimDegree = Math.max(0, (p1.aimDegree !== undefined ? p1.aimDegree : 45) - 1);
@@ -110,6 +122,9 @@ function setupUIHandlers() {
 
     // Pointer & Touch Aiming for Launch Trajectory using the 91-Degree System
     let isAiming = false;
+    let lastClickTime = 0;
+    let lastClickDeg = -1;
+
     function steerTrajectoryFromPointer(e) {
         const p1 = getP1();
         if (!state || !canvas || !p1) return;
@@ -132,6 +147,18 @@ function setupUIHandlers() {
     canvas.addEventListener('pointerdown', (e) => {
         isAiming = true;
         steerTrajectoryFromPointer(e);
+
+        const now = performance.now();
+        const p1 = getP1();
+        const p2 = getP2();
+        if (p1 && p2 && p1.aimDegree !== undefined) {
+            if (now - lastClickTime < 350 && Math.abs(p1.aimDegree - lastClickDeg) <= 3) {
+                // Quick double-tap on/near the border deploys a station
+                queueBuild(p1, 'station', p2);
+            }
+            lastClickTime = now;
+            lastClickDeg = p1.aimDegree;
+        }
     });
 
     window.addEventListener('pointermove', (e) => {

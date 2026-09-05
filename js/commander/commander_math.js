@@ -32,10 +32,10 @@ export function closeBorder(poly) {
     const isP2 = poly[0].y < 7.5;
     if (!isP2) {
         return [
-            ...poly,
             { x: 0, y: Math.max(0, poly[90].y) },
             { x: 0, y: 15 },
-            { x: Math.min(20, poly[0].x), y: 15 }
+            { x: Math.min(20, poly[0].x), y: 15 },
+            ...poly
         ];
     } else {
         return [
@@ -573,6 +573,12 @@ export function getTerritoryPolygon(homePlanet, source, isPlayer2 = false) {
     return poly;
 }
 
+// Builds the complete 94-vertex closed territory polygon matching the prototype
+export function getClosedTerritoryPolygon(homePlanet, source, isPlayer2 = false) {
+    const poly = getTerritoryPolygon(homePlanet, source, isPlayer2);
+    return closeBorder(poly);
+}
+
 export const getBorderPoints = getTerritoryPolygon;
 
 // Finds distance from HQ to territory border along degree or angle (O(1) lookup)
@@ -674,27 +680,27 @@ export function distSqToSegment(p, a, b) {
     return Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y))) ** 2;
 }
 
-// Collision Check against Map Borders & Opposing Territory
-export function isPointCrossingEnemy(playerId, pt, enemyHQ = null, enemyBorder = null, clearance = 0.45) {
-    // 1. Map boundaries [0.5, 19.5] x [0.5, 14.5]
+// Collision Check against Map Borders & Opposing Territory (Prototype Math)
+export function isPointCrossingEnemy(playerId, pt, enemyHQ = null, enemyBorder = null, clearance = 1.05) {
+    // 1. Map boundaries check: [0.5, 19.5] x [0.5, 14.5]
     if (pt.x < 0.5 || pt.x > 19.5 || pt.y < 0.5 || pt.y > 14.5) {
         return true;
     }
     if (!enemyHQ || !enemyBorder) return false;
 
     const isEnemyP2 = enemyHQ.x > 10;
-    const enemyPoly = getTerritoryPolygon(enemyHQ, enemyBorder, isEnemyP2);
+    const enemyClosedPoly = getClosedTerritoryPolygon(enemyHQ, enemyBorder, isEnemyP2);
 
-    // 2. Opposing territory containment check
-    if (isPointInFan(pt, enemyPoly)) {
+    // 2. Opposing territory closed polygon containment check
+    if (isPointInFan(pt, enemyClosedPoly)) {
         return true;
     }
 
-    // 3. Distance clearance to enemy frontier segments
+    // 3. Distance clearance to all enemy closed polygon boundary segments
     const clSq = clearance * clearance;
-    for (let i = 0; i < enemyPoly.length - 1; i++) {
-        const e1 = enemyPoly[i];
-        const e2 = enemyPoly[i + 1];
+    for (let i = 0; i < enemyClosedPoly.length; i++) {
+        const e1 = enemyClosedPoly[i];
+        const e2 = enemyClosedPoly[(i + 1) % enemyClosedPoly.length];
         if (distSqToSegment(pt, e1, e2) < clSq) {
             return true;
         }
@@ -704,38 +710,20 @@ export function isPointCrossingEnemy(playerId, pt, enemyHQ = null, enemyBorder =
 }
 
 // Fast point collision check against enemy territory / stations (backward compatibility)
-export function checkPointEnemyCollision(p, enemyHQ, enemyBorder, enemyStations = null, clearance = 0.45) {
+export function checkPointEnemyCollision(p, enemyHQ, enemyBorder, enemyStations = null, clearance = 1.05) {
     const isEnemyP2 = enemyHQ ? enemyHQ.x > 10 : false;
     const playerId = isEnemyP2 ? 0 : 1;
-    if (isPointCrossingEnemy(playerId, p, enemyHQ, enemyBorder, clearance)) return true;
-    if (enemyStations) {
-        for (let s of enemyStations) {
-            const sx = s.targetX !== undefined ? s.targetX : s.x;
-            const sy = s.targetY !== undefined ? s.targetY : s.y;
-            if (Math.hypot(p.x - sx, p.y - sy) < 1.15) {
-                return true;
-            }
-        }
-    }
-    return false;
+    return isPointCrossingEnemy(playerId, p, enemyHQ, enemyBorder, clearance);
 }
 
-// Binary search to find max safe displacement along ray d
-export function findMaxSafeDelta(playerId, deg, currentR, desiredInc, homePlanet, enemyHQ = null, enemyBorder = null, clearance = 0.45, enemyStations = null) {
+// Binary search to find max safe displacement along ray d (Prototype Math)
+export function findMaxSafeDelta(playerId, deg, currentR, desiredInc, homePlanet, enemyHQ = null, enemyBorder = null, clearance = 1.05, enemyStations = null) {
     if (desiredInc <= 0.005) return 0;
     const isP2 = playerId === 1;
 
     function isSafe(r) {
         const pt = getDotPosition(homePlanet, isP2, deg, r);
-        if (isPointCrossingEnemy(playerId, pt, enemyHQ, enemyBorder, clearance)) return false;
-        if (enemyStations) {
-            for (let s of enemyStations) {
-                const sx = s.targetX !== undefined ? s.targetX : s.x;
-                const sy = s.targetY !== undefined ? s.targetY : s.y;
-                if (Math.hypot(pt.x - sx, pt.y - sy) < 1.35) return false;
-            }
-        }
-        return true;
+        return !isPointCrossingEnemy(playerId, pt, enemyHQ, enemyBorder, clearance);
     }
 
     if (isSafe(currentR + desiredInc)) {
@@ -755,8 +743,8 @@ export function findMaxSafeDelta(playerId, deg, currentR, desiredInc, homePlanet
     return low;
 }
 
-// Pushes radial border with single-dot target, 3-dot core, ±10° spread, and 50/50 neighbor redistribution
-export function pushRadialBorder(homePlanet, border, targetDegreeOrAngle, pushAmount = 1.6, enemyHQ = null, enemyBorder = null, enemyStations = null) {
+// Pushes radial border with single-dot target, 3-dot core, ±10° spread, and 50/50 neighbor redistribution (Prototype Math)
+export function pushRadialBorder(homePlanet, border, targetDegreeOrAngle, pushAmount = 1.4, enemyHQ = null, enemyBorder = null, enemyStations = null) {
     const isP2 = homePlanet.x > 10;
     const playerId = isP2 ? 1 : 0;
     let centerDeg = 45;
@@ -792,26 +780,26 @@ export function pushRadialBorder(homePlanet, border, targetDegreeOrAngle, pushAm
     const currentR = new Float64Array(border);
     const prevDistances = new Float64Array(border);
     let pending = new Float64Array(initialIncrements);
-    const clearance = 0.45;
+    const clearance = 1.05;
 
-    // Iterative 50/50 neighbor redistribution upon enemy boundary collision
-    const maxIterations = 25;
+    // Iterative 50/50 neighbor redistribution upon enemy boundary collision (up to 60 passes matching prototype)
+    const maxIterations = 60;
     for (let iter = 0; iter < maxIterations; iter++) {
         let anyMoved = false;
         const nextPending = new Float64Array(91);
 
         for (let i = 0; i <= 90; i++) {
             const inc = pending[i];
-            if (inc <= 0.002) continue;
+            if (inc <= 0.005) continue;
 
-            const maxSafe = findMaxSafeDelta(playerId, i, currentR[i], inc, homePlanet, enemyHQ, enemyBorder, clearance, enemyStations);
-            if (maxSafe > 0.002) {
+            const maxSafe = findMaxSafeDelta(playerId, i, currentR[i], inc, homePlanet, enemyHQ, enemyBorder, clearance);
+            if (maxSafe > 0.005) {
                 currentR[i] += maxSafe;
                 anyMoved = true;
             }
 
             const excess = inc - maxSafe;
-            if (excess > 0.005) {
+            if (excess > 0.01) {
                 if (i === 0) {
                     nextPending[1] += excess;
                 } else if (i === 90) {
