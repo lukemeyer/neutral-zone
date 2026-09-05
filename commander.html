@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neutral Zone: Hex Grid Variant</title>
+    <title>Neutral Zone: Commander Mode</title>
     <link rel="stylesheet" href="style.css">
     <style>
         body, html {
@@ -11,7 +11,7 @@
             padding: 0;
             width: 100%;
             height: 100%;
-            background: #090d13;
+            background: #0a0d14;
             color: #c9d1d9;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             overflow: hidden;
@@ -123,7 +123,7 @@
         }
 
         .sidebar {
-            width: 250px;
+            width: 270px;
             background: #0d1117;
             border-right: 1px solid #30363d;
             padding: 14px;
@@ -140,58 +140,42 @@
             border-left: 1px solid #30363d;
         }
 
-        .player-card {
+        .card {
             background: #161b22;
             border: 1px solid #30363d;
             border-radius: 8px;
             padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
         .card-header {
             font-weight: bold;
             font-size: 14px;
-            margin-bottom: 6px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
         .energy-val {
-            font-size: 20px;
+            font-size: 22px;
             font-weight: bold;
             font-family: monospace;
             color: #58a6ff;
-            margin-bottom: 4px;
         }
 
-        .hangar-box {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .hangar-header {
-            font-size: 13px;
-            font-weight: 600;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .hangar-stats {
-            font-size: 11px;
-            color: #8b949e;
+        .control-val {
+            font-size: 12px;
             font-family: monospace;
+            color: #3fb950;
         }
 
-        .btn-action {
-            background: #238636;
-            border: none;
-            color: #ffffff;
-            padding: 7px 10px;
+        .build-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 8px 10px;
             border-radius: 6px;
             font-size: 12px;
             font-weight: 600;
@@ -199,26 +183,23 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            transition: all 0.15s ease;
         }
 
-        .btn-action:hover {
-            background: #2ea043;
-        }
-
-        .btn-secondary {
-            background: #21262d;
-            border: 1px solid #30363d;
-            color: #c9d1d9;
-            padding: 6px 10px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .btn-secondary:hover {
+        .build-btn:hover {
             background: #30363d;
             color: #ffffff;
+            border-color: #58a6ff;
+        }
+
+        .build-btn.highlight {
+            background: #1f6feb;
+            border-color: #58a6ff;
+            color: #ffffff;
+        }
+
+        .build-btn.highlight:hover {
+            background: #388bfd;
         }
 
         .progress-slot {
@@ -226,6 +207,8 @@
             background: #21262d;
             border-radius: 2px;
             overflow: hidden;
+            margin-top: -4px;
+            margin-bottom: 4px;
         }
 
         .progress-fill {
@@ -233,6 +216,59 @@
             background: #3fb950;
             width: 0%;
             transition: width 0.1s linear;
+        }
+
+        /* Stance Selector */
+        .stance-group {
+            display: flex;
+            gap: 6px;
+        }
+
+        .stance-btn {
+            flex: 1;
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #8b949e;
+            padding: 8px 4px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.15s ease;
+        }
+
+        .stance-btn:hover {
+            color: #ffffff;
+            background: #30363d;
+        }
+
+        .stance-btn.active {
+            color: #ffffff;
+        }
+
+        .stance-btn#btn-stance-patrol.active {
+            background: #1f6feb;
+            border-color: #58a6ff;
+        }
+
+        .stance-btn#btn-stance-defend.active {
+            background: #d29922;
+            border-color: #e3b341;
+        }
+
+        .stance-btn#btn-stance-attack.active {
+            background: #da3633;
+            border-color: #f85149;
+        }
+
+        .stats-readout {
+            font-size: 12px;
+            color: #8b949e;
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .instructions-card {
@@ -248,7 +284,7 @@
         #canvas-container {
             flex: 1;
             position: relative;
-            background: #090d13;
+            background: #0a0d14;
         }
 
         canvas {
@@ -260,7 +296,7 @@
         #game-over-modal {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(9, 13, 19, 0.85);
+            background: rgba(10, 13, 20, 0.85);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -302,19 +338,19 @@
 
     <div id="top-nav">
         <div class="nav-title">
-            <span>⬡</span> Neutral Zone <span style="font-weight:normal;color:#8b949e">| Hex Grid Variant</span>
+            <span>⭐</span> Neutral Zone <span style="font-weight:normal;color:#8b949e">| Commander Mode</span>
         </div>
 
         <div class="dom-meter-wrap">
             <div class="dom-bar-container">
-                <div id="dom-bar-p1" class="dom-bar-p1" style="width: 10%;"></div>
+                <div id="dom-bar-p1" class="dom-bar-p1" style="width: 2%;"></div>
                 <div style="flex:1"></div>
-                <div id="dom-bar-p2" class="dom-bar-p2" style="width: 10%;"></div>
+                <div id="dom-bar-p2" class="dom-bar-p2" style="width: 2%;"></div>
             </div>
             <div class="dom-labels">
-                <span style="color:#58a6ff">P1: <span id="p1-sectors">3 (10%)</span></span>
-                <span style="color:#8b949e">Goal: 50% Control</span>
-                <span style="color:#ff7b72">P2: <span id="p2-sectors">3 (10%)</span></span>
+                <span style="color:#58a6ff">P1 Blue: <span id="p1-control">5.9 (2.0%)</span></span>
+                <span style="color:#8b949e">Goal: 50% Domination</span>
+                <span style="color:#ff7b72">P2 Red: <span id="p2-control">5.9 (2.0%)</span></span>
             </div>
         </div>
 
@@ -322,108 +358,132 @@
             <button id="btn-pause" class="top-btn">⏸ Pause</button>
             <button id="btn-speed-1x" class="top-btn active">1x</button>
             <button id="btn-speed-2x" class="top-btn">2x</button>
-            <button id="btn-mute" class="top-btn">🔊 Sound</button>
-            <a href="commander.html" class="classic-link" style="color: #a371f7; font-weight: 600;">⭐ Commander Mode</a>
+            <a href="hex.html" class="classic-link" style="color: #2ea043; font-weight: 600;">⬡ Hex Mode</a>
             <a href="index.html" class="classic-link">← Classic Mode</a>
         </div>
     </div>
 
     <div id="game-area">
-        <!-- Left Sidebar: Player 1 (Blue) -->
+        <!-- Left Sidebar: Player 1 (Blue Commander) -->
         <div class="sidebar">
-            <div class="player-card">
+            <div class="card">
                 <div class="card-header" style="color:#58a6ff">
-                    <span>Player 1 (Blue)</span>
-                    <span style="font-size:11px;color:#8b949e">HUMAN</span>
+                    <span>Commander Blue</span>
+                    <span style="font-size:11px;color:#8b949e">BOTTOM-LEFT</span>
                 </div>
-                <div class="energy-val">⚡ <span id="p1-energy">120</span> E</div>
+                <div class="energy-val">⚡ <span id="p1-energy">150</span> E</div>
             </div>
 
-            <!-- Miner Hangar -->
-            <div class="hangar-box">
-                <div class="hangar-header" style="color:#3fb950">
-                    <span>⛏️ Miner Hangar</span>
-                    <span class="hangar-stats">Docked: <b id="p1-miners-docked">2</b></span>
+            <!-- Macro Expansion & Build -->
+            <div class="card">
+                <div class="card-header" style="color:#c9d1d9">
+                    <span>Macro Production</span>
                 </div>
-                <div class="hangar-stats">Active in Flight: <span id="p1-miners-active">0</span></div>
-                <button id="p1-btn-miner" class="btn-action">
-                    <span>Build Miner</span>
-                    <span>30 E</span>
+
+                <button id="btn-build-station" class="build-btn highlight">
+                    <span>📡 Expand Station Arc</span>
+                    <span>50 E</span>
+                </button>
+                <div class="progress-slot">
+                    <div id="p1-prog-station" class="progress-fill"></div>
+                </div>
+
+                <button id="btn-build-miner" class="build-btn">
+                    <span>⛏️ Commission Miner</span>
+                    <span>25 E</span>
                 </button>
                 <div class="progress-slot">
                     <div id="p1-prog-miner" class="progress-fill"></div>
                 </div>
-            </div>
 
-            <!-- Fighter Hangar -->
-            <div class="hangar-box">
-                <div class="hangar-header" style="color:#58a6ff">
-                    <span>✈️ Fighter Hangar</span>
-                    <span class="hangar-stats">Docked: <b id="p1-fighters-docked">2</b></span>
-                </div>
-                <div class="hangar-stats">Active in Flight: <span id="p1-fighters-active">0</span></div>
-                <button id="p1-btn-fighter" class="btn-action" style="background:#1f6feb">
-                    <span>Build Fighter</span>
+                <button id="btn-build-fighter" class="build-btn">
+                    <span>✈️ Commission Fighter</span>
                     <span>75 E</span>
                 </button>
                 <div class="progress-slot">
-                    <div id="p1-prog-fighter" class="progress-fill" style="background:#58a6ff"></div>
+                    <div id="p1-prog-fighter" class="progress-fill"></div>
                 </div>
-                <div style="display:flex;gap:6px;margin-top:2px;">
-                    <button id="p1-btn-scramble" class="btn-secondary" style="flex:1">Scramble (2)</button>
-                    <button id="p1-btn-recall" class="btn-secondary" style="flex:1">Recall to Bay</button>
+            </div>
+
+            <!-- Global Fleet Stance -->
+            <div class="card">
+                <div class="card-header" style="color:#c9d1d9">
+                    <span>Fleet Order (All Units)</span>
+                </div>
+                <div class="stance-group">
+                    <button id="btn-stance-patrol" class="stance-btn active" title="Patrol frontier arc facing enemy (Hotkey: 1)">🔄 PATROL</button>
+                    <button id="btn-stance-defend" class="stance-btn" title="Defend against intruders & guard miners (Hotkey: 2)">🛡️ DEFEND</button>
+                    <button id="btn-stance-attack" class="stance-btn" title="Offensive push into enemy territory (Hotkey: 3)">⚔️ ATTACK</button>
+                </div>
+            </div>
+
+            <!-- Fleet Status Readout -->
+            <div class="card">
+                <div class="card-header" style="color:#8b949e">
+                    <span>Fleet Readout</span>
+                </div>
+                <div class="stats-readout">
+                    <div>Stations: <b id="p1-stations" style="color:#ffffff">3</b> (Expanding Circle)</div>
+                    <div>Miners: <b id="p1-miners" style="color:#3fb950">2</b> (Autonomous)</div>
+                    <div>Fighters: <b id="p1-fighters" style="color:#58a6ff">3</b> (Stance-based)</div>
                 </div>
             </div>
 
             <!-- Strategic Guide -->
             <div class="instructions-card">
-                <b>⬡ Station Construction:</b><br>
-                Click an empty hex intersection connected to your network to build a <b>Relay</b> (35 E).<br><br>
-                <b>🏰 Defense Turret:</b><br>
-                Click any owned Relay to upgrade to a defensive plasma <b>Turret</b> (45 E).<br><br>
-                <b>📦 Clean Hangars:</b><br>
-                Miners and fighters dock safely inside hangars when idle—no clutter or collisions!
+                <b>⭕ On-A-Rail Geometry:</b><br>
+                Stations automatically form the largest fully-connected circular shape around your corner Home Planet. No micro-management!<br><br>
+                <b>🪐 Concentric Mining:</b><br>
+                As territory expands, asteroids in concentric rings are enveloped automatically and harvested.<br><br>
+                <b>🎖️ Fleet Orders:</b><br>
+                Switch between <b>Patrol</b> (border guard), <b>Defend</b> (kill intruders), and <b>Attack</b> (push enemy base).
             </div>
         </div>
 
         <!-- Center Canvas -->
         <div id="canvas-container">
-            <canvas id="hex-canvas"></canvas>
+            <canvas id="commander-canvas"></canvas>
 
             <div id="game-over-modal" style="display:none;">
                 <div class="modal-box">
-                    <h2 id="game-over-text">Player Wins!</h2>
+                    <h2 id="game-over-text">Victory!</h2>
                     <button id="btn-restart" class="btn-restart">Play Again</button>
                 </div>
             </div>
         </div>
 
-        <!-- Right Sidebar: Player 2 (Red CPU) -->
+        <!-- Right Sidebar: Player 2 (Red Commander CPU) -->
         <div class="sidebar right-side">
-            <div class="player-card">
+            <div class="card">
                 <div class="card-header" style="color:#ff7b72">
-                    <span>Player 2 (Red)</span>
-                    <span style="font-size:11px;color:#8b949e">CPU</span>
+                    <span>Commander Red</span>
+                    <span style="font-size:11px;color:#8b949e">TOP-RIGHT (CPU)</span>
                 </div>
-                <div class="energy-val" style="color:#ff7b72">⚡ <span id="p2-energy">120</span> E</div>
+                <div class="energy-val" style="color:#ff7b72">⚡ <span id="p2-energy">150</span> E</div>
             </div>
 
-            <div class="hangar-box">
-                <div class="hangar-header" style="color:#ff7b72">
-                    <span>⛏️ CPU Miner Hangar</span>
-                    <span class="hangar-stats">Docked: <b id="p2-miners-docked">2</b></span>
+            <div class="card">
+                <div class="card-header" style="color:#ff7b72">
+                    <span>Enemy Stance</span>
+                </div>
+                <div style="font-size:16px;font-weight:bold;color:#ffffff;font-family:monospace" id="p2-stance">
+                    PATROL
                 </div>
             </div>
 
-            <div class="hangar-box">
-                <div class="hangar-header" style="color:#ff7b72">
-                    <span>✈️ CPU Fighter Hangar</span>
-                    <span class="hangar-stats">Docked: <b id="p2-fighters-docked">2</b></span>
+            <div class="card">
+                <div class="card-header" style="color:#8b949e">
+                    <span>Enemy Fleet Intel</span>
+                </div>
+                <div class="stats-readout">
+                    <div>Stations: <b id="p2-stations" style="color:#ffffff">3</b></div>
+                    <div>Miners: <b id="p2-miners" style="color:#3fb950">2</b></div>
+                    <div>Fighters: <b id="p2-fighters" style="color:#ff7b72">3</b></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script type="module" src="js/hex/hex_main.js"></script>
+    <script type="module" src="js/commander/commander_main.js"></script>
 </body>
 </html>

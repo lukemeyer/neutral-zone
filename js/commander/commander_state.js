@@ -1,0 +1,116 @@
+import { computeStationPositions, getTerritoryPolygon, getAsteroidLayout } from './commander_math.js';
+
+export function createCommanderState() {
+    const p1Home = { x: 2.5, y: 12.5, health: 1500, maxHealth: 1500, radius: 0.8 };
+    const p2Home = { x: 17.5, y: 2.5, health: 1500, maxHealth: 1500, radius: 0.8 };
+
+    function initStations(home, count, isP2) {
+        const positions = computeStationPositions(home, count, isP2);
+        return positions.map((pos, idx) => ({
+            id: (isP2 ? 100 : 0) + idx,
+            x: pos.x,
+            y: pos.y,
+            targetX: pos.x,
+            targetY: pos.y,
+            health: 250,
+            maxHealth: 250,
+            cooldown: 0,
+            range: 2.5,
+            isPerimeter: pos.isPerimeter
+        }));
+    }
+
+    const players = [
+        {
+            id: 0,
+            name: 'Commander Blue',
+            color: '#1f6feb',
+            accentColor: '#58a6ff',
+            territoryColor: 'rgba(31, 111, 235, 0.28)',
+            energy: 150,
+            homePlanet: p1Home,
+            stationCount: 3,
+            stations: initStations(p1Home, 3, false),
+            stance: 'patrol', // 'patrol' | 'defend' | 'attack'
+            units: {
+                miners: [],
+                fighters: []
+            },
+            buildQueue: [],
+            buildCooldowns: { station: 0, miner: 0, fighter: 0 },
+            isCPU: false,
+            aiTimer: 0
+        },
+        {
+            id: 1,
+            name: 'Commander Red',
+            color: '#f85149',
+            accentColor: '#ff7b72',
+            territoryColor: 'rgba(248, 81, 73, 0.28)',
+            energy: 150,
+            homePlanet: p2Home,
+            stationCount: 3,
+            stations: initStations(p2Home, 3, true),
+            stance: 'patrol',
+            units: {
+                miners: [],
+                fighters: []
+            },
+            buildQueue: [],
+            buildCooldowns: { station: 0, miner: 0, fighter: 0 },
+            isCPU: true,
+            aiTimer: 0
+        }
+    ];
+
+    // Starting units for each player: 2 miners and 3 fighters
+    [0, 1].forEach(pId => {
+        const p = players[pId];
+        // 2 Miners
+        for (let i = 0; i < 2; i++) {
+            p.units.miners.push({
+                id: pId * 1000 + i,
+                playerId: pId,
+                x: p.homePlanet.x + (pId === 0 ? 0.6 : -0.6) * (i + 1),
+                y: p.homePlanet.y + (pId === 0 ? -0.6 : 0.6) * (i + 1),
+                payload: 0,
+                maxPayload: 25,
+                targetAsteroid: null,
+                returning: false,
+                health: 100,
+                maxHealth: 100
+            });
+        }
+        // 3 Fighters
+        for (let i = 0; i < 3; i++) {
+            p.units.fighters.push({
+                id: pId * 1000 + 50 + i,
+                playerId: pId,
+                x: p.homePlanet.x + (pId === 0 ? 1.0 : -1.0) + (i * 0.4),
+                y: p.homePlanet.y + (pId === 0 ? -1.0 : 1.0) - (i * 0.4),
+                health: 150,
+                maxHealth: 150,
+                cooldown: 0,
+                speed: 2.2,
+                patrolT: i * 0.33
+            });
+        }
+    });
+
+    const asteroids = getAsteroidLayout();
+
+    return {
+        mapWidth: 20,
+        mapHeight: 15,
+        players,
+        asteroids,
+        projectiles: [],
+        particles: [],
+        gameTime: 0,
+        gameSpeed: 1.0,
+        isPaused: false,
+        isGameOver: false,
+        winner: null,
+        winReason: ''
+    };
+}
