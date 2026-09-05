@@ -4,6 +4,7 @@
   "description": "Tactical real-time strategy territory domination game",
   "main": "js/main.js",
   "scripts": {
+    "build": "node scripts/build.mjs",
     "test": "node tests/run_all_goals.js",
     "test:scenarios": "node tests/scenarios.js",
     "test:analyze": "node tests/analyze_logs.js"

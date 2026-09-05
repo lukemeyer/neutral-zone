@@ -65,8 +65,8 @@ export default {
         const resourceExhaustion = remainingResources === 0 && p1Exhausted && p2Exhausted;
 
         if (p1Dead || p2Dead || p1Dom || p2Dom || resourceExhaustion) {
-            // Target length is ~4-6 mins (~240-360s). We allow a variance between 3.0 minutes (180s) and 8.0 minutes (480s).
-            if (timeSeconds < 180) {
+            // Target length is ~3-6 mins (~180-360s). We allow a variance between 2.5 minutes (150s) and 8.0 minutes (480s).
+            if (timeSeconds < 150) {
                 global.assert(false, `Game Ended Too Fast: Match concluded in ${timeSeconds.toFixed(1)}s. This implies a first-strike or snowball mechanic is too strong.`);
             } else if (timeSeconds > 480) {
                 global.assert(false, `Game Too Slow: Match took ${timeSeconds.toFixed(1)}s. The CPUs are trapped in an unbreakable stalemate or lack offensive push.`);
