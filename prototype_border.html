@@ -414,7 +414,7 @@
             </div>
 
             <div id="hint-banner">
-                <span>👉 <b>Tap or drag</b> on any dot to expand the border outward. Use controls to tune tap distance & neighbor propagation.</span>
+                <span>👉 <b>Left-Click</b> to expand (+), <b>Right-Click</b> to subtract (-). Drag to shape frontier.</span>
             </div>
         </div>
 
@@ -487,6 +487,11 @@
                         <option value="exponential">Exponential Decay</option>
                     </select>
                 </div>
+
+                <label class="toggle-row" style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(48, 54, 61, 0.5);">
+                    <input type="checkbox" id="toggle-restrict-contraction" checked>
+                    <span><b>Restrict Contraction</b> (dots never decrease on tap)</span>
+                </label>
             </div>
 
             <!-- Smoothing & Filtering -->
@@ -639,10 +644,12 @@
             showFill: true,
             showPreview: true,
             showDegreeLabels: false,
+            restrictContraction: true, // dot value can never decrease when another dot is tapped
 
             // Interaction tracking
             hoveredDegree: -1,
             isDragging: false,
+            dragButton: -1,
             lastInteractedDegree: -1,
 
             // History for Undo/Redo
@@ -798,6 +805,7 @@
         function tapDegree(centerDeg, pushAmount = state.tapDistance, isPull = false) {
             if (centerDeg < 0 || centerDeg >= state.numDegrees) return;
 
+            const prevDistances = new Float64Array(state.distances);
             const rCore = Math.floor((state.initialSpreadDots - 1) / 2);
             const totalRadius = rCore + state.neighborSpread;
             const signedPush = isPull ? -pushAmount : pushAmount;
@@ -820,6 +828,16 @@
 
             if (state.smoothingPasses > 0) {
                 applyLaplacianSmoothing(state.distances, state.laplacianWeight, state.smoothingPasses);
+            }
+
+            // Restrict contraction: when value is increased (not a subtract tap),
+            // a dot's value can NEVER decrease from what it was before this tap
+            if (state.restrictContraction && !isPull) {
+                for (let i = 0; i < state.numDegrees; i++) {
+                    if (state.distances[i] < prevDistances[i]) {
+                        state.distances[i] = prevDistances[i];
+                    }
+                }
             }
 
             saveHistorySnapshot();
@@ -969,10 +987,8 @@
             if (state.showPreview && state.hoveredDegree >= 0) {
                 ctx.save();
                 const centerDeg = state.hoveredDegree;
-                const spread = state.neighborSpread;
-                const strength = state.neighborStrength;
-                const curve = state.falloffCurve;
-                const push = state.tapDistance;
+                const isSubtract = (state.dragButton === 2);
+                const signedPush = isSubtract ? -state.tapDistance : state.tapDistance;
                 const rCore = Math.floor((state.initialSpreadDots - 1) / 2);
                 const totalRadius = rCore + state.neighborSpread;
 
@@ -990,14 +1006,14 @@
                         state.neighborStrength,
                         state.falloffCurve
                     );
-                    const deltaR = push * weight;
-                    const previewR = state.distances[i] + deltaR;
+                    const deltaR = signedPush * weight;
+                    const previewR = Math.max(30, state.distances[i] + deltaR);
                     const pt = getDotPosition(i, previewR);
                     if (i === minDeg) ctx.moveTo(pt.x, pt.y);
                     else ctx.lineTo(pt.x, pt.y);
                 }
 
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.strokeStyle = isSubtract ? 'rgba(248, 81, 73, 0.85)' : 'rgba(255, 255, 255, 0.7)';
                 ctx.lineWidth = 2;
                 ctx.setLineDash([3, 4]);
                 ctx.stroke();
@@ -1135,7 +1151,8 @@
             if (state.isDragging) {
                 const deg = state.hoveredDegree;
                 if (deg !== state.lastInteractedDegree) {
-                    tapDegree(deg, state.tapDistance * 0.4);
+                    const isSubtract = (state.dragButton === 2 || e.shiftKey || e.altKey);
+                    tapDegree(deg, state.tapDistance * 0.4, isSubtract);
                     state.lastInteractedDegree = deg;
                 }
             }
@@ -1144,6 +1161,7 @@
         canvas.addEventListener('mouseleave', () => {
             state.hoveredDegree = -1;
             state.isDragging = false;
+            state.dragButton = -1;
             document.getElementById('insp-deg').innerText = '--';
             document.getElementById('insp-dist').innerText = '--';
             document.getElementById('insp-pos').innerText = '(--, --)';
@@ -1151,16 +1169,25 @@
             render();
         });
 
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+        });
+
         canvas.addEventListener('mousedown', (e) => {
+            e.preventDefault();
             state.isDragging = true;
+            state.dragButton = e.button; // 0 for left (expand), 2 for right (subtract)
             const deg = getPointerDeg(e);
             state.lastInteractedDegree = deg;
-            tapDegree(deg, state.tapDistance);
+            const isSubtract = (e.button === 2 || e.shiftKey || e.altKey);
+            tapDegree(deg, state.tapDistance, isSubtract);
         });
 
         window.addEventListener('mouseup', () => {
             state.isDragging = false;
+            state.dragButton = -1;
             state.lastInteractedDegree = -1;
+            render();
         });
 
         // Touch support
@@ -1305,6 +1332,11 @@
             resizeCanvas();
         });
 
+        const toggleRestrictContraction = document.getElementById('toggle-restrict-contraction');
+        toggleRestrictContraction.addEventListener('change', (e) => {
+            state.restrictContraction = e.target.checked;
+        });
+
         // Display Toggles
         document.getElementById('toggle-rays').addEventListener('change', (e) => {
             state.showRays = e.target.checked;
@@ -1422,10 +1454,20 @@
             sliderSmoothing.value = state.smoothingPasses;
             lblSmoothing.innerText = `${state.smoothingPasses} pass${state.smoothingPasses === 1 ? '' : 'es'}`;
         }
+        if (urlParams.has('restrict')) {
+            state.restrictContraction = (urlParams.get('restrict') === 'true' || urlParams.get('restrict') === '1');
+            toggleRestrictContraction.checked = state.restrictContraction;
+        }
         if (urlParams.has('taps')) {
             const tapList = urlParams.get('taps').split(',').map(Number);
             for (const deg of tapList) {
                 tapDegree(deg, state.tapDistance);
+            }
+        }
+        if (urlParams.has('subtracts')) {
+            const subList = urlParams.get('subtracts').split(',').map(Number);
+            for (const deg of subList) {
+                tapDegree(deg, state.tapDistance, true);
             }
         }
         if (urlParams.has('hover')) {
