@@ -1,4 +1,4 @@
-import { computeStationPositions, getTerritoryPolygon, getAsteroidLayout } from './commander_math.js';
+import { computeStationPositions, getTerritoryPolygon, getAsteroidLayout, createBorderFromStations } from './commander_math.js';
 
 export function createCommanderState() {
     const p1Home = { x: 2.5, y: 12.5, health: 1500, maxHealth: 1500, radius: 0.8 };
@@ -20,6 +20,9 @@ export function createCommanderState() {
         }));
     }
 
+    const p1Stations = initStations(p1Home, 3, false);
+    const p2Stations = initStations(p2Home, 3, true);
+
     const players = [
         {
             id: 0,
@@ -30,7 +33,8 @@ export function createCommanderState() {
             energy: 150,
             homePlanet: p1Home,
             stationCount: 3,
-            stations: initStations(p1Home, 3, false),
+            stations: p1Stations,
+            borderDistances: createBorderFromStations(p1Home, p1Stations, false),
             stance: 'patrol', // 'patrol' | 'defend' | 'attack'
             units: {
                 miners: [],
@@ -54,7 +58,8 @@ export function createCommanderState() {
             energy: 150,
             homePlanet: p2Home,
             stationCount: 3,
-            stations: initStations(p2Home, 3, true),
+            stations: p2Stations,
+            borderDistances: createBorderFromStations(p2Home, p2Stations, true),
             stance: 'patrol',
             units: {
                 miners: [],
@@ -70,6 +75,9 @@ export function createCommanderState() {
             aiTimer: 0
         }
     ];
+
+    players[0].stations._borderDistances = players[0].borderDistances;
+    players[1].stations._borderDistances = players[1].borderDistances;
 
     // Starting units for each player: 2 miners and 3 fighters
     [0, 1].forEach(pId => {

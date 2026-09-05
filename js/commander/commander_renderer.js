@@ -54,7 +54,7 @@ export function renderCommanderGame(ctx, canvas, state) {
 
     // 3. Draw Solid 90-Degree Corner Fan Territories
     players.forEach(p => {
-        const poly = getTerritoryPolygon(p.homePlanet, p.stations, p.id === 1);
+        const poly = getTerritoryPolygon(p.homePlanet, p.borderDistances || p.stations, p.id === 1);
         if (poly.length >= 3) {
             const screenPoly = poly.map(pt => toScreen(pt.x, pt.y));
 

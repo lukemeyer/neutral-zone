@@ -1,4 +1,4 @@
-import { computeStationPositions, getTerritoryPolygon, getBorderIntersection, isPointInFan, canExpandStation, doPolygonsIntersect } from './commander_math.js';
+import { computeStationPositions, getTerritoryPolygon, getBorderIntersection, isPointInFan, canExpandStation, doPolygonsIntersect, pushRadialBorder, pullRadialBorder, createRadialBorder, createBorderFromStations, checkPointEnemyCollision } from './commander_math.js';
 
 export const COMMANDER_COSTS = {
     station: 50,
@@ -598,12 +598,17 @@ export function isPositionSafe(cand, player, enemy = null) {
     if (cand.x < 0.5 || cand.x > 19.5 || cand.y < 0.5 || cand.y > 14.5) return false;
     if (!enemy) return true;
 
-    const enemyStations = enemy.stations || [];
-    const isEnemyP2 = enemy.id === 1;
-    const enemyPoly = getTerritoryPolygon(enemy.homePlanet, enemyStations, isEnemyP2);
-    if (isPointInFan(cand, enemyPoly)) return false;
+    if (enemy.borderDistances) {
+        if (checkPointEnemyCollision(cand, enemy.homePlanet, enemy.borderDistances, enemy.stations)) return false;
+    } else {
+        const enemyStations = enemy.stations || [];
+        const isEnemyP2 = enemy.id === 1;
+        const enemyPoly = getTerritoryPolygon(enemy.homePlanet, enemyStations, isEnemyP2);
+        if (isPointInFan(cand, enemyPoly)) return false;
+    }
 
     const minStationDist = 1.35;
+    const enemyStations = enemy.stations || [];
     for (let es of enemyStations) {
         const esX = es.targetX !== undefined ? es.targetX : es.x;
         const esY = es.targetY !== undefined ? es.targetY : es.y;
@@ -619,8 +624,8 @@ export function isPolygonSafe(testStations, player, enemy = null) {
     if (!enemy) return true;
     const isP2 = player.id === 1;
     const isEnemyP2 = enemy.id === 1;
-    const proposedPoly = getTerritoryPolygon(player.homePlanet, testStations, isP2);
-    const enemyPoly = getTerritoryPolygon(enemy.homePlanet, enemy.stations || [], isEnemyP2);
+    const proposedPoly = getTerritoryPolygon(player.homePlanet, player.borderDistances || testStations, isP2);
+    const enemyPoly = getTerritoryPolygon(enemy.homePlanet, enemy.borderDistances || enemy.stations || [], isEnemyP2);
     return !doPolygonsIntersect(proposedPoly, enemyPoly);
 }
 
@@ -685,7 +690,8 @@ export function calculateLaunchTarget(player, angle, enemy = null) {
     const isP2 = player.id === 1;
     const hx = player.homePlanet.x;
     const hy = player.homePlanet.y;
-    const borderDist = getBorderIntersection(player.homePlanet, player.stations, isP2, angle);
+    const borderSource = player.borderDistances || player.stations;
+    const borderDist = getBorderIntersection(player.homePlanet, borderSource, isP2, angle);
 
     let effectiveEnemy = enemy;
     if (enemy && enemy.launchingStations && enemy.launchingStations.length > 0) {
@@ -701,7 +707,7 @@ export function calculateLaunchTarget(player, angle, enemy = null) {
         const testAng = angle + dAng;
         const cosA = Math.cos(testAng);
         const sinA = Math.sin(testAng);
-        const bDist = getBorderIntersection(player.homePlanet, player.stations, isP2, testAng);
+        const bDist = getBorderIntersection(player.homePlanet, borderSource, isP2, testAng);
         const maxD = bDist + 2.0;
         const minD = Math.max(1.5, bDist * 0.4);
 
@@ -769,6 +775,28 @@ export function onStationAdded(player, impactPos, enemy = null) {
     const cx = isP2 ? 20 : 0;
     const cy = isP2 ? 0 : 15;
 
+    // Initialize borderDistances if not present
+    if (!player.borderDistances) {
+        player.borderDistances = createBorderFromStations(player.homePlanet, player.stations || [], isP2);
+    }
+
+    const launchAng = player.launchAngle !== undefined ? player.launchAngle : (isP2 ? Math.PI * 0.75 : -Math.PI * 0.25);
+
+    // Push radial border with angular falloff and neighbor excess redistribution upon collision
+    pushRadialBorder(
+        player.homePlanet,
+        player.borderDistances,
+        launchAng,
+        2.0,
+        enemy ? enemy.homePlanet : null,
+        enemy ? enemy.borderDistances : null,
+        enemy ? enemy.stations : null
+    );
+
+    if (player.stations) {
+        player.stations._borderDistances = player.borderDistances;
+    }
+
     const clampedNewPos = clampStationToSeam(impactPos, isP2);
 
     // Pull existing stations in a weighted way: closer stations move more, farther stations move less
@@ -818,6 +846,7 @@ export function onStationAdded(player, impactPos, enemy = null) {
     };
     player.stations.push(newStation);
     player.stationCount = player.stations.length;
+    player.stations._borderDistances = player.borderDistances;
 
     // Enforce even distribution across network (prevent clustering and prevent overlap)
     relaxStations(player.stations, isP2, enemy);
@@ -831,8 +860,20 @@ export function onStationDestroyed(player, destroyedStation, enemy = null) {
     const deadX = destroyedStation.targetX !== undefined ? destroyedStation.targetX : destroyedStation.x;
     const deadY = destroyedStation.targetY !== undefined ? destroyedStation.targetY : destroyedStation.y;
 
+    // Pull radial border inward at destroyed station angle
+    if (player.borderDistances) {
+        const deadAng = Math.atan2(deadY - player.homePlanet.y, deadX - player.homePlanet.x);
+        pullRadialBorder(player.homePlanet, player.borderDistances, deadAng, 1.8);
+        if (player.stations) {
+            player.stations._borderDistances = player.borderDistances;
+        }
+    }
+
     player.stations = player.stations.filter(s => s !== destroyedStation);
     player.stationCount = Math.max(0, player.stations.length);
+    if (player.stations && player.borderDistances) {
+        player.stations._borderDistances = player.borderDistances;
+    }
 
     // Remaining stations move in a weighted way to fill the gap: closer stations move more, farther stations move less
     const fillRadius = 8.0;

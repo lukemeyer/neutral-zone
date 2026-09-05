@@ -80,6 +80,33 @@ export function canExpandStation(player, enemy, targetCount = null) {
     const count = targetCount !== null ? targetCount : (player.stationCount + 1);
     const steer = player.launchAngle !== undefined ? player.launchAngle : (player.steeringAngle || null);
 
+    // If players have radial borders, test if ray along steer angle has headroom
+    if (player.borderDistances && enemy.borderDistances) {
+        const angle = steer !== null ? steer : (isP2 ? Math.PI * 0.75 : -Math.PI * 0.25);
+        let canonicalAngle = angle;
+        if (isP2) canonicalAngle = angle - Math.PI;
+        const t = (canonicalAngle - (-Math.PI * 0.5)) / (Math.PI * 0.5);
+        const deg = Math.max(0, Math.min(90, Math.round(t * 90)));
+        const rad = isP2 ? (Math.PI * 0.5 + (deg / 90) * (Math.PI * 0.5)) : (-Math.PI * 0.5 + (deg / 90) * (Math.PI * 0.5));
+        const hx = player.homePlanet ? player.homePlanet.x : (isP2 ? 17.5 : 2.5);
+        const hy = player.homePlanet ? player.homePlanet.y : (isP2 ? 2.5 : 12.5);
+        const curDist = player.borderDistances[deg];
+        const maxWall = distToWall(hx, hy, rad);
+        if (curDist >= maxWall - 0.2) return false;
+
+        const enemyHQ = enemy.homePlanet || { x: enemy.id === 1 ? 17.5 : 2.5, y: enemy.id === 1 ? 2.5 : 12.5 };
+        const testP = { x: hx + (curDist + 1.0) * Math.cos(rad), y: hy + (curDist + 1.0) * Math.sin(rad) };
+        if (checkPointEnemyCollision(testP, enemyHQ, enemy.borderDistances, enemy.stations)) {
+            // Check if excess can spill to neighbors
+            const leftP = { x: hx + (curDist + 0.5) * Math.cos(rad - 0.1), y: hy + (curDist + 0.5) * Math.sin(rad - 0.1) };
+            const rightP = { x: hx + (curDist + 0.5) * Math.cos(rad + 0.1), y: hy + (curDist + 0.5) * Math.sin(rad + 0.1) };
+            const leftSafe = !checkPointEnemyCollision(leftP, enemyHQ, enemy.borderDistances, enemy.stations);
+            const rightSafe = !checkPointEnemyCollision(rightP, enemyHQ, enemy.borderDistances, enemy.stations);
+            return leftSafe || rightSafe;
+        }
+        return true;
+    }
+
     const proposedStations = computeStationPositions(player.homePlanet, count, isP2, steer);
     const proposedPoly = getTerritoryPolygon(player.homePlanet, proposedStations, isP2);
 
@@ -267,139 +294,206 @@ export function convexHull(points) {
     return lower.concat(upper);
 }
 
-// Helper to dig cavities along wide frontier edges for concave territory shapes (e.g. U-shapes)
-function digCavity(A, B, stations, boundary) {
-    // Both A and B must be stations (not corner wall anchor points)
-    const isWallA = A.x === 0 || A.y === 15;
-    const isWallB = B.x === 0 || B.y === 15;
-    if (isWallA || isWallB) return [];
+// Function to find distance to rectangular boundary [0, 20] x [0, 15] along angle
+export function distToWall(hx, hy, angleRad) {
+    const cosA = Math.cos(angleRad);
+    const sinA = Math.sin(angleRad);
+    let minD = Infinity;
 
-    const dx = B.x - A.x;
-    const dy = B.y - A.y;
-    const L = Math.hypot(dx, dy);
-    if (L < 5.0) return [];
+    if (cosA > 1e-6) minD = Math.min(minD, (20 - hx) / cosA);
+    if (cosA < -1e-6) minD = Math.min(minD, (0 - hx) / cosA);
+    if (sinA > 1e-6) minD = Math.min(minD, (15 - hy) / sinA);
+    if (sinA < -1e-6) minD = Math.min(minD, (0 - hy) / sinA);
 
-    const candidates = [];
-    for (let p of stations) {
-        if (boundary.some(b => Math.hypot(b.x - p.x, b.y - p.y) < 0.1)) continue;
-        const t = ((p.x - A.x) * dx + (p.y - A.y) * dy) / (L * L);
-        if (t <= 0.05 || t >= 0.95) continue;
-        const depth = (dx * (p.y - A.y) - dy * (p.x - A.x)) / L;
-
-        // Valley must have sufficient depth from outer chord to represent a genuine recessed bay
-        if (depth >= 2.8) {
-            candidates.push({ p, t, depth });
-        }
-    }
-
-    if (candidates.length === 0) return [];
-
-    candidates.sort((a, b) => a.t - b.t);
-
-    const result = [];
-    candidates.forEach(c => {
-        if (result.length === 0 || c.t - result[result.length - 1].t > 0.10) {
-            result.push(c);
-        } else if (c.depth < result[result.length - 1].depth) {
-            result[result.length - 1] = c;
-        }
-    });
-
-    return result.map(c => c.p);
+    return Math.max(0, minD);
 }
 
-// Builds territory polygon filling the entire 90 degree corner with support for concave shapes
-export function getTerritoryPolygon(homePlanet, stations, isPlayer2 = false) {
-    if (!stations || stations.length === 0) {
-        return [];
+// Generates initial 91-degree quadrant border (0 to 90 degrees from North to East)
+export function createQuadrantBorder(initialRadius = 3.8) {
+    return new Float64Array(91).fill(initialRadius);
+}
+export const createRadialBorder = createQuadrantBorder;
+
+// Generates a 91-degree radial border enclosing given stations
+export function createBorderFromStations(hq, stations, isP2 = false) {
+    if (stations && stations._borderDistances) return stations._borderDistances;
+    const r = new Float64Array(91).fill(0.5);
+    if (!stations || stations.length === 0) return r;
+
+    for (let s of stations) {
+        const sx = s.targetX !== undefined ? s.targetX : s.x;
+        const sy = s.targetY !== undefined ? s.targetY : s.y;
+        let dx = sx - hq.x;
+        let dy = sy - hq.y;
+        if (isP2) {
+            dx = (20 - sx) - 2.5;
+            dy = (15 - sy) - 12.5;
+        }
+        const dist = Math.hypot(dx, dy);
+        const ang = Math.atan2(dy, dx);
+        const t = (ang - (-Math.PI * 0.5)) / (Math.PI * 0.5);
+        const centerDeg = Math.max(0, Math.min(90, Math.round(t * 90)));
+        const spread = 15;
+        const reach = Math.max(dist, 1.0);
+
+        for (let i = 0; i <= 90; i++) {
+            const diff = Math.abs(i - centerDeg);
+            if (diff <= spread) {
+                const w = Math.cos((Math.PI / 2) * (diff / spread));
+                const bumped = reach * w * w + (1 - w * w) * r[i];
+                if (bumped > r[i]) r[i] = bumped;
+            }
+        }
+    }
+    return r;
+}
+
+// Fast point collision check against enemy territory / stations
+export function checkPointEnemyCollision(p, enemyHQ, enemyBorder, enemyStations = null, clearance = 0.5) {
+    if (p.x < 0.5 || p.x > 19.5 || p.y < 0.5 || p.y > 14.5) return true;
+    if (!enemyHQ) return false;
+    const isEnemyP2 = enemyHQ.x > 10;
+    if (enemyBorder) {
+        const enemyPoly = getTerritoryPolygon(enemyHQ, enemyBorder, isEnemyP2);
+        if (isPointInFan(p, enemyPoly)) return true;
+        for (let i = 0; i < enemyPoly.length; i++) {
+            const v = enemyPoly[i];
+            if (Math.hypot(p.x - v.x, p.y - v.y) < clearance) return true;
+        }
+    }
+    if (enemyStations) {
+        for (let s of enemyStations) {
+            const sx = s.targetX !== undefined ? s.targetX : s.x;
+            const sy = s.targetY !== undefined ? s.targetY : s.y;
+            if (Math.hypot(p.x - sx, p.y - sy) < 1.35) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Pushes radial border with angular falloff and neighbor excess redistribution upon collision
+export function pushRadialBorder(homePlanet, border, targetAngleRad, pushAmount = 2.0, enemyHQ = null, enemyBorder = null, enemyStations = null) {
+    const isP2 = homePlanet.x > 10;
+    const hx = homePlanet.x;
+    const hy = homePlanet.y;
+    let canonicalAngle = targetAngleRad;
+    if (isP2) canonicalAngle = targetAngleRad - Math.PI;
+
+    const t = (canonicalAngle - (-Math.PI * 0.5)) / (Math.PI * 0.5);
+    const targetDeg = Math.max(0, Math.min(90, Math.round(t * 90)));
+    const spread = 25;
+    const pendingPush = new Float64Array(91);
+
+    for (let d = 0; d <= 90; d++) {
+        const diff = Math.abs(d - targetDeg);
+        if (diff <= spread) {
+            const w = Math.cos((Math.PI / 2) * (diff / spread));
+            pendingPush[d] = pushAmount * w * w;
+        }
     }
 
-    // Auto-detect player 2 if isPlayer2 flag isn't explicitly passed
-    const isP2 = isPlayer2 || (homePlanet && homePlanet.x > 10) || (stations[0] && stations[0].x > 10);
+    for (let iter = 0; iter < 10; iter++) {
+        const excess = new Float64Array(91);
+        let hasExcess = false;
+
+        for (let d = 0; d <= 90; d++) {
+            if (pendingPush[d] <= 0.001) continue;
+            const rad = isP2
+                ? (Math.PI * 0.5 + (d / 90) * (Math.PI * 0.5))
+                : (-Math.PI * 0.5 + (d / 90) * (Math.PI * 0.5));
+            const cosA = Math.cos(rad);
+            const sinA = Math.sin(rad);
+            const maxWall = distToWall(hx, hy, rad);
+
+            const desiredR = border[d] + pendingPush[d];
+            let safeR = border[d];
+            const testSteps = 10;
+            for (let s = 1; s <= testSteps; s++) {
+                const r = border[d] + (desiredR - border[d]) * (s / testSteps);
+                if (r > maxWall) break;
+                const p = { x: hx + r * cosA, y: hy + r * sinA };
+                if (enemyHQ && checkPointEnemyCollision(p, enemyHQ, enemyBorder, enemyStations, 0.5)) break;
+                safeR = r;
+            }
+
+            const actualPush = safeR - border[d];
+            border[d] = safeR;
+            const rem = pendingPush[d] - actualPush;
+            if (rem > 0.01) {
+                hasExcess = true;
+                if (d > 0) excess[d - 1] += rem * 0.45;
+                if (d < 90) excess[d + 1] += rem * 0.45;
+            }
+            pendingPush[d] = 0;
+        }
+
+        if (!hasExcess) break;
+        for (let d = 0; d <= 90; d++) {
+            pendingPush[d] = excess[d];
+        }
+    }
+}
+
+// Pulls radial border inward around a target angle (e.g. when a station is destroyed)
+export function pullRadialBorder(homePlanet, border, targetAngleRad, pullAmount = 1.5) {
+    const isP2 = homePlanet.x > 10;
+    const hx = homePlanet.x;
+    const hy = homePlanet.y;
+    let canonicalAngle = targetAngleRad;
+    if (isP2) canonicalAngle = targetAngleRad - Math.PI;
+
+    const t = (canonicalAngle - (-Math.PI * 0.5)) / (Math.PI * 0.5);
+    const targetDeg = Math.max(0, Math.min(90, Math.round(t * 90)));
+    const spread = 25;
+
+    for (let d = 0; d <= 90; d++) {
+        const diff = Math.abs(d - targetDeg);
+        if (diff <= spread) {
+            const w = Math.cos((Math.PI / 2) * (diff / spread));
+            const pull = pullAmount * w * w;
+            border[d] = Math.max(2.0, border[d] - pull);
+        }
+    }
+}
+
+// Builds territory polygon from 91-degree radial distance graph (fixed 94 vertices, guaranteed zero self-intersections)
+export function getTerritoryPolygon(homePlanet, source, isPlayer2 = false) {
+    const isP2 = isPlayer2 || (homePlanet && homePlanet.x > 10) || (source && source.id === 1) || (Array.isArray(source) && source[0] && source[0].x > 10);
+    const hx = homePlanet ? homePlanet.x : (isP2 ? 17.5 : 2.5);
+    const hy = homePlanet ? homePlanet.y : (isP2 ? 2.5 : 12.5);
+
+    let distances = null;
+    if (source instanceof Float64Array || (Array.isArray(source) && source.length === 91 && typeof source[0] === 'number')) {
+        distances = source;
+    } else if (source && source.borderDistances) {
+        distances = source.borderDistances;
+    } else if (Array.isArray(source)) {
+        if (source._borderDistances) distances = source._borderDistances;
+        else distances = createBorderFromStations({ x: hx, y: hy }, source, isP2);
+    }
+
+    if (!distances) {
+        distances = createQuadrantBorder(3.8);
+    }
 
     if (!isP2) {
-        // Corner is (0, 15). Calculate station polar angles from corner.
-        let minAngle = Infinity;
-        let maxAngle = -Infinity;
-        let leftStation = null;
-        let bottomStation = null;
+        const poly = [];
+        poly.push({ x: 0, y: 15 });
+        poly.push({ x: 0, y: Math.max(0, Math.round((hy - distances[0]) * 1000) / 1000) });
 
-        const st = stations.map(s => ({
-            x: s.targetX !== undefined ? s.targetX : s.x,
-            y: s.targetY !== undefined ? s.targetY : s.y
-        }));
-
-        st.forEach(s => {
-            const ang = Math.atan2(s.y - 15, s.x);
-            if (ang < minAngle) {
-                minAngle = ang;
-                leftStation = s;
-            }
-            if (ang > maxAngle) {
-                maxAngle = ang;
-                bottomStation = s;
-            }
-        });
-
-        const leftR = leftStation ? Math.max(3.2, Math.hypot(leftStation.x, 15 - leftStation.y)) : 3.2;
-        const bottomR = bottomStation ? Math.max(3.2, Math.hypot(bottomStation.x, 15 - bottomStation.y)) : 3.2;
-
-        const leftWallPoint = { x: 0, y: Math.max(0, Math.round((15 - leftR) * 1000) / 1000) };
-        const bottomWallPoint = { x: Math.min(20, Math.round(bottomR * 1000) / 1000), y: 15 };
-
-        const allPoints = [
-            { x: 0, y: 15 },
-            leftWallPoint,
-            ...st,
-            bottomWallPoint
-        ];
-
-        const hull = convexHull(allPoints);
-        const cornerIdx = hull.findIndex(p => Math.abs(p.x - 0) < 1e-4 && Math.abs(p.y - 15) < 1e-4);
-        if (cornerIdx === -1) return hull;
-
-        const ordered = [];
-        for (let i = 0; i < hull.length; i++) {
-            ordered.push(hull[(cornerIdx + i) % hull.length]);
+        for (let i = 0; i <= 90; i++) {
+            const rad = -Math.PI * 0.5 + (i / 90) * (Math.PI * 0.5);
+            const dist = distances[i];
+            const px = Math.max(0, Math.min(20, Math.round((hx + dist * Math.cos(rad)) * 1000) / 1000));
+            const py = Math.max(0, Math.min(15, Math.round((hy + dist * Math.sin(rad)) * 1000) / 1000));
+            poly.push({ x: px, y: py });
         }
-        // Ensure canonical winding: corner (0, 15) -> left wall (0, y) -> frontier -> bottom wall (x, 15)
-        if (ordered.length >= 2 && ordered[1].x !== 0) {
-            const rev = [ordered[0]];
-            for (let i = ordered.length - 1; i >= 1; i--) rev.push(ordered[i]);
-            ordered = rev;
-        }
-
-        // Dig cavities along wide frontier edges to permit concave territory shapes (e.g. U-shapes)
-        const refined = [];
-        for (let i = 0; i < ordered.length; i++) {
-            const A = ordered[i];
-            const B = ordered[(i + 1) % ordered.length];
-            refined.push(A);
-
-            const isWallEdge = (A.x === 0 && B.x === 0) || (A.y === 15 && B.y === 15) || (A.x === 0 && A.y === 15) || (B.x === 0 && B.y === 15);
-            if (!isWallEdge) {
-                const dug = digCavity(A, B, st, ordered);
-                dug.forEach(p => refined.push(p));
-            }
-        }
-
-        return refined;
+        poly.push({ x: Math.min(20, Math.round((hx + distances[90]) * 1000) / 1000), y: 15 });
+        return poly;
     } else {
-        // P2 Corner is (20, 0)
-        // Canonical reflection from P1
-        const reflectedStations = stations.map(s => {
-            const rx = 20 - (s.targetX !== undefined ? s.targetX : s.x);
-            const ry = 15 - (s.targetY !== undefined ? s.targetY : s.y);
-            return {
-                ...s,
-                x: rx,
-                y: ry,
-                targetX: rx,
-                targetY: ry
-            };
-        });
-        const p1Poly = getTerritoryPolygon(null, reflectedStations, false);
-
+        const p1Poly = getTerritoryPolygon({ x: 2.5, y: 12.5 }, distances, false);
         return p1Poly.map(pt => ({
             x: Math.round((20 - pt.x) * 1000) / 1000,
             y: Math.round((15 - pt.y) * 1000) / 1000
@@ -407,43 +501,29 @@ export function getTerritoryPolygon(homePlanet, stations, isPlayer2 = false) {
     }
 }
 
-// Finds distance from HQ to current territory border along angle (outermost frontier)
-export function getBorderIntersection(homePlanet, stations, isPlayer2, angle) {
+// Finds distance from HQ to current territory border along angle (O(1) radial graph lookup)
+export function getBorderIntersection(homePlanet, source, isPlayer2, angle) {
     if (!homePlanet) return 2.0;
     const isP2 = isPlayer2 !== undefined ? isPlayer2 : homePlanet.x > 10;
-    const hx = homePlanet.x;
-    const hy = homePlanet.y;
-    const cosA = Math.cos(angle);
-    const sinA = Math.sin(angle);
+    let canonicalAngle = angle;
+    if (isP2) canonicalAngle = angle - Math.PI;
+    const t = (canonicalAngle - (-Math.PI * 0.5)) / (Math.PI * 0.5);
+    const deg = Math.max(0, Math.min(90, Math.round(t * 90)));
 
-    const poly = getTerritoryPolygon(homePlanet, stations, isP2);
-    if (!poly || poly.length < 3) return 2.0;
-
-    let borderDist = null;
-    let maxT = -Infinity;
-
-    for (let i = 0; i < poly.length; i++) {
-        const p1 = poly[i];
-        const p2 = poly[(i + 1) % poly.length];
-
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
-        const denom = dx * sinA - dy * cosA;
-
-        if (Math.abs(denom) > 1e-6) {
-            const t = ((hx - p1.x) * dy - (hy - p1.y) * dx) / denom;
-            const u = ((p1.y - hy) * cosA - (p1.x - hx) * sinA) / denom;
-
-            if (t > 0.05 && u >= -0.01 && u <= 1.01) {
-                if (t > maxT) {
-                    maxT = t;
-                    borderDist = t;
-                }
-            }
-        }
+    let distances = null;
+    if (source instanceof Float64Array || (Array.isArray(source) && source.length === 91 && typeof source[0] === 'number')) {
+        distances = source;
+    } else if (source && source.borderDistances) {
+        distances = source.borderDistances;
+    } else if (Array.isArray(source)) {
+        if (source._borderDistances) distances = source._borderDistances;
+        else distances = createBorderFromStations(homePlanet, source, isP2);
     }
 
-    return borderDist !== null ? borderDist : 2.0;
+    if (distances) {
+        return distances[deg];
+    }
+    return 2.0;
 }
 
 // Asymmetrical asteroid field layout with mathematically equal radial distances from HQ

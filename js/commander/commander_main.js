@@ -245,8 +245,8 @@ function updateHUD() {
 
     // Territory Domination %
     const totalMapArea = 20 * 15;
-    const p1Area = polygonArea(getTerritoryPolygon(p1.homePlanet, p1.stations, false));
-    const p2Area = polygonArea(getTerritoryPolygon(p2.homePlanet, p2.stations, true));
+    const p1Area = polygonArea(getTerritoryPolygon(p1.homePlanet, p1.borderDistances || p1.stations, false));
+    const p2Area = polygonArea(getTerritoryPolygon(p2.homePlanet, p2.borderDistances || p2.stations, true));
 
     const p1Pct = ((p1Area / totalMapArea) * 100).toFixed(1);
     const p2Pct = ((p2Area / totalMapArea) * 100).toFixed(1);
@@ -308,8 +308,8 @@ function checkWinConditions() {
     const p2 = state.players[1];
 
     const totalMapArea = 20 * 15;
-    const p1Area = polygonArea(getTerritoryPolygon(p1.homePlanet, p1.stations, false));
-    const p2Area = polygonArea(getTerritoryPolygon(p2.homePlanet, p2.stations, true));
+    const p1Area = polygonArea(getTerritoryPolygon(p1.homePlanet, p1.borderDistances || p1.stations, false));
+    const p2Area = polygonArea(getTerritoryPolygon(p2.homePlanet, p2.borderDistances || p2.stations, true));
 
     let winner = null;
     let reason = '';
