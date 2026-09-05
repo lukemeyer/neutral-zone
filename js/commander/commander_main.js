@@ -349,13 +349,21 @@ function gameLoop(time) {
     if (!state.isPaused && !state.isGameOver) {
         const dt = rawDt * state.gameSpeed;
         state.gameTime += dt;
-        updateCommanderUnits(state, dt);
-        updateCommanderAI(state, dt);
-        checkWinConditions();
+        try {
+            updateCommanderUnits(state, dt);
+            updateCommanderAI(state, dt);
+            checkWinConditions();
+        } catch (err) {
+            console.error('Error during Commander simulation tick:', err);
+        }
     }
 
-    renderCommanderGame(ctx, canvas, state);
-    updateHUD();
+    try {
+        renderCommanderGame(ctx, canvas, state);
+        updateHUD();
+    } catch (err) {
+        console.error('Error during Commander render tick:', err);
+    }
 
     requestAnimationFrame(gameLoop);
 }

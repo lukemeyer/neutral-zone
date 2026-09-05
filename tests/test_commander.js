@@ -541,6 +541,60 @@ for (let s1 of hP1.stations) {
 }
 assert(minOpposingDist >= 1.35, `Opposing stations maintain minimum clearance (${minOpposingDist.toFixed(2)} >= 1.35)`);
 
+// 29. Test Combat Simulation, Station Destruction, and Miner Hits without Freezing
+const combatState = createCommanderState();
+const cPlayer1 = combatState.players[0];
+const cPlayer2 = combatState.players[1];
+cPlayer1.stance = 'attack';
+
+const targetStation = cPlayer2.stations[0];
+targetStation.health = 10; // Low health to trigger fatal hit
+
+// Spawn lethal projectile targeting enemy station
+combatState.projectiles.push({
+    x: targetStation.x,
+    y: targetStation.y,
+    vx: 1.0,
+    vy: 0.0,
+    damage: 25,
+    ownerId: cPlayer1.id,
+    life: 0.5
+});
+
+// Also test miner projectile hit
+cPlayer2.units.miners.push({
+    id: 9999,
+    playerId: 1,
+    x: 10,
+    y: 10,
+    health: 10,
+    maxHealth: 100,
+    payload: 0,
+    maxPayload: 10
+});
+combatState.projectiles.push({
+    x: 10,
+    y: 10,
+    vx: 1.0,
+    vy: 0.0,
+    damage: 20,
+    ownerId: cPlayer1.id,
+    life: 0.5
+});
+
+let combatError = null;
+try {
+    for (let t = 0; t < 30; t++) {
+        updateCommanderUnits(combatState, 0.05);
+    }
+} catch (e) {
+    combatError = e;
+}
+
+assert(combatError === null, `Attack simulation and station destruction executed with 0 errors: ${combatError ? combatError.message : 'none'}`);
+assert(!cPlayer2.stations.includes(targetStation), "Target station was successfully destroyed and removed from player stations");
+assert(cPlayer2.units.miners.filter(m => m.id === 9999).length === 0, "Killed miner was cleaned up successfully");
+
 console.log(`\n------------------------------------------------------------`);
 console.log(`  Summary: ${passed} Passed, ${failed} Failed`);
 console.log(`------------------------------------------------------------\n`);

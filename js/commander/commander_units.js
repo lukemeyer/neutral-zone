@@ -494,6 +494,7 @@ export function updateCommanderUnits(state, dt) {
 
         let hit = false;
         const enemy = players.find(p => p.id !== pr.ownerId);
+        const shooter = players.find(p => p.id === pr.ownerId);
 
         // Check enemy fighters
         for (let f of enemy.units.fighters) {
@@ -501,6 +502,17 @@ export function updateCommanderUnits(state, dt) {
                 f.health -= pr.damage;
                 hit = true;
                 break;
+            }
+        }
+
+        // Check enemy miners
+        if (!hit) {
+            for (let m of enemy.units.miners) {
+                if (Math.hypot(m.x - pr.x, m.y - pr.y) <= 0.35) {
+                    m.health -= pr.damage;
+                    hit = true;
+                    break;
+                }
             }
         }
 
@@ -512,7 +524,25 @@ export function updateCommanderUnits(state, dt) {
                     hit = true;
                     if (s.health <= 0) {
                         // Station destroyed! Impulse gap-filling pull
-                        onStationDestroyed(enemy, s, p);
+                        onStationDestroyed(enemy, s, shooter);
+
+                        // Visual feedback: station destruction explosion particles
+                        if (particles) {
+                            for (let k = 0; k < 20; k++) {
+                                const ang = (k / 20) * Math.PI * 2;
+                                const spd = 1.5 + Math.random() * 3.0;
+                                particles.push({
+                                    x: s.x,
+                                    y: s.y,
+                                    vx: Math.cos(ang) * spd,
+                                    vy: Math.sin(ang) * spd,
+                                    color: enemy.accentColor || enemy.color || '#ff4444',
+                                    size: 3.5,
+                                    life: 0.6,
+                                    maxLife: 0.6
+                                });
+                            }
+                        }
                     }
                     break;
                 }
@@ -533,6 +563,15 @@ export function updateCommanderUnits(state, dt) {
     // 7. Cleanup Dead Units
     players.forEach(p => {
         p.units.fighters = p.units.fighters.filter(f => f.health > 0);
+        p.units.miners = p.units.miners.filter(m => {
+            if (m.health <= 0) {
+                if (m.targetAsteroid) {
+                    m.targetAsteroid.miners = Math.max(0, (m.targetAsteroid.miners || 1) - 1);
+                }
+                return false;
+            }
+            return true;
+        });
     });
 
     // 8. Update Particles
