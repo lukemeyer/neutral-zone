@@ -36,6 +36,10 @@ export function createCommanderState() {
                 miners: [],
                 fighters: []
             },
+            launchAngle: -Math.PI * 0.25,
+            steeringAngle: -Math.PI * 0.25,
+            launchHits: [],
+            launchingStations: [],
             buildQueue: [],
             buildCooldowns: { station: 0, miner: 0, fighter: 0 },
             isCPU: false,
@@ -56,6 +60,10 @@ export function createCommanderState() {
                 miners: [],
                 fighters: []
             },
+            launchAngle: Math.PI * 0.75,
+            steeringAngle: Math.PI * 0.75,
+            launchHits: [],
+            launchingStations: [],
             buildQueue: [],
             buildCooldowns: { station: 0, miner: 0, fighter: 0 },
             isCPU: true,

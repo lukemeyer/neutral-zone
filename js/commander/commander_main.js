@@ -73,10 +73,67 @@ function setupUIHandlers() {
         if (e.code === 'Digit1' || e.code === 'KeyP') setStance('patrol');
         if (e.code === 'Digit2' || e.code === 'KeyD') setStance('defend');
         if (e.code === 'Digit3' || e.code === 'KeyA') setStance('attack');
+        // Steer launch trajectory with Q / E or ArrowLeft / ArrowRight
+        if (e.code === 'KeyQ' || e.code === 'ArrowLeft') {
+            p1.launchAngle = Math.max(-Math.PI * 0.47, p1.launchAngle - 0.05);
+        }
+        if (e.code === 'KeyE' || e.code === 'ArrowRight') {
+            p1.launchAngle = Math.min(-Math.PI * 0.03, p1.launchAngle + 0.05);
+        }
         if (e.code === 'Space') {
             state.isPaused = !state.isPaused;
             const pBtn = document.getElementById('btn-pause');
             if (pBtn) pBtn.innerText = state.isPaused ? '▶ Resume' : '⏸ Pause';
+        }
+    });
+
+    // Pointer & Touch Aiming for Launch Trajectory
+    let isAiming = false;
+    function steerTrajectoryFromPointer(e) {
+        if (!state || !canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+        const wx = (px / canvas.width) * state.mapWidth;
+        const wy = (py / canvas.height) * state.mapHeight;
+
+        const dx = wx - p1.homePlanet.x;
+        const dy = wy - p1.homePlanet.y;
+        let angle = Math.atan2(dy, dx);
+
+        // Valid forward quadrant for P1: -85 deg to -5 deg
+        const minA = -Math.PI * 0.47;
+        const maxA = -Math.PI * 0.03;
+
+        if (angle > -Math.PI * 0.95 && angle < Math.PI * 0.35) {
+            p1.launchAngle = Math.max(minA, Math.min(maxA, angle));
+        }
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+        isAiming = true;
+        steerTrajectoryFromPointer(e);
+    });
+
+    window.addEventListener('pointermove', (e) => {
+        if (isAiming) {
+            steerTrajectoryFromPointer(e);
+        }
+    });
+
+    window.addEventListener('pointerup', () => {
+        isAiming = false;
+    });
+
+    // Hover aiming near friendly territory
+    canvas.addEventListener('pointermove', (e) => {
+        if (!isAiming && state && canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const wx = ((e.clientX - rect.left) / canvas.width) * state.mapWidth;
+            const wy = ((e.clientY - rect.top) / canvas.height) * state.mapHeight;
+            if (Math.hypot(wx - p1.homePlanet.x, wy - p1.homePlanet.y) <= 8.0) {
+                steerTrajectoryFromPointer(e);
+            }
         }
     });
 

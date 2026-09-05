@@ -55,8 +55,7 @@ export function updateCommanderUnits(state, dt) {
                     p.buildCooldowns[type] = 0;
                     // Spawn built item
                     if (type === 'station') {
-                        p.stationCount++;
-                        updateStationLayout(p);
+                        launchStation(p, state);
                     } else if (type === 'miner') {
                         p.units.miners.push({
                             id: p.id * 1000 + p.units.miners.length,
@@ -99,6 +98,64 @@ export function updateCommanderUnits(state, dt) {
                 }
             }
         });
+    });
+
+    // 1.5. Update Launching Stations in Flight (Along Steered Trajectory Line)
+    players.forEach(p => {
+        if (p.launchingStations && p.launchingStations.length > 0) {
+            for (let i = p.launchingStations.length - 1; i >= 0; i--) {
+                const ls = p.launchingStations[i];
+                ls.progress += ls.speed * dt;
+                const t = Math.min(1.0, ls.progress);
+                const ease = 1 - Math.pow(1 - t, 3);
+                ls.x = ls.startX + (ls.targetX - ls.startX) * ease;
+                ls.y = ls.startY + (ls.targetY - ls.startY) * ease;
+
+                // Glowing thruster trail
+                if (particles && Math.random() < 0.85) {
+                    particles.push({
+                        x: ls.x,
+                        y: ls.y,
+                        vx: -Math.cos(ls.angle) * 2.8 + (Math.random() - 0.5) * 1.5,
+                        vy: -Math.sin(ls.angle) * 2.8 + (Math.random() - 0.5) * 1.5,
+                        color: p.accentColor,
+                        size: 2.2,
+                        life: 0.28,
+                        maxLife: 0.28
+                    });
+                }
+
+                if (ls.progress >= 1.0) {
+                    // Station strikes the frontier!
+                    p.launchingStations.splice(i, 1);
+                    p.steeringAngle = ls.angle;
+                    if (!p.launchHits) p.launchHits = [];
+                    p.launchHits.push({ x: ls.targetX, y: ls.targetY, angle: ls.angle });
+
+                    // Impact shockwave / ring explosion
+                    if (particles) {
+                        for (let k = 0; k < 16; k++) {
+                            const ang = (k / 16) * Math.PI * 2;
+                            const spd = 1.8 + Math.random() * 2.2;
+                            particles.push({
+                                x: ls.targetX,
+                                y: ls.targetY,
+                                vx: Math.cos(ang) * spd,
+                                vy: Math.sin(ang) * spd,
+                                color: p.accentColor,
+                                size: 2.8,
+                                life: 0.45,
+                                maxLife: 0.45
+                            });
+                        }
+                    }
+
+                    // Increment station count & recalculate weighted layout
+                    p.stationCount++;
+                    updateStationLayout(p, { x: ls.targetX, y: ls.targetY });
+                }
+            }
+        }
     });
 
     // 2. Smoothly Glide Stations to their Target Radial Positions
@@ -498,25 +555,57 @@ export function updateCommanderUnits(state, dt) {
     }
 }
 
-// Recalculates smooth target radial coordinates for a player's stations
-export function updateStationLayout(player) {
+// Launches a newly constructed station along the HQ trajectory line
+export function launchStation(player, state = null) {
+    if (!player.launchingStations) player.launchingStations = [];
     const isP2 = player.id === 1;
-    const targetPositions = computeStationPositions(player.homePlanet, player.stationCount, isP2);
+    const launchAngle = player.launchAngle !== undefined ? player.launchAngle : (isP2 ? Math.PI * 0.75 : -Math.PI * 0.25);
+
+    // Outer radius for the next station count
+    const nextCount = player.stationCount + 1;
+    const rOuter = nextCount === 1 ? 3.2 : 3.6 + 0.9 * (nextCount - 2);
+
+    // Trajectory flight distance out to the frontier
+    const flightDist = Math.max(2.0, rOuter - 1.2);
+    const targetX = player.homePlanet.x + Math.cos(launchAngle) * flightDist;
+    const targetY = player.homePlanet.y + Math.sin(launchAngle) * flightDist;
+
+    player.launchingStations.push({
+        id: (isP2 ? 100 : 0) + player.stationCount,
+        x: player.homePlanet.x,
+        y: player.homePlanet.y,
+        startX: player.homePlanet.x,
+        startY: player.homePlanet.y,
+        targetX,
+        targetY,
+        angle: launchAngle,
+        progress: 0,
+        speed: 1.5 // ~0.66s travel time
+    });
+}
+
+// Recalculates smooth target radial coordinates for a player's stations
+export function updateStationLayout(player, spawnPos = null) {
+    const isP2 = player.id === 1;
+    const steer = player.steeringAngle !== undefined ? player.steeringAngle : (player.launchAngle || null);
+    const targetPositions = computeStationPositions(player.homePlanet, player.stationCount, isP2, steer);
 
     // Sync or grow station list
     while (player.stations.length < player.stationCount) {
-        const newPos = targetPositions[player.stations.length];
+        const idx = player.stations.length;
+        const newPos = targetPositions[idx] || { x: player.homePlanet.x, y: player.homePlanet.y, isPerimeter: true, angle: 0 };
         player.stations.push({
-            id: (isP2 ? 100 : 0) + player.stations.length,
-            x: player.homePlanet.x, // glide out from home planet
-            y: player.homePlanet.y,
+            id: (isP2 ? 100 : 0) + idx,
+            x: spawnPos ? spawnPos.x : player.homePlanet.x, // spawn at impact coordinate or home
+            y: spawnPos ? spawnPos.y : player.homePlanet.y,
             targetX: newPos.x,
             targetY: newPos.y,
             health: 250,
             maxHealth: 250,
             cooldown: 0,
             range: 2.5,
-            isPerimeter: newPos.isPerimeter
+            isPerimeter: newPos.isPerimeter,
+            angle: newPos.angle
         });
     }
 

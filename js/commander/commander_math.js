@@ -78,8 +78,9 @@ export function canExpandStation(player, enemy, targetCount = null) {
     if (!player || !enemy) return true;
     const isP2 = player.id === 1;
     const count = targetCount !== null ? targetCount : (player.stationCount + 1);
+    const steer = player.launchAngle !== undefined ? player.launchAngle : (player.steeringAngle || null);
 
-    const proposedStations = computeStationPositions(player.homePlanet, count, isP2);
+    const proposedStations = computeStationPositions(player.homePlanet, count, isP2, steer);
     const proposedPoly = getTerritoryPolygon(player.homePlanet, proposedStations, isP2);
     const enemyPoly = getTerritoryPolygon(enemy.homePlanet, enemy.stations, enemy.id === 1);
 
@@ -87,7 +88,7 @@ export function canExpandStation(player, enemy, targetCount = null) {
 }
 
 // Computes station coordinates for N stations around corner Home Planet
-export function computeStationPositions(homePlanet, n, isPlayer2 = false) {
+export function computeStationPositions(homePlanet, n, isPlayer2 = false, steeringAngle = null) {
     if (n <= 0) return [];
 
     // Corner is (0, 15) for P1
@@ -154,6 +155,14 @@ export function computeStationPositions(homePlanet, n, isPlayer2 = false) {
         ];
     }
 
+    // Default angle for P1 is diagonal: -PI/4
+    const defaultAngle = -Math.PI * 0.25;
+    let canonicalSteer = steeringAngle;
+    if (isPlayer2 && steeringAngle !== null) {
+        canonicalSteer = steeringAngle - Math.PI;
+    }
+    const steerDir = canonicalSteer !== null ? canonicalSteer : defaultAngle;
+
     const stations = [];
     let id = 0;
     rings.forEach(ring => {
@@ -162,18 +171,30 @@ export function computeStationPositions(homePlanet, n, isPlayer2 = false) {
             if (ring.count === 1) {
                 angle = (ring.minA + ring.maxA) / 2;
             } else {
-                const t = i / (ring.count - 1);
+                let t = i / (ring.count - 1);
+                // Angular bias weighting if perimeter and steeringAngle is explicitly provided
+                if (ring.isPerimeter && canonicalSteer !== null) {
+                    const bias = Math.max(-1, Math.min(1, (steerDir - defaultAngle) / (Math.PI * 0.2)));
+                    t = t + 0.22 * bias * Math.sin(Math.PI * t);
+                }
                 angle = ring.minA + t * (ring.maxA - ring.minA);
             }
 
-            const sx = cx + ring.r * Math.cos(angle);
-            const sy = cy + ring.r * Math.sin(angle);
+            // Radial reach weighting
+            let effectiveR = ring.r;
+            if (ring.isPerimeter && canonicalSteer !== null) {
+                const align = Math.cos(angle - steerDir);
+                effectiveR = ring.r * (1 + 0.18 * align);
+            }
+
+            const sx = cx + effectiveR * Math.cos(angle);
+            const sy = cy + effectiveR * Math.sin(angle);
 
             stations.push({
                 id: id++,
                 x: Math.round(sx * 1000) / 1000,
                 y: Math.round(sy * 1000) / 1000,
-                ringRadius: ring.r,
+                ringRadius: effectiveR,
                 isPerimeter: ring.isPerimeter,
                 angle
             });
@@ -208,10 +229,11 @@ export function getTerritoryPolygon(homePlanet, stations, isPlayer2 = false) {
     if (!isP2) {
         // P1 Corner is (0, 15)
         const sorted = [...activeOuter].sort((a, b) => a.angle - b.angle);
-        const maxR = Math.max(...activeOuter.map(s => Math.hypot(s.x, 15 - s.y)));
+        const leftR = Math.hypot(sorted[0].x, 15 - sorted[0].y);
+        const bottomR = Math.hypot(sorted[sorted.length - 1].x, 15 - sorted[sorted.length - 1].y);
 
-        const leftWallPoint = { x: 0, y: Math.max(0, Math.round((15 - maxR) * 1000) / 1000) };
-        const bottomWallPoint = { x: Math.min(20, Math.round(maxR * 1000) / 1000), y: 15 };
+        const leftWallPoint = { x: 0, y: Math.max(0, Math.round((15 - leftR) * 1000) / 1000) };
+        const bottomWallPoint = { x: Math.min(20, Math.round(bottomR * 1000) / 1000), y: 15 };
 
         const poly = [
             { x: 0, y: 15 },

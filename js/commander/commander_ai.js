@@ -41,4 +41,24 @@ export function updateCommanderAI(state, dt) {
         // Standard frontier security
         ai.stance = 'patrol';
     }
+
+    // 3. Dynamic Launch Trajectory Steering toward uncaptured resources
+    const uncaptured = asteroids.filter(a => a.resources > 0 && !isPointInFan(a, aiPoly));
+    if (uncaptured.length > 0) {
+        let best = null;
+        let minDist = Infinity;
+        uncaptured.forEach(a => {
+            const d = Math.hypot(a.x - ai.homePlanet.x, a.y - ai.homePlanet.y);
+            if (d < minDist) {
+                minDist = d;
+                best = a;
+            }
+        });
+        if (best) {
+            let angle = Math.atan2(best.y - ai.homePlanet.y, best.x - ai.homePlanet.x);
+            // Clamp to P2 expansion quadrant: [0.53 PI, 0.97 PI] (~95 deg to ~175 deg)
+            angle = Math.max(Math.PI * 0.53, Math.min(Math.PI * 0.97, angle));
+            ai.launchAngle = angle;
+        }
+    }
 }

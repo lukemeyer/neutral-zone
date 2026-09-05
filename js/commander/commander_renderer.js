@@ -180,6 +180,90 @@ export function renderCommanderGame(ctx, canvas, state) {
         ctx.fillRect(hpScreen.x - hpW / 2, hpScreen.y + 20, hpW, 4);
         ctx.fillStyle = p.color;
         ctx.fillRect(hpScreen.x - hpW / 2, hpScreen.y + 20, hpW * hpRatio, 4);
+
+        // Launch Trajectory: line from center of HQ extending 2x HQ radius with an arrow at the end
+        const launchAngle = p.launchAngle !== undefined ? p.launchAngle : (p.id === 0 ? -Math.PI * 0.25 : Math.PI * 0.75);
+        const trajLen = p.homePlanet.radius * 2.0; // 2x HQ radius
+        const arrowEndX = p.homePlanet.x + Math.cos(launchAngle) * trajLen;
+        const arrowEndY = p.homePlanet.y + Math.sin(launchAngle) * trajLen;
+        const arrowScreen = toScreen(arrowEndX, arrowEndY);
+
+        // Aiming guide ray extending outward toward the frontier
+        const guideDist = Math.max(3.2, 3.6 + 0.9 * (p.stationCount - 1));
+        const guideTargetX = p.homePlanet.x + Math.cos(launchAngle) * guideDist;
+        const guideTargetY = p.homePlanet.y + Math.sin(launchAngle) * guideDist;
+        const guideScreen = toScreen(guideTargetX, guideTargetY);
+
+        ctx.save();
+        ctx.setLineDash([3, 5]);
+        ctx.strokeStyle = p.accentColor + '55';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(arrowScreen.x, arrowScreen.y);
+        ctx.lineTo(guideScreen.x, guideScreen.y);
+        ctx.stroke();
+
+        // Subtle frontier impact reticle ring
+        ctx.beginPath();
+        ctx.arc(guideScreen.x, guideScreen.y, 6, 0, Math.PI * 2);
+        ctx.strokeStyle = p.accentColor + '88';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+
+        // Solid Trajectory line from HQ center extending 2x HQ radius
+        ctx.beginPath();
+        ctx.moveTo(hpScreen.x, hpScreen.y);
+        ctx.lineTo(arrowScreen.x, arrowScreen.y);
+        ctx.strokeStyle = p.accentColor;
+        ctx.lineWidth = 3.2;
+        ctx.stroke();
+
+        // Prominent Arrowhead at the tip of the trajectory line
+        const screenAngle = Math.atan2(arrowScreen.y - hpScreen.y, arrowScreen.x - hpScreen.x);
+        ctx.save();
+        ctx.translate(arrowScreen.x, arrowScreen.y);
+        ctx.rotate(screenAngle);
+        ctx.beginPath();
+        ctx.moveTo(0, 0); // Tip
+        ctx.lineTo(-14, -7);
+        ctx.lineTo(-10, 0);
+        ctx.lineTo(-14, 7);
+        ctx.closePath();
+        ctx.fillStyle = p.accentColor;
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+
+        // In-flight Launching Stations
+        if (p.launchingStations && p.launchingStations.length > 0) {
+            p.launchingStations.forEach(ls => {
+                const lsScreen = toScreen(ls.x, ls.y);
+
+                // Energy thruster flare
+                ctx.beginPath();
+                ctx.arc(lsScreen.x, lsScreen.y, 11, 0, Math.PI * 2);
+                ctx.fillStyle = p.accentColor + '44';
+                ctx.fill();
+
+                // Station hull
+                ctx.beginPath();
+                ctx.arc(lsScreen.x, lsScreen.y, 7.5, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2.0;
+                ctx.stroke();
+
+                // Core
+                ctx.beginPath();
+                ctx.arc(lsScreen.x, lsScreen.y, 3, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+            });
+        }
     });
 
     // 6. Draw Miners & Mining Beams

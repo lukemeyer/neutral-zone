@@ -260,6 +260,59 @@ assert(!depleteTestState.asteroids.includes(dAst), "Depleted asteroid completely
 assert(dMiner.targetAsteroid === null, "Miner detached from depleted asteroid");
 assert(dMiner.returning === true, "Miner returns home with gathered resources");
 
+// 13. Test Launch Trajectory Line Geometry (2x HQ Radius)
+const trajState = createCommanderState();
+const tP1 = trajState.players[0];
+const trajLen = tP1.homePlanet.radius * 2.0;
+assert(Math.abs(trajLen - 1.6) < 1e-5, `Trajectory length is strictly 2x HQ radius (1.6 units)`);
+
+const arrowX = tP1.homePlanet.x + Math.cos(tP1.launchAngle) * trajLen;
+const arrowY = tP1.homePlanet.y + Math.sin(tP1.launchAngle) * trajLen;
+const arrowDist = Math.hypot(arrowX - tP1.homePlanet.x, arrowY - tP1.homePlanet.y);
+assert(Math.abs(arrowDist - 1.6) < 1e-5, `Arrow tip is positioned exactly 2x HQ radius from HQ center`);
+
+// 14. Test Steered Expansion Weighting & Asteroid Envelopment at N=4
+const t2North = { x: 2.50, y: 9.50 };
+const t2East = { x: 5.50, y: 12.50 };
+
+// Steered North (-1.25 rad)
+const stationsNorth = computeStationPositions(tP1.homePlanet, 4, false, -1.25);
+const polyNorth = getTerritoryPolygon(tP1.homePlanet, stationsNorth, false);
+assert(isPointInFan(t2North, polyNorth), "Steering North at N=4 envelops the northern Tier 2 asteroid");
+assert(!isPointInFan(t2East, polyNorth), "Steering North at N=4 leaves the eastern Tier 2 asteroid outside");
+
+// Steered East (-0.20 rad)
+const stationsEast = computeStationPositions(tP1.homePlanet, 4, false, -0.20);
+const polyEast = getTerritoryPolygon(tP1.homePlanet, stationsEast, false);
+assert(!isPointInFan(t2North, polyEast), "Steering East at N=4 leaves the northern Tier 2 asteroid outside");
+assert(isPointInFan(t2East, polyEast), "Steering East at N=4 envelops the eastern Tier 2 asteroid");
+
+// 15. Test Launching Station Lifecycle (HQ Launch -> Flight -> Frontier Impact)
+const launchState = createCommanderState();
+const lP1 = launchState.players[0];
+const initialStationCount = lP1.stationCount;
+
+// Trigger station build completion
+lP1.launchAngle = -1.25; // Aim North
+lP1.buildCooldowns.station = 0.05;
+updateCommanderUnits(launchState, 0.1);
+
+assert(lP1.launchingStations.length === 1, "Station build spawned an in-flight launching station");
+const activeLaunch = lP1.launchingStations[0];
+assert(activeLaunch.progress > 0 && activeLaunch.progress < 1.0, "Launching station is actively flying outward");
+assert(activeLaunch.angle === -1.25, "Station is flying along the steered launch trajectory angle");
+
+// Advance flight to completion (speed = 1.5, requires ~0.66s)
+updateCommanderUnits(launchState, 0.8);
+assert(lP1.launchingStations.length === 0, "Launching station completed flight and struck the frontier");
+assert(lP1.stationCount === initialStationCount + 1, "Station count incremented on frontier impact");
+assert(lP1.launchHits.length > 0, "Launch impact angle recorded in player launchHits");
+assert(lP1.steeringAngle === -1.25, "Player steeringAngle updated from station impact");
+
+// 16. Test Steered canExpandStation Against Enemy Territory
+const canExpandNorth = canExpandStation(lP1, launchState.players[1], 4);
+assert(canExpandNorth === true, "Steered expansion at N=4 is valid and does not collide with enemy");
+
 console.log(`\n------------------------------------------------------------`);
 console.log(`  Summary: ${passed} Passed, ${failed} Failed`);
 console.log(`------------------------------------------------------------\n`);
