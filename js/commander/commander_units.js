@@ -113,6 +113,8 @@ export function updateCommanderUnits(state, dt) {
     });
 
     // 3. Autonomous Miner Logistics (No micro-management)
+    asteroids.forEach(a => { a.activeMiners = 0; });
+
     players.forEach(p => {
         const enemy = players.find(ep => ep.id !== p.id);
         const myPoly = getTerritoryPolygon(p.homePlanet, p.stations, p.id === 1);
@@ -136,7 +138,7 @@ export function updateCommanderUnits(state, dt) {
                     m.payload = 0;
                     m.returning = false;
                     if (m.targetAsteroid) {
-                        m.targetAsteroid.miners = Math.max(0, m.targetAsteroid.miners - 1);
+                        m.targetAsteroid.miners = Math.max(0, (m.targetAsteroid.miners || 1) - 1);
                         m.targetAsteroid = null;
                     }
                 } else {
@@ -144,11 +146,12 @@ export function updateCommanderUnits(state, dt) {
                     m.y += (dy / dist) * speed * dt;
                 }
             } else if (!m.targetAsteroid) {
-                // Find nearest captured asteroid with space (< 3 miners)
+                // Find nearest captured asteroid with space (< 3 assigned miners)
                 let best = null;
                 let minDist = Infinity;
                 capturedAsteroids.forEach(a => {
-                    if (a.miners < 3) {
+                    const assigned = a.miners || 0;
+                    if (assigned < 3) {
                         const d = Math.hypot(a.x - m.x, a.y - m.y);
                         if (d < minDist) {
                             minDist = d;
@@ -159,7 +162,7 @@ export function updateCommanderUnits(state, dt) {
 
                 if (best) {
                     m.targetAsteroid = best;
-                    best.miners++;
+                    best.miners = (best.miners || 0) + 1;
                 } else if (m.payload > 0) {
                     m.returning = true;
                 }
@@ -167,10 +170,10 @@ export function updateCommanderUnits(state, dt) {
                 // Flying to asteroid or mining
                 const a = m.targetAsteroid;
                 // Enforce territory protection: if asteroid lost to enemy or depleted
-                if (a.resources <= 0 || !isPointInFan(a, myPoly) || isPointInFan(a, enemyPoly)) {
-                    a.miners = Math.max(0, a.miners - 1);
+                if (!a || a.resources <= 0 || !isPointInFan(a, myPoly) || isPointInFan(a, enemyPoly)) {
+                    if (a) a.miners = Math.max(0, (a.miners || 1) - 1);
                     m.targetAsteroid = null;
-                    m.returning = true;
+                    if (m.payload > 0) m.returning = true;
                     return;
                 }
 
@@ -182,31 +185,83 @@ export function updateCommanderUnits(state, dt) {
                     m.x += (dx / dist) * speed * dt;
                     m.y += (dy / dist) * speed * dt;
                 } else {
-                    // Mining
-                    const amount = Math.min(a.resources, 10 * dt, m.maxPayload - m.payload);
-                    a.resources -= amount;
-                    m.payload += amount;
+                    // Miner arrived at asteroid.
+                    // Enforce: max 3 miners actively mining an asteroid at once
+                    if ((a.activeMiners || 0) < 3 && m.payload < m.maxPayload && a.resources > 0) {
+                        a.activeMiners = (a.activeMiners || 0) + 1;
 
-                    if (Math.random() < 0.2) {
-                        particles.push({
-                            x: a.x + (Math.random() - 0.5) * 0.3,
-                            y: a.y + (Math.random() - 0.5) * 0.3,
-                            vx: (m.x - a.x) * 1.5,
-                            vy: (m.y - a.y) * 1.5,
-                            life: 0.35,
-                            maxLife: 0.35,
-                            color: '#3fb950',
-                            size: 2.5
-                        });
-                    }
+                        // Resource gathering speed cut in half: 5.0 units/sec (reduced from 10.0)
+                        const GATHER_SPEED = 5.0;
+                        const amount = Math.min(a.resources, GATHER_SPEED * dt, m.maxPayload - m.payload);
+                        a.resources -= amount;
+                        m.payload += amount;
 
-                    if (m.payload >= m.maxPayload || a.resources <= 0) {
+                        if (Math.random() < 0.2) {
+                            particles.push({
+                                x: a.x + (Math.random() - 0.5) * 0.3,
+                                y: a.y + (Math.random() - 0.5) * 0.3,
+                                vx: (m.x - a.x) * 1.5,
+                                vy: (m.y - a.y) * 1.5,
+                                life: 0.35,
+                                maxLife: 0.35,
+                                color: '#3fb950',
+                                size: 2.5
+                            });
+                        }
+
+                        if (m.payload >= m.maxPayload || a.resources <= 0) {
+                            m.returning = true;
+                            a.miners = Math.max(0, (a.miners || 1) - 1);
+                        }
+                    } else if (m.payload >= m.maxPayload || a.resources <= 0) {
                         m.returning = true;
+                        a.miners = Math.max(0, (a.miners || 1) - 1);
                     }
                 }
             }
         });
     });
+
+    // 3b. Asteroid Depletion & Disappearance (Asteroids disappear when resources reach 0)
+    const depletedAsteroids = asteroids.filter(a => a.resources <= 0);
+    if (depletedAsteroids.length > 0) {
+        depletedAsteroids.forEach(da => {
+            // Mineral dissolution burst
+            for (let i = 0; i < 14; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const spd = 0.4 + Math.random() * 1.8;
+                particles.push({
+                    x: da.x,
+                    y: da.y,
+                    vx: Math.cos(angle) * spd,
+                    vy: Math.sin(angle) * spd,
+                    life: 0.6,
+                    maxLife: 0.6,
+                    color: '#8b949e',
+                    size: 3.0
+                });
+            }
+
+            // Detach any miners assigned to or targeting this asteroid
+            players.forEach(p => {
+                p.units.miners.forEach(m => {
+                    if (m.targetAsteroid === da) {
+                        m.targetAsteroid = null;
+                        if (m.payload > 0) {
+                            m.returning = true;
+                        }
+                    }
+                });
+            });
+        });
+
+        // Remove depleted asteroids from array in-place
+        for (let i = asteroids.length - 1; i >= 0; i--) {
+            if (asteroids[i].resources <= 0) {
+                asteroids.splice(i, 1);
+            }
+        }
+    }
 
     // 4. Fleet Stance Controller (Patrol / Defend / Attack)
     players.forEach(p => {

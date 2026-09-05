@@ -81,19 +81,38 @@ for (let i = 0; i < 5; i++) {
 const p2Poly = getTerritoryPolygon(p2Home, p2Stations, true);
 assert(p2Poly[0].x === 20 && p2Poly[0].y === 0, "P2 territory polygon covers 90-degree corner (20, 0)");
 
-// 4. Test Concentric Asteroid Envelopment
+// 4. Test Concentric Asteroid Envelopment & Asymmetric Map Generation
 const asteroids = getAsteroidLayout();
 assert(asteroids.length >= 7, `Generated ${asteroids.length} concentric asteroids`);
 
-// Tier 1 asteroid should be captured by N=3
-const tier1AstP1 = asteroids.find(a => a.tier === 1 && a.side === 'p1');
-const poly3 = getTerritoryPolygon(p1Home, computeStationPositions(p1Home, 3, false), false);
-assert(isPointInFan(tier1AstP1, poly3), "Tier 1 asteroid enveloped at N=3 stations");
+// Distance equality check: HQ-to-asteroid distances match per tier for each player
+const p1Asts = asteroids.filter(a => a.side === 'p1');
+const p2Asts = asteroids.filter(a => a.side === 'p2');
+const p1Dists = p1Asts.map(a => Math.round(Math.hypot(a.x - p1Home.x, a.y - p1Home.y) * 100) / 100).sort((a,b) => a - b);
+const p2Dists = p2Asts.map(a => Math.round(Math.hypot(a.x - p2Home.x, a.y - p2Home.y) * 100) / 100).sort((a,b) => a - b);
+assert(p1Dists.length === p2Dists.length && p1Dists.every((d, i) => Math.abs(d - p2Dists[i]) <= 0.05), "Distances from HQ to each asteroid are identical for both players");
 
-// Tier 2 asteroid should be captured by N=6
+// Asymmetry check: P2 is NOT an exact diagonal mirror of P1 (x2 != 20 - x1 or y2 != 15 - y1)
+const exactMirrors = p1Asts.filter(a1 => p2Asts.some(a2 => Math.hypot(a2.x - (20 - a1.x), a2.y - (15 - a1.y)) < 0.05)).length;
+assert(exactMirrors === 0, `Map generation is not point-symmetrical (${exactMirrors} exact mirrors found)`);
+
+// Tier 1 asteroids should be captured by N=3 for both players
+const tier1AstP1 = asteroids.find(a => a.tier === 1 && a.side === 'p1');
+const tier1AstP2 = asteroids.find(a => a.tier === 1 && a.side === 'p2');
+const poly3P1 = getTerritoryPolygon(p1Home, computeStationPositions(p1Home, 3, false), false);
+const poly3P2 = getTerritoryPolygon(p2Home, computeStationPositions(p2Home, 3, true), true);
+assert(isPointInFan(tier1AstP1, poly3P1), "Tier 1 P1 asteroid enveloped at N=3 stations");
+assert(isPointInFan(tier1AstP2, poly3P2), "Tier 1 P2 asteroid enveloped at N=3 stations");
+
+// Tier 2 asteroids should be outside territory at N=3 and captured by N=6
 const tier2AstP1 = asteroids.find(a => a.tier === 2 && a.side === 'p1');
-assert(!isPointInFan(tier2AstP1, poly3), "Tier 2 asteroid outside territory at N=3 stations");
-assert(isPointInFan(tier2AstP1, poly6), "Tier 2 asteroid enveloped at N=6 stations");
+const tier2AstP2 = asteroids.find(a => a.tier === 2 && a.side === 'p2');
+const poly6P1 = getTerritoryPolygon(p1Home, computeStationPositions(p1Home, 6, false), false);
+const poly6P2 = getTerritoryPolygon(p2Home, computeStationPositions(p2Home, 6, true), true);
+assert(!isPointInFan(tier2AstP1, poly3P1), "Tier 2 P1 asteroid outside territory at N=3 stations");
+assert(isPointInFan(tier2AstP1, poly6P1), "Tier 2 P1 asteroid enveloped at N=6 stations");
+assert(!isPointInFan(tier2AstP2, poly3P2), "Tier 2 P2 asteroid outside territory at N=3 stations");
+assert(isPointInFan(tier2AstP2, poly6P2), "Tier 2 P2 asteroid enveloped at N=6 stations");
 
 // 5. Test "No Overlapping Territories" Restriction
 const polySeparatedP1 = getTerritoryPolygon(p1Home, computeStationPositions(p1Home, 8, false), false);
@@ -114,19 +133,33 @@ const p1 = testState.players[0];
 const p2 = testState.players[1];
 p1.energy = 500;
 
-assert(queueBuild(p1, 'miner', p2), "Queue miner 1 succeeds");
-assert(queueBuild(p1, 'miner', p2), "Queue miner 2 succeeds");
-assert(queueBuild(p1, 'miner', p2), "Queue miner 3 succeeds");
-assert(!queueBuild(p1, 'miner', p2), "Queue miner 4 rejected (max 3 queued)");
+// Queue 3 stations (1 in progress + 2 in queue)
+assert(queueBuild(p1, 'station', p2), "Queued station 1 (active)");
+assert(queueBuild(p1, 'station', p2), "Queued station 2");
+assert(queueBuild(p1, 'station', p2), "Queued station 3");
+assert(!queueBuild(p1, 'station', p2), "4th station rejected (queue limit 3 reached)");
 
-// 7. Test Miner Payload Capacity (Reduced to 10)
-assert(p1.units.miners[0].maxPayload === 10, "Starting miner capacity is reduced to 10");
-assert(p1.units.miners[1].maxPayload === 10, "Second starting miner capacity is 10");
+// Miner queue independent
+assert(queueBuild(p1, 'miner', p2), "Queued miner 1");
+assert(queueBuild(p1, 'miner', p2), "Queued miner 2");
+assert(queueBuild(p1, 'miner', p2), "Queued miner 3");
+assert(!queueBuild(p1, 'miner', p2), "4th miner rejected (queue limit 3 reached)");
 
-// 8. Test Shared Attack Target in Attack Mode
+// Fighter queue independent
+assert(queueBuild(p1, 'fighter', p2), "Queued fighter 1");
+assert(queueBuild(p1, 'fighter', p2), "Queued fighter 2");
+assert(queueBuild(p1, 'fighter', p2), "Queued fighter 3");
+assert(!queueBuild(p1, 'fighter', p2), "4th fighter rejected (queue limit 3 reached)");
+
+// 7. Test Miner Payload Capacity (10 per trip)
+assert(p1.units.miners.length > 0, "P1 has initial miners");
+assert(p1.units.miners[0].maxPayload === 10, "Miner maxPayload is 10 energy per trip");
+
+// 8. Test Attack Stance Shared Target
 p1.stance = 'attack';
+p2.stations = computeStationPositions(p2.homePlanet, 3, true);
 updateCommanderUnits(testState, 0.1);
-// Check that all attacking fighters target the exact same entity
+
 const targetEntity0 = p2.stations.find(s => Math.hypot(s.x - p1.units.fighters[0].x, s.y - p1.units.fighters[0].y) < 20);
 assert(targetEntity0 !== undefined, "Attacking fleet found an enemy station target");
 
@@ -151,6 +184,81 @@ const initialDist = Math.hypot(bestStation.x - testFighter.x, bestStation.y - te
 updateCommanderUnits(testState, 0.1);
 const newDist = Math.hypot(bestStation.x - testFighter.x, bestStation.y - testFighter.y);
 assert(Math.abs(newDist - initialDist) < 0.05, `Fighter held firing range standoff (initial=${initialDist.toFixed(2)}, new=${newDist.toFixed(2)})`);
+
+// 10. Test Max 3 Active Miners Per Asteroid
+const minerTestState = createCommanderState();
+const mP1 = minerTestState.players[0];
+const targetAst = minerTestState.asteroids.find(a => a.tier === 1 && a.side === 'p1');
+assert(targetAst !== undefined, "Found target asteroid for active miner limit test");
+
+// Create 5 miners placed right at the asteroid
+mP1.units.miners = [];
+for (let i = 0; i < 5; i++) {
+    mP1.units.miners.push({
+        id: 900 + i,
+        playerId: 0,
+        x: targetAst.x,
+        y: targetAst.y,
+        payload: 0,
+        maxPayload: 10,
+        returning: false,
+        targetAsteroid: targetAst
+    });
+}
+targetAst.miners = 5;
+
+updateCommanderUnits(minerTestState, 0.1);
+assert(targetAst.activeMiners <= 3, `Active miners capped at 3 (actual: ${targetAst.activeMiners})`);
+
+// 11. Test Resource Gathering Speed Cut in Half (5.0 units/sec)
+const gatherTestState = createCommanderState();
+const gP1 = gatherTestState.players[0];
+const gAst = gatherTestState.asteroids.find(a => a.tier === 1 && a.side === 'p1');
+const initialRes = gAst.resources;
+
+gP1.units.miners = [{
+    id: 999,
+    playerId: 0,
+    x: gAst.x,
+    y: gAst.y,
+    payload: 0,
+    maxPayload: 10,
+    returning: false,
+    targetAsteroid: gAst
+}];
+gAst.miners = 1;
+
+// Run exactly 1.0 second of mining
+updateCommanderUnits(gatherTestState, 1.0);
+const extracted = initialRes - gAst.resources;
+assert(Math.abs(extracted - 5.0) < 0.1, `Resource gathering speed is 5.0 units/sec (extracted: ${extracted.toFixed(2)})`);
+assert(Math.abs(gP1.units.miners[0].payload - 5.0) < 0.1, `Miner payload increased by 5.0 in 1 second (payload: ${gP1.units.miners[0].payload.toFixed(2)})`);
+
+// 12. Test Asteroid Disappearance at 0 Resources
+const depleteTestState = createCommanderState();
+const dP1 = depleteTestState.players[0];
+const dAst = depleteTestState.asteroids.find(a => a.tier === 1 && a.side === 'p1');
+dAst.resources = 1.0; // 1 unit remaining
+
+const dMiner = {
+    id: 888,
+    playerId: 0,
+    x: dAst.x,
+    y: dAst.y,
+    payload: 0,
+    maxPayload: 10,
+    returning: false,
+    targetAsteroid: dAst
+};
+dP1.units.miners = [dMiner];
+dAst.miners = 1;
+
+// Mine for 0.5s: 5 * 0.5 = 2.5 > 1.0, depleting the asteroid to 0
+updateCommanderUnits(depleteTestState, 0.5);
+
+assert(!depleteTestState.asteroids.includes(dAst), "Depleted asteroid completely removed from state.asteroids");
+assert(dMiner.targetAsteroid === null, "Miner detached from depleted asteroid");
+assert(dMiner.returning === true, "Miner returns home with gathered resources");
 
 console.log(`\n------------------------------------------------------------`);
 console.log(`  Summary: ${passed} Passed, ${failed} Failed`);

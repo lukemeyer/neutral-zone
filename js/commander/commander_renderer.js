@@ -103,8 +103,9 @@ export function renderCommanderGame(ctx, canvas, state) {
         });
     });
 
-    // 4. Draw Asteroids
+    // 4. Draw Asteroids (Only active with resources > 0)
     asteroids.forEach(a => {
+        if (a.resources <= 0) return;
         const aScreen = toScreen(a.x, a.y);
         ctx.beginPath();
         ctx.arc(aScreen.x, aScreen.y, a.radius * ((scX + scY) / 2), 0, Math.PI * 2);
@@ -120,11 +121,12 @@ export function renderCommanderGame(ctx, canvas, state) {
         ctx.fillStyle = '#3fb950';
         ctx.fill();
 
-        // Resource & Tier text
+        // Resource & Tier text (shows active miners / 3 if mining)
         ctx.font = '10px monospace';
         ctx.fillStyle = '#8b949e';
         ctx.textAlign = 'center';
-        ctx.fillText(`T${a.tier} · ${Math.ceil(a.resources)}`, aScreen.x, aScreen.y + 16);
+        const minerInfo = a.activeMiners > 0 ? ` (${a.activeMiners}/3)` : '';
+        ctx.fillText(`T${a.tier} · ${Math.ceil(a.resources)}${minerInfo}`, aScreen.x, aScreen.y + 16);
     });
 
     // 5. Draw Stations

@@ -237,25 +237,33 @@ export function getTerritoryPolygon(homePlanet, stations, isPlayer2 = false) {
     }
 }
 
-// Symmetrically placed asteroid field layout in progressive concentric tiers
+// Asymmetrical asteroid field layout with mathematically equal radial distances from HQ
 export function getAsteroidLayout() {
+    // Player 1 HQ is at (2.5, 12.5), Player 2 HQ is at (17.5, 2.5)
+    // Tiers are organized by progressive concentric distance from each player's HQ:
+    // Tier 1: R = 0.86 (Home base: enveloped by starting 3 stations)
+    // Tier 2: R = 3.00 (Expansion frontier: enveloped by 6 stations)
+    // Tier 3: R = 5.32 (Contested forward zone: enveloped by 8-9 stations)
     const rawP1 = [
-        // Tier 1 (Home Rings: enveloped by starting 3 stations)
-        { tier: 1, x: 1.8, y: 12.0, resources: 500 },
-        { tier: 1, x: 3.0, y: 13.2, resources: 500 },
+        { tier: 1, x: 1.80, y: 12.00, resources: 500, hqDistance: 0.86 },
+        { tier: 1, x: 3.00, y: 13.20, resources: 500, hqDistance: 0.86 },
+        { tier: 2, x: 2.50, y: 9.50, resources: 800, hqDistance: 3.00 },
+        { tier: 2, x: 5.50, y: 12.50, resources: 800, hqDistance: 3.00 },
+        { tier: 3, x: 6.00, y: 8.50, resources: 1200, hqDistance: 5.32 }
+    ];
 
-        // Tier 2 (Expansion Arc: enveloped by 5 stations)
-        { tier: 2, x: 2.5, y: 9.5, resources: 800 },
-        { tier: 2, x: 5.5, y: 12.5, resources: 800 },
-
-        // Tier 3 Contested asteroids (enveloped by 8-9 stations)
-        { tier: 3, x: 6.0, y: 8.5, resources: 1200 }
+    // Asymmetric placement for P2: NOT a point mirror, but identical distances from P2 HQ (17.5, 2.5)
+    const rawP2 = [
+        { tier: 1, x: 17.72, y: 3.33, resources: 500, hqDistance: 0.86 },
+        { tier: 1, x: 16.69, y: 2.79, resources: 500, hqDistance: 0.86 },
+        { tier: 2, x: 16.47, y: 5.32, resources: 800, hqDistance: 3.00 },
+        { tier: 2, x: 14.68, y: 3.53, resources: 800, hqDistance: 3.00 },
+        { tier: 3, x: 13.14, y: 5.55, resources: 1200, hqDistance: 5.32 }
     ];
 
     const asteroids = [];
     let id = 0;
 
-    // P1 Asteroids
     rawP1.forEach(a => {
         asteroids.push({
             id: id++,
@@ -266,26 +274,27 @@ export function getAsteroidLayout() {
             resources: a.resources,
             maxResources: a.resources,
             miners: 0,
-            radius: 0.35
+            radius: 0.35,
+            hqDistance: a.hqDistance
         });
     });
 
-    // P2 Asteroids (Symmetrically mirrored: x2 = 20 - x1, y2 = 15 - y1)
-    rawP1.forEach(a => {
+    rawP2.forEach(a => {
         asteroids.push({
             id: id++,
-            x: Math.round((20 - a.x) * 100) / 100,
-            y: Math.round((15 - a.y) * 100) / 100,
+            x: a.x,
+            y: a.y,
             tier: a.tier,
             side: 'p2',
             resources: a.resources,
             maxResources: a.resources,
             miners: 0,
-            radius: 0.35
+            radius: 0.35,
+            hqDistance: a.hqDistance
         });
     });
 
-    // Central King Asteroid (exactly at map midpoint 10, 7.5)
+    // Central Contested King Asteroid (midpoint at 10.0, 7.5; exactly 9.01 from both HQs)
     asteroids.push({
         id: id++,
         x: 10.0,
@@ -295,8 +304,10 @@ export function getAsteroidLayout() {
         resources: 2000,
         maxResources: 2000,
         miners: 0,
-        radius: 0.55
+        radius: 0.55,
+        hqDistance: 9.01
     });
 
     return asteroids;
 }
+
