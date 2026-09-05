@@ -83,35 +83,11 @@ export function canExpandStation(player, enemy, targetCount = null) {
     const proposedStations = computeStationPositions(player.homePlanet, count, isP2, steer);
     const proposedPoly = getTerritoryPolygon(player.homePlanet, proposedStations, isP2);
 
-    // 1. Check against enemy's current active territory
+    // Check against enemy's current active territory
     const enemyCurrentStations = enemy.stations || computeStationPositions(enemy.homePlanet, enemy.stationCount, enemy.id === 1);
     const enemyCurrentPoly = getTerritoryPolygon(enemy.homePlanet, enemyCurrentStations, enemy.id === 1);
     if (doPolygonsIntersect(proposedPoly, enemyCurrentPoly)) {
         return false;
-    }
-
-    // 2. Check against enemy's committed pipeline (pending builds and in-flight stations)
-    const enemyPending = (enemy.buildCooldowns && enemy.buildCooldowns.station > 0 ? 1 : 0) +
-                         (enemy.launchingStations ? enemy.launchingStations.length : 0) +
-                         (enemy.buildQueue ? enemy.buildQueue.filter(b => b.type === 'station').length : 0);
-    if (enemyPending > 0) {
-        const enemyTotalCommitted = (enemy.stationCount || 0) + enemyPending;
-        const enemyCommittedStations = computeStationPositions(enemy.homePlanet, enemyTotalCommitted, enemy.id === 1, enemy.steeringAngle || enemy.launchAngle);
-        const enemyCommittedPoly = getTerritoryPolygon(enemy.homePlanet, enemyCommittedStations, enemy.id === 1);
-        if (doPolygonsIntersect(proposedPoly, enemyCommittedPoly)) {
-            return false;
-        }
-    }
-
-    // 3. Check against central neutral diagonal seam (y = 0.75 * x)
-    for (let pt of proposedPoly) {
-        if (!isP2) {
-            // P1 must stay in y >= 0.75 * x + 0.20
-            if (pt.y < 0.75 * pt.x + 0.20) return false;
-        } else {
-            // P2 must stay in y <= 0.75 * x - 0.20
-            if (pt.y > 0.75 * pt.x - 0.20) return false;
-        }
     }
 
     return true;
@@ -175,13 +151,14 @@ export function computeStationPositions(homePlanet, n, isPlayer2 = false, steeri
             { r: 10.8, count: 5, minA: -Math.PI * 0.45, maxA: -Math.PI * 0.05, isPerimeter: true }
         ];
     } else {
-        const outerCount = 5;
-        const midCount = Math.min(5, n - 7);
-        const innerCount = Math.max(1, n - outerCount - midCount);
+        // n >= 11: All additional stations increase density along the outer perimeter border!
+        const innerCount = 2;
+        const midCount = 3;
+        const outerCount = n - innerCount - midCount;
         rings = [
             { r: 3.2, count: innerCount, minA: -Math.PI * 0.35, maxA: -Math.PI * 0.15, isPerimeter: false },
             { r: 6.5, count: midCount, minA: -Math.PI * 0.38, maxA: -Math.PI * 0.12, isPerimeter: false },
-            { r: rOuter, count: outerCount, minA: -Math.PI * 0.45, maxA: -Math.PI * 0.05, isPerimeter: true }
+            { r: 11.2, count: outerCount, minA: -Math.PI * 0.45, maxA: -Math.PI * 0.05, isPerimeter: true }
         ];
     }
 
@@ -217,6 +194,16 @@ export function computeStationPositions(homePlanet, n, isPlayer2 = false, steeri
                 const s = Math.max(-1, Math.min(1, (steerDir - defaultAngle) / span));
                 const u = Math.max(-1, Math.min(1, (angle - defaultAngle) / span));
                 effectiveR = ring.r * (1 + 0.35 * s * u);
+            }
+
+            // Overlap protection / seam clamp at angle:
+            // Line y = 0.75 * x + buffer (buffer = 0.30)
+            const denom = 0.75 * Math.cos(angle) - Math.sin(angle);
+            if (denom > 0) {
+                const rMax = 14.70 / denom;
+                if (effectiveR > rMax) {
+                    effectiveR = rMax;
+                }
             }
 
             const sx = cx + effectiveR * Math.cos(angle);

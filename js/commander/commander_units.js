@@ -23,14 +23,6 @@ export function queueBuild(player, type, enemyPlayer = null) {
     const currentCount = inProgress + queued;
     if (currentCount >= 3) return false;
 
-    // Enforce "no overlapping territories" restriction
-    if (type === 'station' && enemyPlayer) {
-        const nextTotalStations = player.stationCount + currentCount + 1;
-        if (!canExpandStation(player, enemyPlayer, nextTotalStations)) {
-            return false;
-        }
-    }
-
     if (player.energy >= cost) {
         player.energy -= cost;
         if (player.buildCooldowns[type] <= 0) {
@@ -150,29 +142,9 @@ export function updateCommanderUnits(state, dt) {
                         }
                     }
 
-                    // Final border overlap check before adding station
-                    const enemy = players.find(ep => ep.id !== p.id);
-                    if (canExpandStation(p, enemy, p.stationCount + 1)) {
-                        p.stationCount++;
-                        updateStationLayout(p, { x: ls.targetX, y: ls.targetY });
-                    } else {
-                        // Expansion blocked by border: refund station energy and alert
-                        p.energy += COMMANDER_COSTS.station;
-                        if (particles) {
-                            for (let k = 0; k < 14; k++) {
-                                particles.push({
-                                    x: p.homePlanet.x,
-                                    y: p.homePlanet.y,
-                                    vx: (Math.random() - 0.5) * 2.5,
-                                    vy: (Math.random() - 0.5) * 2.5,
-                                    color: '#f85149',
-                                    size: 3.0,
-                                    life: 0.6,
-                                    maxLife: 0.6
-                                });
-                            }
-                        }
-                    }
+                    // Add station to network and update layout (density scales cleanly along border)
+                    p.stationCount++;
+                    updateStationLayout(p, { x: ls.targetX, y: ls.targetY });
                 }
             }
         }

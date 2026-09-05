@@ -33,22 +33,35 @@ export function initCommander() {
 }
 
 function setupUIHandlers() {
-    const p1 = state.players[0];
+    const getP1 = () => state ? state.players[0] : null;
+    const getP2 = () => state ? state.players[1] : null;
 
     // Build buttons
     const btnStation = document.getElementById('btn-build-station');
     if (btnStation) {
-        btnStation.addEventListener('click', () => queueBuild(p1, 'station', state.players[1]));
+        btnStation.addEventListener('click', () => {
+            const p1 = getP1();
+            const p2 = getP2();
+            if (p1 && p2) queueBuild(p1, 'station', p2);
+        });
     }
 
     const btnMiner = document.getElementById('btn-build-miner');
     if (btnMiner) {
-        btnMiner.addEventListener('click', () => queueBuild(p1, 'miner', state.players[1]));
+        btnMiner.addEventListener('click', () => {
+            const p1 = getP1();
+            const p2 = getP2();
+            if (p1 && p2) queueBuild(p1, 'miner', p2);
+        });
     }
 
     const btnFighter = document.getElementById('btn-build-fighter');
     if (btnFighter) {
-        btnFighter.addEventListener('click', () => queueBuild(p1, 'fighter', state.players[1]));
+        btnFighter.addEventListener('click', () => {
+            const p1 = getP1();
+            const p2 = getP2();
+            if (p1 && p2) queueBuild(p1, 'fighter', p2);
+        });
     }
 
     // Fleet Stance buttons
@@ -57,7 +70,8 @@ function setupUIHandlers() {
     const btnAttack = document.getElementById('btn-stance-attack');
 
     function setStance(newStance) {
-        p1.stance = newStance;
+        const p1 = getP1();
+        if (p1) p1.stance = newStance;
         [btnPatrol, btnDefend, btnAttack].forEach(b => b && b.classList.remove('active'));
         if (newStance === 'patrol' && btnPatrol) btnPatrol.classList.add('active');
         if (newStance === 'defend' && btnDefend) btnDefend.classList.add('active');
@@ -70,6 +84,9 @@ function setupUIHandlers() {
 
     // Keyboard Hotkeys
     window.addEventListener('keydown', (e) => {
+        const p1 = getP1();
+        if (!p1 || !state) return;
+
         if (e.code === 'Digit1' || e.code === 'KeyP') setStance('patrol');
         if (e.code === 'Digit2' || e.code === 'KeyD') setStance('defend');
         if (e.code === 'Digit3' || e.code === 'KeyA') setStance('attack');
@@ -94,7 +111,8 @@ function setupUIHandlers() {
     // Pointer & Touch Aiming for Launch Trajectory
     let isAiming = false;
     function steerTrajectoryFromPointer(e) {
-        if (!state || !canvas) return;
+        const p1 = getP1();
+        if (!state || !canvas || !p1) return;
         const rect = canvas.getBoundingClientRect();
         const px = e.clientX - rect.left;
         const py = e.clientY - rect.top;
@@ -133,7 +151,8 @@ function setupUIHandlers() {
 
     // Hover aiming near friendly territory
     canvas.addEventListener('pointermove', (e) => {
-        if (!isAiming && state && canvas) {
+        const p1 = getP1();
+        if (!isAiming && state && canvas && p1) {
             const rect = canvas.getBoundingClientRect();
             const wx = ((e.clientX - rect.left) / canvas.width) * state.mapWidth;
             const wy = ((e.clientY - rect.top) / canvas.height) * state.mapHeight;
@@ -148,12 +167,12 @@ function setupUIHandlers() {
     const btn2x = document.getElementById('btn-speed-2x');
     if (btn1x && btn2x) {
         btn1x.addEventListener('click', () => {
-            state.gameSpeed = 1.0;
+            if (state) state.gameSpeed = 1.0;
             btn1x.classList.add('active');
             btn2x.classList.remove('active');
         });
         btn2x.addEventListener('click', () => {
-            state.gameSpeed = 2.0;
+            if (state) state.gameSpeed = 2.0;
             btn2x.classList.add('active');
             btn1x.classList.remove('active');
         });
@@ -163,8 +182,10 @@ function setupUIHandlers() {
     const pBtn = document.getElementById('btn-pause');
     if (pBtn) {
         pBtn.addEventListener('click', () => {
-            state.isPaused = !state.isPaused;
-            pBtn.innerText = state.isPaused ? '▶ Resume' : '⏸ Pause';
+            if (state) {
+                state.isPaused = !state.isPaused;
+                pBtn.innerText = state.isPaused ? '▶ Resume' : '⏸ Pause';
+            }
         });
     }
 
@@ -172,10 +193,39 @@ function setupUIHandlers() {
     const btnRestart = document.getElementById('btn-restart');
     if (btnRestart) {
         btnRestart.addEventListener('click', () => {
-            state = createCommanderState();
-            document.getElementById('game-over-modal').style.display = 'none';
+            resetCommanderGame();
         });
     }
+}
+
+export function resetCommanderGame() {
+    state = createCommanderState();
+    lastTime = performance.now();
+
+    const modal = document.getElementById('game-over-modal');
+    if (modal) modal.style.display = 'none';
+
+    // Reset Pause UI
+    const pBtn = document.getElementById('btn-pause');
+    if (pBtn) pBtn.innerText = '⏸ Pause';
+
+    // Reset Speed UI
+    const btn1x = document.getElementById('btn-speed-1x');
+    const btn2x = document.getElementById('btn-speed-2x');
+    if (btn1x && btn2x) {
+        btn1x.classList.add('active');
+        btn2x.classList.remove('active');
+    }
+
+    // Reset Stance UI to patrol
+    const btnPatrol = document.getElementById('btn-stance-patrol');
+    const btnDefend = document.getElementById('btn-stance-defend');
+    const btnAttack = document.getElementById('btn-stance-attack');
+    [btnPatrol, btnDefend, btnAttack].forEach(b => b && b.classList.remove('active'));
+    if (btnPatrol) btnPatrol.classList.add('active');
+
+    // Update HUD immediately
+    updateHUD();
 }
 
 function updateHUD() {
@@ -241,18 +291,12 @@ function updateHUD() {
             });
         }
 
-        // Button states: full queue / blocked expansion
+        // Button states: full queue / title
         const btn = document.getElementById(`btn-build-${t}`);
         if (btn) {
+            btn.classList.remove('blocked');
             if (t === 'station') {
-                const canExpand = canExpandStation(p1, p2, p1.stationCount + totalQueued + 1);
-                if (!canExpand) {
-                    btn.classList.add('blocked');
-                    btn.title = 'Frontier Blocked: Cannot overlap enemy territory!';
-                } else {
-                    btn.classList.remove('blocked');
-                    btn.title = `Expand Station Perimeter (50 Energy) [${totalQueued}/3 queued]`;
-                }
+                btn.title = `Expand Station Perimeter (50 Energy) [${totalQueued}/3 queued]`;
             } else {
                 btn.title = `Build ${t} (${COMMANDER_COSTS[t]} Energy) [${totalQueued}/3 queued]`;
             }

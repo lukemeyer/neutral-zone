@@ -31,8 +31,10 @@ for (let n = 1; n <= 12; n++) {
 
     const outerStations = stations.filter(s => s.isPerimeter);
     const rOuter = outerStations[0].ringRadius;
-    if (n > 1) {
+    if (n > 1 && n <= 11) {
         assert(rOuter > prevRadius, `Station count ${n} strictly increases outer radius (${rOuter.toFixed(2)} > ${prevRadius.toFixed(2)})`);
+    } else if (n > 11) {
+        assert(rOuter >= prevRadius, `Station count ${n} outer radius is capped at border seam (${rOuter.toFixed(2)} >= ${prevRadius.toFixed(2)})`);
     }
     prevRadius = rOuter;
 
@@ -114,18 +116,18 @@ assert(isPointInFan(tier2AstP1, poly6P1), "Tier 2 P1 asteroid enveloped at N=6 s
 assert(!isPointInFan(tier2AstP2, poly3P2), "Tier 2 P2 asteroid outside territory at N=3 stations");
 assert(isPointInFan(tier2AstP2, poly6P2), "Tier 2 P2 asteroid enveloped at N=6 stations");
 
-// 5. Test "No Overlapping Territories" Restriction
+// 5. Test Border Protection & Zero Overlap at High Station Counts
 const polySeparatedP1 = getTerritoryPolygon(p1Home, computeStationPositions(p1Home, 8, false), false);
 const polySeparatedP2 = getTerritoryPolygon(p2Home, computeStationPositions(p2Home, 8, true), true);
 assert(!doPolygonsIntersect(polySeparatedP1, polySeparatedP2), "Territories at N=8 do not intersect across the map");
 
-const polyCollidingP1 = getTerritoryPolygon(p1Home, computeStationPositions(p1Home, 13, false), false);
-const polyCollidingP2 = getTerritoryPolygon(p2Home, computeStationPositions(p2Home, 13, true), true);
-assert(doPolygonsIntersect(polyCollidingP1, polyCollidingP2), "Territories at N=13 intersect along the central frontier");
+const polyHighN1 = getTerritoryPolygon(p1Home, computeStationPositions(p1Home, 13, false), false);
+const polyHighN2 = getTerritoryPolygon(p2Home, computeStationPositions(p2Home, 13, true), true);
+assert(!doPolygonsIntersect(polyHighN1, polyHighN2), "Territories at N=13 do not intersect due to border seam protection");
 
 const dummyP1 = { id: 0, homePlanet: p1Home, stationCount: 12 };
 const dummyP2 = { id: 1, homePlanet: p2Home, stationCount: 13, stations: computeStationPositions(p2Home, 13, true) };
-assert(!canExpandStation(dummyP1, dummyP2, 13), "canExpandStation correctly forbids expanding into overlapping enemy territory");
+assert(canExpandStation(dummyP1, dummyP2, 13), "canExpandStation allows expanding since stations pack densely along border without crossing");
 
 // 6. Test Build Queue (Max 3 per unit type)
 const testState = createCommanderState();
@@ -321,24 +323,66 @@ const northY = Math.min(...stNorth.map(s => s.y));
 const eastY = Math.min(...stEast.map(s => s.y));
 assert(northY < eastY - 0.5, `North steering reaches significantly further north (${northY.toFixed(2)} vs ${eastY.toFixed(2)})`);
 
-// 18. Test Central Treaty Seam Enforcement (y = 0.75 * x)
-// High station count that would cross diagonal is blocked
-const excessiveStations = 15;
-const p1CanCross = canExpandStation(lP1, launchState.players[1], excessiveStations);
-assert(p1CanCross === false, `Expansion to N=${excessiveStations} rejected because it crosses the central seam buffer`);
+// 18. Test Border Station Density Scaling at N >= 11
+const st10 = computeStationPositions(lP1.homePlanet, 10, false);
+const st11 = computeStationPositions(lP1.homePlanet, 11, false);
+const st15 = computeStationPositions(lP1.homePlanet, 15, false);
 
-// 19. Test Pipeline Queue Defense in canExpandStation
-const pipeState = createCommanderState();
-const pp1 = pipeState.players[0];
-const pp2 = pipeState.players[1];
-pp1.stationCount = 7;
-pp2.stationCount = 7;
-// With 0 enemy pending, 8 might be allowed
-// But if enemy has 2 queued/in-flight stations, expanding into the disputed zone must be protected
-pp2.buildQueue = [{ type: 'station' }, { type: 'station' }];
-const pp1Expand = canExpandStation(pp1, pp2, 9);
-// Expansion is strictly protected against enemy committed pipeline
-assert(typeof pp1Expand === 'boolean', "Pipeline check returns valid boolean");
+const border10 = st10.filter(s => s.isPerimeter);
+const border11 = st11.filter(s => s.isPerimeter);
+const border15 = st15.filter(s => s.isPerimeter);
+
+assert(border10.length === 5, `Border stations at N=10 is 5`);
+assert(border11.length === 6, `Border stations at N=11 is 6 (density increased)`);
+assert(border15.length === 10, `Border stations at N=15 is 10 (density increased)`);
+
+// Average spacing between border stations decreases
+function getAvgSpacing(stations) {
+    let sum = 0;
+    for (let i = 0; i < stations.length - 1; i++) {
+        sum += Math.hypot(stations[i+1].x - stations[i].x, stations[i+1].y - stations[i].y);
+    }
+    return sum / (stations.length - 1);
+}
+
+const spacing10 = getAvgSpacing(border10);
+const spacing11 = getAvgSpacing(border11);
+const spacing15 = getAvgSpacing(border15);
+
+assert(spacing11 < spacing10, `Border station spacing decreases from N=10 to N=11 (${spacing11.toFixed(2)} < ${spacing10.toFixed(2)})`);
+assert(spacing15 < spacing11, `Border station spacing decreases from N=11 to N=15 (${spacing15.toFixed(2)} < ${spacing11.toFixed(2)})`);
+
+// 19. Test Zero Polygon Overlap Across Full Station Range N=1..20
+let collisionFound = false;
+for (let testN = 1; testN <= 18; testN++) {
+    const p1Poly = getTerritoryPolygon(lP1.homePlanet, computeStationPositions(lP1.homePlanet, testN, false), false);
+    const p2Poly = getTerritoryPolygon(launchState.players[1].homePlanet, computeStationPositions(launchState.players[1].homePlanet, testN, true), true);
+    if (doPolygonsIntersect(p1Poly, p2Poly)) {
+        collisionFound = true;
+        break;
+    }
+}
+assert(!collisionFound, "Zero territory collisions across all station counts up to N=18");
+
+// 20. Test Continuous Station Queueing without Collision Block
+const lateState = createCommanderState();
+const lateP1 = lateState.players[0];
+const lateP2 = lateState.players[1];
+lateP1.stationCount = 14;
+lateP1.energy = 200;
+assert(queueBuild(lateP1, 'station', lateP2), "Station queueing succeeds at N=14 without collision lockout");
+
+// 21. Test Game Reset State Reinitialization
+let resetTestState = createCommanderState();
+resetTestState.players[0].energy = 999;
+resetTestState.players[0].stationCount = 10;
+resetTestState.isGameOver = true;
+// Resetting creates fresh state
+resetTestState = createCommanderState();
+assert(resetTestState.players[0].energy === 150, "Energy reset to initial 150");
+assert(resetTestState.players[0].stationCount === 3, "Station count reset to initial 3");
+assert(resetTestState.isGameOver === false, "isGameOver reset to false");
+assert(queueBuild(resetTestState.players[0], 'station', resetTestState.players[1]), "New game accepts build queues immediately");
 
 console.log(`\n------------------------------------------------------------`);
 console.log(`  Summary: ${passed} Passed, ${failed} Failed`);
