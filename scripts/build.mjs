@@ -163,7 +163,7 @@ for (const htmlFile of htmlFiles) {
     const linkHrefMatches = [...content.matchAll(/<link\b[^>]*?\bhref=["']([^"']+)["']/g)];
     for (const match of linkHrefMatches) {
         const hrefPath = match[1];
-        if (hrefPath.startsWith('http://') || hrefPath.startsWith('https://')) continue;
+        if (hrefPath.startsWith('http://') || hrefPath.startsWith('https://') || hrefPath.startsWith('data:')) continue;
         const targetPath = path.join(distDir, hrefPath);
         if (!fs.existsSync(targetPath)) {
             console.error(`[build ERROR] ${htmlFile} references missing stylesheet/link: ${hrefPath}`);

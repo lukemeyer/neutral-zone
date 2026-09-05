@@ -252,15 +252,21 @@ export function updateCommanderUnits(state, dt) {
             if (p.stance === 'patrol') {
                 // Cruise along the perimeter frontier
                 if (sortedPerimeter.length >= 2) {
-                    f.patrolT = (f.patrolT + 0.15 * dt) % 1.0;
+                    const currentT = (typeof f.patrolT === 'number' && !isNaN(f.patrolT)) ? f.patrolT : 0;
+                    f.patrolT = (currentT + 0.15 * dt) % 1.0;
                     const segmentCount = sortedPerimeter.length - 1;
-                    const segIdx = Math.min(segmentCount - 1, Math.floor(f.patrolT * segmentCount));
-                    const localT = (f.patrolT * segmentCount) - segIdx;
+                    const segIdx = Math.max(0, Math.min(segmentCount - 1, Math.floor(f.patrolT * segmentCount)));
+                    const localT = Math.max(0, Math.min(1, (f.patrolT * segmentCount) - segIdx));
 
                     const pA = sortedPerimeter[segIdx];
                     const pB = sortedPerimeter[segIdx + 1];
-                    targetX = pA.x + localT * (pB.x - pA.x);
-                    targetY = pA.y + localT * (pB.y - pA.y);
+                    if (pA && pB) {
+                        targetX = pA.x + localT * (pB.x - pA.x);
+                        targetY = pA.y + localT * (pB.y - pA.y);
+                    } else if (pA) {
+                        targetX = pA.x;
+                        targetY = pA.y;
+                    }
                 } else if (sortedPerimeter.length === 1) {
                     targetX = sortedPerimeter[0].x;
                     targetY = sortedPerimeter[0].y;

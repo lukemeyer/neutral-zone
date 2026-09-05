@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neutral Zone: Commander Mode</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⭐</text></svg>">
     <link rel="stylesheet" href="style.css">
     <style>
         body, html {
@@ -377,6 +378,89 @@
 
         .btn-restart:hover {
             background: #388bfd;
+        }
+
+        /* Mobile & Responsive Adaptations */
+        @media (max-width: 768px) {
+            #top-nav {
+                height: auto;
+                min-height: 44px;
+                padding: 6px 10px;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .nav-title {
+                font-size: 13px;
+            }
+            .dom-meter-wrap {
+                order: 3;
+                width: 100%;
+                max-width: 100%;
+                margin: 2px 0 4px 0;
+            }
+            .top-actions {
+                gap: 4px;
+            }
+            .top-btn {
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+            #tactical-dock {
+                bottom: 8px;
+                padding: 6px 8px;
+                gap: 6px;
+                max-width: 98%;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            .dock-divider {
+                display: none;
+            }
+            .dock-section {
+                gap: 6px;
+                justify-content: center;
+            }
+            .dock-stat {
+                font-size: 11px;
+            }
+            .dock-btn {
+                min-width: 68px;
+                padding: 4px 6px;
+                font-size: 10px;
+            }
+            .dock-stance-btn {
+                padding: 4px 6px;
+                font-size: 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            #tactical-dock {
+                bottom: 4px;
+                padding: 4px 6px;
+                gap: 4px;
+                width: calc(100% - 12px);
+                border-radius: 8px;
+            }
+            .dock-btn {
+                min-width: 60px;
+                padding: 3px 5px;
+                font-size: 9.5px;
+            }
+            .dock-cost {
+                font-size: 8px;
+                padding: 0 2px;
+            }
+            .dock-stance-btn {
+                padding: 4px 6px;
+                font-size: 9.5px;
+            }
+            .dock-stat {
+                font-size: 10px;
+            }
+            .dock-val-blue, .dock-val-red {
+                font-size: 11px;
+            }
         }
     </style>
 </head>

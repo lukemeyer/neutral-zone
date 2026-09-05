@@ -257,5 +257,10 @@ function gameLoop(time) {
 }
 
 if (typeof window !== 'undefined') {
-    window.addEventListener('DOMContentLoaded', initCommanderGame);
+    if (document.readyState === 'loading') {
+        window.addEventListener('DOMContentLoaded', initCommander);
+    } else {
+        initCommander();
+    }
 }
+
