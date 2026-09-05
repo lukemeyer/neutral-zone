@@ -11,7 +11,7 @@ export function updateCommanderAI(state, dt) {
     ai.aiTimer = 0;
 
     const player = players[0];
-    const aiPoly = getTerritoryPolygon(ai.homePlanet, ai.stations);
+    const aiPoly = getTerritoryPolygon(ai.homePlanet, ai.stations, true);
 
     // 1. Economic Decision Making
     const capturedAsteroids = asteroids.filter(a => a.resources > 0 && isPointInFan(a, aiPoly));

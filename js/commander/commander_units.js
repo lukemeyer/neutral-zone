@@ -95,8 +95,8 @@ export function updateCommanderUnits(state, dt) {
     // 3. Autonomous Miner Logistics (No micro-management)
     players.forEach(p => {
         const enemy = players.find(ep => ep.id !== p.id);
-        const myPoly = getTerritoryPolygon(p.homePlanet, p.stations);
-        const enemyPoly = getTerritoryPolygon(enemy.homePlanet, enemy.stations);
+        const myPoly = getTerritoryPolygon(p.homePlanet, p.stations, p.id === 1);
+        const enemyPoly = getTerritoryPolygon(enemy.homePlanet, enemy.stations, enemy.id === 1);
 
         // Find captured asteroids inside friendly territory (and NOT in enemy territory)
         const capturedAsteroids = asteroids.filter(a => {
@@ -191,7 +191,7 @@ export function updateCommanderUnits(state, dt) {
     // 4. Fleet Stance Controller (Patrol / Defend / Attack)
     players.forEach(p => {
         const enemy = players.find(ep => ep.id !== p.id);
-        const myPoly = getTerritoryPolygon(p.homePlanet, p.stations);
+        const myPoly = getTerritoryPolygon(p.homePlanet, p.stations, p.id === 1);
         const perimeterStations = p.stations.filter(s => s.isPerimeter);
         const sortedPerimeter = [...perimeterStations].sort((a, b) => a.angle - b.angle);
 
@@ -228,21 +228,28 @@ export function updateCommanderUnits(state, dt) {
                     targetEntity = nearbyThreat;
                 }
             } else if (p.stance === 'defend') {
-                // Check if any enemy is inside friendly territory
-                const intruder = enemy.units.fighters.find(ef => isPointInFan(ef, myPoly)) ||
-                                 enemy.units.miners.find(em => isPointInFan(em, myPoly));
+                // Check if any enemy engages a station or enters friendly territory
+                const attackingStationThreat = enemy.units.fighters.find(ef => {
+                    return p.stations.some(s => Math.hypot(ef.x - s.x, ef.y - s.y) <= 2.5) ||
+                           Math.hypot(ef.x - p.homePlanet.x, ef.y - p.homePlanet.y) <= 3.5;
+                });
 
-                if (intruder) {
-                    targetX = intruder.x;
-                    targetY = intruder.y;
-                    targetEntity = intruder;
+                const territoryIntruder = enemy.units.fighters.find(ef => isPointInFan(ef, myPoly)) ||
+                                          enemy.units.miners.find(em => isPointInFan(em, myPoly));
+
+                const activeThreat = attackingStationThreat || territoryIntruder;
+
+                if (activeThreat) {
+                    targetX = activeThreat.x;
+                    targetY = activeThreat.y;
+                    targetEntity = activeThreat;
                 } else {
-                    // Guard most forward perimeter station
-                    if (sortedPerimeter.length > 0) {
-                        const midP = sortedPerimeter[Math.floor(sortedPerimeter.length / 2)];
-                        targetX = midP.x + Math.sin(fIdx * 1.5) * 0.8;
-                        targetY = midP.y + Math.cos(fIdx * 1.5) * 0.8;
-                    }
+                    // Hold defensive formation near HQ (escort arc facing toward center)
+                    const baseAngle = (p.id === 0 ? -Math.PI * 0.25 : Math.PI * 0.75);
+                    const spread = (fIdx - (p.units.fighters.length - 1) / 2) * 0.35;
+                    const holdDist = 1.4;
+                    targetX = p.homePlanet.x + holdDist * Math.cos(baseAngle + spread);
+                    targetY = p.homePlanet.y + holdDist * Math.sin(baseAngle + spread);
                 }
             } else if (p.stance === 'attack') {
                 // Offensive strike priority:

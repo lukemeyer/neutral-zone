@@ -28,85 +28,91 @@ export function isPointInFan(pt, poly) {
 export function computeStationPositions(homePlanet, n, isPlayer2 = false) {
     if (n <= 0) return [];
 
-    // Base P1 corner is (2.5, 12.5)
-    // We compute canonical P1 positions, then reflect for P2
-    const hx = 2.5;
-    const hy = 12.5;
+    // Corner is (0, 15) for P1
+    const cx = 0;
+    const cy = 15;
 
-    const baseAngles = {
-        min: -Math.PI * 0.42, // ~ -75 deg (pointing mostly up)
-        max: -Math.PI * 0.08  // ~ -15 deg (pointing mostly right)
-    };
+    // Outer radius strictly increases with each station n (no plateaus or clumping)
+    const rOuter = n === 1 ? 3.2 : 3.6 + 0.9 * (n - 2);
 
-    const stations = [];
-
-    // Radial ring distribution
-    // Ring 1: R = 3.2
-    // Ring 2: R = 5.8
-    // Ring 3: R = 8.4
-    // Ring 4: R = 11.0
-
-    let ringAssignments = [];
+    let rings = [];
     if (n === 1) {
-        ringAssignments = [{ r: 3.2, count: 1 }];
+        rings = [{ r: 3.2, count: 1, minA: -Math.PI * 0.25, maxA: -Math.PI * 0.25, isPerimeter: true }];
     } else if (n === 2) {
-        ringAssignments = [{ r: 3.2, count: 2 }];
+        rings = [{ r: 3.8, count: 2, minA: -Math.PI * 0.40, maxA: -Math.PI * 0.10, isPerimeter: true }];
     } else if (n === 3) {
-        ringAssignments = [{ r: 3.4, count: 3 }];
+        rings = [{ r: 4.5, count: 3, minA: -Math.PI * 0.42, maxA: -Math.PI * 0.08, isPerimeter: true }];
     } else if (n === 4) {
-        ringAssignments = [
-            { r: 3.2, count: 2 },
-            { r: 5.6, count: 2 }
+        rings = [
+            { r: 2.8, count: 1, minA: -Math.PI * 0.25, maxA: -Math.PI * 0.25, isPerimeter: false },
+            { r: 5.4, count: 3, minA: -Math.PI * 0.42, maxA: -Math.PI * 0.08, isPerimeter: true }
         ];
     } else if (n === 5) {
-        ringAssignments = [
-            { r: 3.2, count: 2 },
-            { r: 5.8, count: 3 }
+        rings = [
+            { r: 3.2, count: 2, minA: -Math.PI * 0.35, maxA: -Math.PI * 0.15, isPerimeter: false },
+            { r: 6.3, count: 3, minA: -Math.PI * 0.43, maxA: -Math.PI * 0.07, isPerimeter: true }
         ];
     } else if (n === 6) {
-        ringAssignments = [
-            { r: 3.2, count: 2 },
-            { r: 6.0, count: 4 }
+        rings = [
+            { r: 3.4, count: 2, minA: -Math.PI * 0.35, maxA: -Math.PI * 0.15, isPerimeter: false },
+            { r: 7.2, count: 4, minA: -Math.PI * 0.44, maxA: -Math.PI * 0.06, isPerimeter: true }
         ];
     } else if (n === 7) {
-        ringAssignments = [
-            { r: 3.2, count: 2 },
-            { r: 5.6, count: 2 },
-            { r: 8.2, count: 3 }
+        rings = [
+            { r: 3.2, count: 2, minA: -Math.PI * 0.35, maxA: -Math.PI * 0.15, isPerimeter: false },
+            { r: 5.6, count: 2, minA: -Math.PI * 0.35, maxA: -Math.PI * 0.15, isPerimeter: false },
+            { r: 8.1, count: 3, minA: -Math.PI * 0.44, maxA: -Math.PI * 0.06, isPerimeter: true }
+        ];
+    } else if (n === 8) {
+        rings = [
+            { r: 3.2, count: 2, minA: -Math.PI * 0.35, maxA: -Math.PI * 0.15, isPerimeter: false },
+            { r: 5.8, count: 2, minA: -Math.PI * 0.35, maxA: -Math.PI * 0.15, isPerimeter: false },
+            { r: 9.0, count: 4, minA: -Math.PI * 0.45, maxA: -Math.PI * 0.05, isPerimeter: true }
+        ];
+    } else if (n === 9) {
+        rings = [
+            { r: 3.2, count: 2, minA: -Math.PI * 0.35, maxA: -Math.PI * 0.15, isPerimeter: false },
+            { r: 6.0, count: 3, minA: -Math.PI * 0.38, maxA: -Math.PI * 0.12, isPerimeter: false },
+            { r: 9.9, count: 4, minA: -Math.PI * 0.45, maxA: -Math.PI * 0.05, isPerimeter: true }
+        ];
+    } else if (n === 10) {
+        rings = [
+            { r: 3.2, count: 2, minA: -Math.PI * 0.35, maxA: -Math.PI * 0.15, isPerimeter: false },
+            { r: 6.3, count: 3, minA: -Math.PI * 0.38, maxA: -Math.PI * 0.12, isPerimeter: false },
+            { r: 10.8, count: 5, minA: -Math.PI * 0.45, maxA: -Math.PI * 0.05, isPerimeter: true }
         ];
     } else {
-        // n >= 8
-        const r3Count = n - 4;
-        ringAssignments = [
-            { r: 3.2, count: 2 },
-            { r: 5.6, count: 2 },
-            { r: 8.4, count: r3Count }
+        const outerCount = 5;
+        const midCount = Math.min(5, n - 7);
+        const innerCount = Math.max(1, n - outerCount - midCount);
+        rings = [
+            { r: 3.2, count: innerCount, minA: -Math.PI * 0.35, maxA: -Math.PI * 0.15, isPerimeter: false },
+            { r: 6.5, count: midCount, minA: -Math.PI * 0.38, maxA: -Math.PI * 0.12, isPerimeter: false },
+            { r: rOuter, count: outerCount, minA: -Math.PI * 0.45, maxA: -Math.PI * 0.05, isPerimeter: true }
         ];
     }
 
+    const stations = [];
     let id = 0;
-    ringAssignments.forEach((ring, ringIdx) => {
-        const count = ring.count;
-        const isOutermost = ringIdx === ringAssignments.length - 1;
-
-        for (let i = 0; i < count; i++) {
+    rings.forEach(ring => {
+        for (let i = 0; i < ring.count; i++) {
             let angle;
-            if (count === 1) {
-                angle = (baseAngles.min + baseAngles.max) / 2;
+            if (ring.count === 1) {
+                angle = (ring.minA + ring.maxA) / 2;
             } else {
-                const t = i / (count - 1);
-                angle = baseAngles.min + t * (baseAngles.max - baseAngles.min);
+                const t = i / (ring.count - 1);
+                angle = ring.minA + t * (ring.maxA - ring.minA);
             }
 
-            const sx = hx + ring.r * Math.cos(angle);
-            const sy = hy + ring.r * Math.sin(angle);
+            const sx = cx + ring.r * Math.cos(angle);
+            const sy = cy + ring.r * Math.sin(angle);
 
             stations.push({
                 id: id++,
                 x: Math.round(sx * 1000) / 1000,
                 y: Math.round(sy * 1000) / 1000,
                 ringRadius: ring.r,
-                isPerimeter: isOutermost,
+                isPerimeter: ring.isPerimeter,
                 angle
             });
         }
@@ -125,42 +131,63 @@ export function computeStationPositions(homePlanet, n, isPlayer2 = false) {
     return stations;
 }
 
-// Builds the simple, solid territory polygon from Home Planet and outer perimeter stations
-export function getTerritoryPolygon(homePlanet, stations) {
+// Builds territory polygon filling the entire 90 degree corner
+export function getTerritoryPolygon(homePlanet, stations, isPlayer2 = false) {
     if (!stations || stations.length === 0) {
         return [];
     }
 
+    // Auto-detect player 2 if isPlayer2 flag isn't explicitly passed
+    const isP2 = isPlayer2 || (homePlanet && homePlanet.x > 10) || (stations[0] && stations[0].x > 10);
+
     const outerStations = stations.filter(s => s.isPerimeter);
     const activeOuter = outerStations.length > 0 ? outerStations : stations;
 
-    // Sort outer stations by angle in sector
-    const sorted = [...activeOuter].sort((a, b) => a.angle - b.angle);
+    if (!isP2) {
+        // P1 Corner is (0, 15)
+        const sorted = [...activeOuter].sort((a, b) => a.angle - b.angle);
+        const maxR = Math.max(...activeOuter.map(s => Math.hypot(s.x, 15 - s.y)));
 
-    // Convex fan: Home -> Sorted outer stations -> Home
-    const poly = [{ x: homePlanet.x, y: homePlanet.y }];
-    sorted.forEach(s => poly.push({ x: s.x, y: s.y }));
+        const leftWallPoint = { x: 0, y: Math.max(0, Math.round((15 - maxR) * 1000) / 1000) };
+        const bottomWallPoint = { x: Math.min(20, Math.round(maxR * 1000) / 1000), y: 15 };
 
-    return poly;
+        const poly = [
+            { x: 0, y: 15 },
+            leftWallPoint
+        ];
+        sorted.forEach(s => poly.push({ x: s.x, y: s.y }));
+        poly.push(bottomWallPoint);
+        return poly;
+    } else {
+        // P2 Corner is (20, 0)
+        // Canonical reflection from P1
+        const p1Poly = getTerritoryPolygon(null, stations.map(s => ({
+            ...s,
+            x: 20 - s.x,
+            y: 15 - s.y,
+            angle: s.angle - Math.PI
+        })), false);
+
+        return p1Poly.map(pt => ({
+            x: Math.round((20 - pt.x) * 1000) / 1000,
+            y: Math.round((15 - pt.y) * 1000) / 1000
+        }));
+    }
 }
 
 // Symmetrically placed asteroid field layout in progressive concentric tiers
 export function getAsteroidLayout() {
-    // Symmetrical pairs around diagonal axis: P1 side vs P2 side
-    const p1Home = { x: 2.5, y: 12.5 };
-    const p2Home = { x: 17.5, y: 2.5 };
-
     const rawP1 = [
-        // Tier 1 (Home Rings: enveloped by 2-3 stations)
-        { tier: 1, dist: 2.6, angle: -Math.PI * 0.30, resources: 500 },
-        { tier: 1, dist: 2.8, angle: -Math.PI * 0.18, resources: 500 },
+        // Tier 1 (Home Rings: enveloped by starting 3 stations)
+        { tier: 1, x: 1.8, y: 12.0, resources: 500 },
+        { tier: 1, x: 3.0, y: 13.2, resources: 500 },
 
-        // Tier 2 (Expansion Arc: enveloped by 4-6 stations)
-        { tier: 2, dist: 5.0, angle: -Math.PI * 0.38, resources: 800 },
-        { tier: 2, dist: 5.2, angle: -Math.PI * 0.12, resources: 800 },
+        // Tier 2 (Expansion Arc: enveloped by 5 stations)
+        { tier: 2, x: 2.5, y: 9.5, resources: 800 },
+        { tier: 2, x: 5.5, y: 12.5, resources: 800 },
 
-        // Tier 3 Central contested asteroids (near diagonal midpoint)
-        { tier: 3, dist: 8.5, angle: -Math.PI * 0.25, resources: 1200 }
+        // Tier 3 Contested asteroids (enveloped by 8-9 stations)
+        { tier: 3, x: 6.0, y: 8.5, resources: 1200 }
     ];
 
     const asteroids = [];
@@ -168,12 +195,10 @@ export function getAsteroidLayout() {
 
     // P1 Asteroids
     rawP1.forEach(a => {
-        const x = Math.round((p1Home.x + a.dist * Math.cos(a.angle)) * 100) / 100;
-        const y = Math.round((p1Home.y + a.dist * Math.sin(a.angle)) * 100) / 100;
         asteroids.push({
             id: id++,
-            x,
-            y,
+            x: a.x,
+            y: a.y,
             tier: a.tier,
             side: 'p1',
             resources: a.resources,
@@ -185,14 +210,10 @@ export function getAsteroidLayout() {
 
     // P2 Asteroids (Symmetrically mirrored: x2 = 20 - x1, y2 = 15 - y1)
     rawP1.forEach(a => {
-        const s1X = p1Home.x + a.dist * Math.cos(a.angle);
-        const s1Y = p1Home.y + a.dist * Math.sin(a.angle);
-        const x = Math.round((20 - s1X) * 100) / 100;
-        const y = Math.round((15 - s1Y) * 100) / 100;
         asteroids.push({
             id: id++,
-            x,
-            y,
+            x: Math.round((20 - a.x) * 100) / 100,
+            y: Math.round((15 - a.y) * 100) / 100,
             tier: a.tier,
             side: 'p2',
             resources: a.resources,

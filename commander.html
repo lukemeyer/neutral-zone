@@ -117,172 +117,15 @@
 
         #game-area {
             flex: 1;
-            display: flex;
             position: relative;
             overflow: hidden;
-        }
-
-        .sidebar {
-            width: 270px;
-            background: #0d1117;
-            border-right: 1px solid #30363d;
-            padding: 14px;
-            box-sizing: border-box;
             display: flex;
-            flex-direction: column;
-            gap: 12px;
-            overflow-y: auto;
-            z-index: 5;
-        }
-
-        .sidebar.right-side {
-            border-right: none;
-            border-left: 1px solid #30363d;
-        }
-
-        .card {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .card-header {
-            font-weight: bold;
-            font-size: 14px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .energy-val {
-            font-size: 22px;
-            font-weight: bold;
-            font-family: monospace;
-            color: #58a6ff;
-        }
-
-        .control-val {
-            font-size: 12px;
-            font-family: monospace;
-            color: #3fb950;
-        }
-
-        .build-btn {
-            background: #21262d;
-            border: 1px solid #30363d;
-            color: #c9d1d9;
-            padding: 8px 10px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: all 0.15s ease;
-        }
-
-        .build-btn:hover {
-            background: #30363d;
-            color: #ffffff;
-            border-color: #58a6ff;
-        }
-
-        .build-btn.highlight {
-            background: #1f6feb;
-            border-color: #58a6ff;
-            color: #ffffff;
-        }
-
-        .build-btn.highlight:hover {
-            background: #388bfd;
-        }
-
-        .progress-slot {
-            height: 4px;
-            background: #21262d;
-            border-radius: 2px;
-            overflow: hidden;
-            margin-top: -4px;
-            margin-bottom: 4px;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: #3fb950;
-            width: 0%;
-            transition: width 0.1s linear;
-        }
-
-        /* Stance Selector */
-        .stance-group {
-            display: flex;
-            gap: 6px;
-        }
-
-        .stance-btn {
-            flex: 1;
-            background: #21262d;
-            border: 1px solid #30363d;
-            color: #8b949e;
-            padding: 8px 4px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: bold;
-            cursor: pointer;
-            text-align: center;
-            transition: all 0.15s ease;
-        }
-
-        .stance-btn:hover {
-            color: #ffffff;
-            background: #30363d;
-        }
-
-        .stance-btn.active {
-            color: #ffffff;
-        }
-
-        .stance-btn#btn-stance-patrol.active {
-            background: #1f6feb;
-            border-color: #58a6ff;
-        }
-
-        .stance-btn#btn-stance-defend.active {
-            background: #d29922;
-            border-color: #e3b341;
-        }
-
-        .stance-btn#btn-stance-attack.active {
-            background: #da3633;
-            border-color: #f85149;
-        }
-
-        .stats-readout {
-            font-size: 12px;
-            color: #8b949e;
-            font-family: monospace;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .instructions-card {
-            background: rgba(22, 27, 34, 0.6);
-            border: 1px dashed #30363d;
-            border-radius: 8px;
-            padding: 10px;
-            font-size: 11px;
-            color: #8b949e;
-            line-height: 1.4;
         }
 
         #canvas-container {
             flex: 1;
+            width: 100%;
+            height: 100%;
             position: relative;
             background: #0a0d14;
         }
@@ -291,6 +134,177 @@
             display: block;
             width: 100%;
             height: 100%;
+        }
+
+        /* Floating Minimal Tactical HUD */
+        #tactical-dock {
+            position: absolute;
+            bottom: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(22, 27, 34, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(48, 54, 61, 0.85);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65);
+            padding: 6px 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 20;
+            max-width: 96%;
+            user-select: none;
+        }
+
+        .dock-section {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dock-divider {
+            width: 1px;
+            height: 24px;
+            background: #30363d;
+        }
+
+        .dock-stat {
+            font-size: 12px;
+            font-family: monospace;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+
+        .dock-val-blue {
+            font-weight: bold;
+            color: #58a6ff;
+            font-size: 14px;
+        }
+
+        .dock-val-red {
+            font-weight: bold;
+            color: #ff7b72;
+            font-size: 14px;
+        }
+
+        .dock-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            transition: all 0.15s ease;
+            position: relative;
+            overflow: hidden;
+            min-width: 80px;
+        }
+
+        .dock-btn:hover {
+            background: #30363d;
+            color: #ffffff;
+            border-color: #58a6ff;
+        }
+
+        .dock-btn.highlight {
+            background: #1f6feb;
+            border-color: #58a6ff;
+            color: #ffffff;
+        }
+
+        .dock-btn.highlight:hover {
+            background: #388bfd;
+        }
+
+        .dock-btn-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .dock-cost {
+            font-size: 9px;
+            opacity: 0.85;
+            background: rgba(0,0,0,0.3);
+            padding: 1px 4px;
+            border-radius: 3px;
+        }
+
+        .dock-prog-wrap {
+            width: 100%;
+            height: 3px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 1.5px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+
+        .dock-prog {
+            height: 100%;
+            background: #3fb950;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        .dock-stance-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #8b949e;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .dock-stance-btn:hover {
+            color: #ffffff;
+            background: #30363d;
+        }
+
+        .dock-stance-btn.active {
+            color: #ffffff;
+        }
+
+        .dock-stance-btn#btn-stance-patrol.active {
+            background: #1f6feb;
+            border-color: #58a6ff;
+            box-shadow: 0 0 8px rgba(31, 111, 235, 0.4);
+        }
+
+        .dock-stance-btn#btn-stance-defend.active {
+            background: #d29922;
+            border-color: #e3b341;
+            box-shadow: 0 0 8px rgba(210, 153, 34, 0.4);
+        }
+
+        .dock-stance-btn#btn-stance-attack.active {
+            background: #da3633;
+            border-color: #f85149;
+            box-shadow: 0 0 8px rgba(218, 54, 51, 0.4);
+        }
+
+        .dock-intel-stance {
+            font-weight: bold;
+            font-size: 11px;
+            color: #ffffff;
+            background: rgba(248, 81, 73, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid rgba(248, 81, 73, 0.4);
         }
 
         #game-over-modal {
@@ -338,7 +352,7 @@
 
     <div id="top-nav">
         <div class="nav-title">
-            <span>⭐</span> Neutral Zone <span style="font-weight:normal;color:#8b949e">| Commander Mode</span>
+            <span>⭐</span> Neutral Zone <span style="font-weight:normal;color:#8b949e">| Commander</span>
         </div>
 
         <div class="dom-meter-wrap">
@@ -358,127 +372,67 @@
             <button id="btn-pause" class="top-btn">⏸ Pause</button>
             <button id="btn-speed-1x" class="top-btn active">1x</button>
             <button id="btn-speed-2x" class="top-btn">2x</button>
-            <a href="hex.html" class="classic-link" style="color: #2ea043; font-weight: 600;">⬡ Hex Mode</a>
-            <a href="index.html" class="classic-link">← Classic Mode</a>
+            <a href="hex.html" class="classic-link" style="color: #2ea043; font-weight: 600;">⬡ Hex</a>
+            <a href="index.html" class="classic-link">← Classic</a>
         </div>
     </div>
 
     <div id="game-area">
-        <!-- Left Sidebar: Player 1 (Blue Commander) -->
-        <div class="sidebar">
-            <div class="card">
-                <div class="card-header" style="color:#58a6ff">
-                    <span>Commander Blue</span>
-                    <span style="font-size:11px;color:#8b949e">BOTTOM-LEFT</span>
-                </div>
-                <div class="energy-val">⚡ <span id="p1-energy">150</span> E</div>
-            </div>
-
-            <!-- Macro Expansion & Build -->
-            <div class="card">
-                <div class="card-header" style="color:#c9d1d9">
-                    <span>Macro Production</span>
-                </div>
-
-                <button id="btn-build-station" class="build-btn highlight">
-                    <span>📡 Expand Station Arc</span>
-                    <span>50 E</span>
-                </button>
-                <div class="progress-slot">
-                    <div id="p1-prog-station" class="progress-fill"></div>
-                </div>
-
-                <button id="btn-build-miner" class="build-btn">
-                    <span>⛏️ Commission Miner</span>
-                    <span>25 E</span>
-                </button>
-                <div class="progress-slot">
-                    <div id="p1-prog-miner" class="progress-fill"></div>
-                </div>
-
-                <button id="btn-build-fighter" class="build-btn">
-                    <span>✈️ Commission Fighter</span>
-                    <span>75 E</span>
-                </button>
-                <div class="progress-slot">
-                    <div id="p1-prog-fighter" class="progress-fill"></div>
-                </div>
-            </div>
-
-            <!-- Global Fleet Stance -->
-            <div class="card">
-                <div class="card-header" style="color:#c9d1d9">
-                    <span>Fleet Order (All Units)</span>
-                </div>
-                <div class="stance-group">
-                    <button id="btn-stance-patrol" class="stance-btn active" title="Patrol frontier arc facing enemy (Hotkey: 1)">🔄 PATROL</button>
-                    <button id="btn-stance-defend" class="stance-btn" title="Defend against intruders & guard miners (Hotkey: 2)">🛡️ DEFEND</button>
-                    <button id="btn-stance-attack" class="stance-btn" title="Offensive push into enemy territory (Hotkey: 3)">⚔️ ATTACK</button>
-                </div>
-            </div>
-
-            <!-- Fleet Status Readout -->
-            <div class="card">
-                <div class="card-header" style="color:#8b949e">
-                    <span>Fleet Readout</span>
-                </div>
-                <div class="stats-readout">
-                    <div>Stations: <b id="p1-stations" style="color:#ffffff">3</b> (Expanding Circle)</div>
-                    <div>Miners: <b id="p1-miners" style="color:#3fb950">2</b> (Autonomous)</div>
-                    <div>Fighters: <b id="p1-fighters" style="color:#58a6ff">3</b> (Stance-based)</div>
-                </div>
-            </div>
-
-            <!-- Strategic Guide -->
-            <div class="instructions-card">
-                <b>⭕ On-A-Rail Geometry:</b><br>
-                Stations automatically form the largest fully-connected circular shape around your corner Home Planet. No micro-management!<br><br>
-                <b>🪐 Concentric Mining:</b><br>
-                As territory expands, asteroids in concentric rings are enveloped automatically and harvested.<br><br>
-                <b>🎖️ Fleet Orders:</b><br>
-                Switch between <b>Patrol</b> (border guard), <b>Defend</b> (kill intruders), and <b>Attack</b> (push enemy base).
-            </div>
-        </div>
-
-        <!-- Center Canvas -->
         <div id="canvas-container">
             <canvas id="commander-canvas"></canvas>
 
+            <!-- Floating Minimal Tactical HUD -->
+            <div id="tactical-dock">
+                <!-- P1 Blue Stats -->
+                <div class="dock-section">
+                    <span class="dock-stat">⚡ <span id="p1-energy" class="dock-val-blue">150</span> E</span>
+                    <span class="dock-stat" style="color:#8b949e">📡 <b id="p1-stations" style="color:#fff">3</b></span>
+                    <span class="dock-stat" style="color:#8b949e">⛏️ <b id="p1-miners" style="color:#3fb950">2</b></span>
+                    <span class="dock-stat" style="color:#8b949e">✈️ <b id="p1-fighters" style="color:#58a6ff">3</b></span>
+                </div>
+
+                <div class="dock-divider"></div>
+
+                <!-- Macro Build Production -->
+                <div class="dock-section">
+                    <button id="btn-build-station" class="dock-btn highlight" title="Expand Station Perimeter (50 Energy)">
+                        <div class="dock-btn-row"><span>📡 +Station</span><span class="dock-cost">50E</span></div>
+                        <div class="dock-prog-wrap"><div id="p1-prog-station" class="dock-prog"></div></div>
+                    </button>
+                    <button id="btn-build-miner" class="dock-btn" title="Commission Miner (25 Energy)">
+                        <div class="dock-btn-row"><span>⛏️ +Miner</span><span class="dock-cost">25E</span></div>
+                        <div class="dock-prog-wrap"><div id="p1-prog-miner" class="dock-prog"></div></div>
+                    </button>
+                    <button id="btn-build-fighter" class="dock-btn" title="Commission Fighter (75 Energy)">
+                        <div class="dock-btn-row"><span>✈️ +Fighter</span><span class="dock-cost">75E</span></div>
+                        <div class="dock-prog-wrap"><div id="p1-prog-fighter" class="dock-prog"></div></div>
+                    </button>
+                </div>
+
+                <div class="dock-divider"></div>
+
+                <!-- Global Fleet Orders (Stance) -->
+                <div class="dock-section">
+                    <button id="btn-stance-patrol" class="dock-stance-btn active" title="Patrol frontier border facing enemy (Hotkey: 1)">🔄 1: Patrol</button>
+                    <button id="btn-stance-defend" class="dock-stance-btn" title="Hold at HQ, scramble when threatened (Hotkey: 2)">🛡️ 2: Defend</button>
+                    <button id="btn-stance-attack" class="dock-stance-btn" title="Assault enemy forward stations & base (Hotkey: 3)">⚔️ 3: Attack</button>
+                </div>
+
+                <div class="dock-divider"></div>
+
+                <!-- Enemy Intel -->
+                <div class="dock-section">
+                    <span class="dock-stat" style="color:#ff7b72">🔴 Red: ⚡ <span id="p2-energy" class="dock-val-red">150</span></span>
+                    <span id="p2-stance" class="dock-intel-stance">PATROL</span>
+                    <span class="dock-stat" style="color:#8b949e">📡 <b id="p2-stations" style="color:#fff">3</b> ⛏️ <b id="p2-miners" style="color:#3fb950">2</b> ✈️ <b id="p2-fighters" style="color:#ff7b72">3</b></span>
+                </div>
+            </div>
+
+            <!-- Game Over Modal -->
             <div id="game-over-modal" style="display:none;">
                 <div class="modal-box">
                     <h2 id="game-over-text">Victory!</h2>
                     <button id="btn-restart" class="btn-restart">Play Again</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Right Sidebar: Player 2 (Red Commander CPU) -->
-        <div class="sidebar right-side">
-            <div class="card">
-                <div class="card-header" style="color:#ff7b72">
-                    <span>Commander Red</span>
-                    <span style="font-size:11px;color:#8b949e">TOP-RIGHT (CPU)</span>
-                </div>
-                <div class="energy-val" style="color:#ff7b72">⚡ <span id="p2-energy">150</span> E</div>
-            </div>
-
-            <div class="card">
-                <div class="card-header" style="color:#ff7b72">
-                    <span>Enemy Stance</span>
-                </div>
-                <div style="font-size:16px;font-weight:bold;color:#ffffff;font-family:monospace" id="p2-stance">
-                    PATROL
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-header" style="color:#8b949e">
-                    <span>Enemy Fleet Intel</span>
-                </div>
-                <div class="stats-readout">
-                    <div>Stations: <b id="p2-stations" style="color:#ffffff">3</b></div>
-                    <div>Miners: <b id="p2-miners" style="color:#3fb950">2</b></div>
-                    <div>Fighters: <b id="p2-fighters" style="color:#ff7b72">3</b></div>
                 </div>
             </div>
         </div>

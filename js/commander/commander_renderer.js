@@ -26,14 +26,22 @@ export function renderCommanderGame(ctx, canvas, state) {
     ctx.lineWidth = 1.0;
     ctx.setLineDash([4, 4]);
 
-    // Concentric guide rings from each corner
-    [players[0].homePlanet, players[1].homePlanet].forEach(hp => {
-        const hpScreen = toScreen(hp.x, hp.y);
-        [3.2, 5.8, 8.4, 11.0].forEach(r => {
-            ctx.beginPath();
-            ctx.arc(hpScreen.x, hpScreen.y, r * ((scX + scY) / 2), 0, Math.PI * 2);
-            ctx.stroke();
-        });
+    // Concentric 90° guide rings from each corner
+    const ringRadii = [3.6, 5.4, 7.2, 9.0, 10.8, 12.6];
+    const p1Corner = toScreen(0, 15);
+    const p2Corner = toScreen(20, 0);
+    const avgScale = (scX + scY) / 2;
+
+    ringRadii.forEach(r => {
+        // P1 Corner arc: -PI/2 to 0
+        ctx.beginPath();
+        ctx.arc(p1Corner.x, p1Corner.y, r * avgScale, -Math.PI * 0.5, 0);
+        ctx.stroke();
+
+        // P2 Corner arc: PI/2 to PI
+        ctx.beginPath();
+        ctx.arc(p2Corner.x, p2Corner.y, r * avgScale, Math.PI * 0.5, Math.PI);
+        ctx.stroke();
     });
 
     // Diagonal neutral dividing line
@@ -43,9 +51,9 @@ export function renderCommanderGame(ctx, canvas, state) {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // 3. Draw Solid Circular Fan Territories
+    // 3. Draw Solid 90-Degree Corner Fan Territories
     players.forEach(p => {
-        const poly = getTerritoryPolygon(p.homePlanet, p.stations);
+        const poly = getTerritoryPolygon(p.homePlanet, p.stations, p.id === 1);
         if (poly.length >= 3) {
             const screenPoly = poly.map(pt => toScreen(pt.x, pt.y));
 
