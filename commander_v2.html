@@ -1,0 +1,1869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Commander Mode v2 | Neutral Zone</title>
+    <style>
+        :root {
+            --bg-color: #0b0e14;
+            --panel-bg: rgba(22, 27, 34, 0.94);
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent-blue: #58a6ff;
+            --accent-red: #f85149;
+            --accent-cyan: #39c5cf;
+            --accent-green: #3fb950;
+            --accent-orange: #d29922;
+            --accent-purple: #bc8cff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Header & RTS Command Deck */
+        header {
+            height: 52px;
+            background: #161b22;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            user-select: none;
+            z-index: 10;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .header-brand .tag {
+            font-size: 11px;
+            font-weight: 600;
+            background: rgba(56, 139, 253, 0.15);
+            color: var(--accent-blue);
+            border: 1px solid rgba(56, 139, 253, 0.4);
+            padding: 2px 7px;
+            border-radius: 12px;
+        }
+
+        /* Player Stats Ribbon */
+        .player-ribbon {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            font-size: 13px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        .p-stat-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 4px 12px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .p-stat-box.blue { border-color: rgba(88, 166, 255, 0.35); }
+        .p-stat-box.red { border-color: rgba(248, 81, 73, 0.35); }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .stat-item .val {
+            font-weight: 700;
+        }
+
+        .stat-item .energy { color: #e3b341; }
+        .stat-item .station { color: #39c5cf; }
+        .stat-item .miner { color: #3fb950; }
+        .stat-item .fighter { color: #f0883e; }
+
+        /* Main Workspace */
+        #workspace {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #viewport {
+            flex: 1;
+            position: relative;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Tactical Command Toolbar (Floating at Bottom Center) */
+        #command-deck {
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            user-select: none;
+            z-index: 20;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+        }
+
+        .deck-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .deck-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 0.5px;
+            margin-right: 4px;
+        }
+
+        .btn-deck {
+            background: #21262d;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .btn-deck:hover:not(:disabled) {
+            background: #30363d;
+            border-color: #8b949e;
+        }
+
+        .btn-deck:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-deck.active {
+            background: #1f6feb;
+            border-color: var(--accent-blue);
+            color: #ffffff;
+            box-shadow: 0 0 8px rgba(88, 166, 255, 0.4);
+        }
+
+        .btn-deck.danger {
+            color: var(--accent-red);
+        }
+
+        .btn-deck.danger:hover {
+            background: rgba(248, 81, 73, 0.15);
+            border-color: var(--accent-red);
+        }
+
+        .divider {
+            width: 1px;
+            height: 24px;
+            background: var(--border-color);
+        }
+
+        /* Top-Left Tactical HUD Inspector */
+        #hud-inspector {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: rgba(22, 27, 34, 0.90);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+            pointer-events: none;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            z-index: 15;
+        }
+
+        #hud-inspector span.highlight {
+            color: var(--accent-blue);
+            font-weight: bold;
+        }
+
+        #hud-inspector span.slide-highlight {
+            color: var(--accent-orange);
+            font-weight: bold;
+        }
+
+        /* Bottom-Left Instruction Tip */
+        #hint-banner {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            background: rgba(22, 27, 34, 0.90);
+            border: 1px solid rgba(88, 166, 255, 0.3);
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 12px;
+            color: var(--text-primary);
+            pointer-events: none;
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 15;
+        }
+
+        /* Mobile Responsive Adjustments */
+        @media (max-width: 820px) {
+            header {
+                height: auto;
+                flex-wrap: wrap;
+                padding: 6px 10px;
+                gap: 6px;
+            }
+            .header-brand {
+                font-size: 13px;
+            }
+            .player-ribbon {
+                gap: 6px;
+                font-size: 11px;
+            }
+            .p-stat-box {
+                padding: 2px 6px;
+                gap: 6px;
+            }
+            #command-deck {
+                width: calc(100% - 16px);
+                max-width: 480px;
+                padding: 6px 8px;
+                gap: 6px;
+                flex-wrap: wrap;
+                justify-content: center;
+                bottom: 8px;
+            }
+            .btn-deck {
+                padding: 5px 8px;
+                font-size: 11px;
+            }
+            .divider {
+                display: none;
+            }
+            #hint-banner {
+                display: none;
+            }
+            #hud-inspector {
+                font-size: 10px;
+                padding: 6px 10px;
+                top: 6px;
+                left: 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-brand">
+            <span>🚀</span>
+            <span>Commander Mode</span>
+            <span class="tag">v2 Tactical</span>
+        </div>
+
+        <div class="player-ribbon">
+            <!-- Blue Player Stats -->
+            <div class="p-stat-box blue">
+                <span style="color: var(--accent-blue); font-weight: bold;">🔵 Blue (P1)</span>
+                <div class="stat-item" title="Energy"><span class="energy">⚡</span> <span id="p1-energy" class="val energy">150</span></div>
+                <div class="stat-item" title="Stations"><span class="station">🛰️</span> <span id="p1-stations" class="val station">0</span></div>
+                <div class="stat-item" title="Miners"><span class="miner">⛏️</span> <span id="p1-miners" class="val miner">2</span></div>
+                <div class="stat-item" title="Fighters"><span class="fighter">⚔️</span> <span id="p1-fighters" class="val fighter">3</span></div>
+            </div>
+
+            <!-- Red Player Stats -->
+            <div class="p-stat-box red">
+                <span style="color: var(--accent-red); font-weight: bold;">🔴 Red (P2)</span>
+                <div class="stat-item" title="Energy"><span class="energy">⚡</span> <span id="p2-energy" class="val energy">150</span></div>
+                <div class="stat-item" title="Stations"><span class="station">🛰️</span> <span id="p2-stations" class="val station">0</span></div>
+                <div class="stat-item" title="Miners"><span class="miner">⛏️</span> <span id="p2-miners" class="val miner">2</span></div>
+                <div class="stat-item" title="Fighters"><span class="fighter">⚔️</span> <span id="p2-fighters" class="val fighter">3</span></div>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+            <button id="btn-toggle-cpu" class="btn-deck active" title="Toggle CPU for Red (Player 2)">
+                <span>🤖 CPU: ON</span>
+            </button>
+            <button id="btn-restart" class="btn-deck danger" title="Reset match to initial state">
+                <span>🔄 Reset</span>
+            </button>
+        </div>
+    </header>
+
+    <div id="workspace">
+        <div id="viewport">
+            <canvas id="game-canvas"></canvas>
+
+            <div id="hud-inspector">
+                <div>Aiming Degree: <span id="insp-deg" class="highlight">--</span>°</div>
+                <div id="insp-station-row">Station: <span id="insp-station-status" class="highlight">Click ray to establish</span></div>
+                <div>Distance from HQ: <span id="insp-dist" class="highlight">--</span> px</div>
+                <div>Fleet Stance: <span id="insp-stance" class="highlight">Defend</span></div>
+            </div>
+
+            <div id="hint-banner">
+                <span>👉 <b>Click any ray</b> to deploy a station & expand your border! If occupied, slides to nearest neighbor dot.</span>
+            </div>
+
+            <!-- Tactical Command Deck for Blue Player -->
+            <div id="command-deck">
+                <!-- Fighter Stances -->
+                <div class="deck-group">
+                    <span class="deck-label">Fleet Stance:</span>
+                    <button type="button" class="btn-deck active" id="btn-stance-defend" data-stance="defend" title="Defend HQ & Stations (Key 1)">
+                        <span>🛡️ Defend</span>
+                    </button>
+                    <button type="button" class="btn-deck" id="btn-stance-patrol" data-stance="patrol" title="Patrol Border Frontier (Key 2)">
+                        <span>👁️ Patrol</span>
+                    </button>
+                    <button type="button" class="btn-deck" id="btn-stance-attack" data-stance="attack" title="Assault Enemy Bases & Fleet (Key 3)">
+                        <span>⚔️ Attack</span>
+                    </button>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Unit Production -->
+                <div class="deck-group">
+                    <span class="deck-label">Build:</span>
+                    <button type="button" class="btn-deck" id="btn-build-miner" title="Build Miner (40 Energy) [Key M]">
+                        <span>⛏️ + Miner (40⚡)</span>
+                    </button>
+                    <button type="button" class="btn-deck" id="btn-build-fighter" title="Build Fighter (60 Energy) [Key F]">
+                        <span>⚔️ + Fighter (60⚡)</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =========================================================================
+        // Commander Mode v2: Prototype-First RTS Architecture
+        // =========================================================================
+
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Costs & Combat Tuning
+        const COSTS = {
+            station: 50,
+            miner: 40,
+            fighter: 60
+        };
+
+        const MINER_SPEED = 100; // px/sec
+        const FIGHTER_SPEED = 140; // px/sec
+
+        // Fixed mathematical settings identical to prototype_border.html
+        const CONFIG = {
+            numDegrees: 91,
+            initialRadius: 280,
+            hqOffset: 80,
+            tapDistance: 25,
+            initialSpreadDots: 3,
+            spreadMode: 'rounded',
+            neighborStrength: 1.00,
+            neighborSpread: 10,
+            falloffCurve: 'smoothstep',
+            restrictContraction: true,
+            smoothingPasses: 1,
+            laplacianWeight: 0.18,
+            enableCollision: true,
+            frontierClearance: 8
+        };
+
+        const gameState = {
+            cpuEnabled: true,
+            hoveredDegree: -1,
+            activePlayerId: 0,
+            nextEntityId: 100,
+
+            players: [
+                {
+                    id: 0,
+                    name: 'Blue (P1)',
+                    color: '#58a6ff',
+                    accentColor: '#1f6feb',
+                    dotColor: '#79c0ff',
+                    hq: { x: 80, y: 0, radius: 18 },
+                    corner: { x: 0, y: 0 },
+                    energy: 150,
+                    stance: 'defend',
+                    distances: new Float64Array(91),
+                    stations: [],
+                    miners: [],
+                    fighters: []
+                },
+                {
+                    id: 1,
+                    name: 'Red (P2)',
+                    color: '#f85149',
+                    accentColor: '#da3633',
+                    dotColor: '#ff7b72',
+                    hq: { x: 0, y: 80, radius: 18 },
+                    corner: { x: 0, y: 0 },
+                    energy: 150,
+                    stance: 'defend',
+                    distances: new Float64Array(91),
+                    stations: [],
+                    miners: [],
+                    fighters: []
+                }
+            ],
+
+            asteroids: [],
+            projectiles: [],
+            particles: [],
+
+            // CPU AI Timer
+            aiActionCooldown: 1.5
+        };
+
+        // --- Distance Graph Math (From Prototype) ---
+        function resetDistances(radius = CONFIG.initialRadius) {
+            for (const p of gameState.players) {
+                for (let i = 0; i < CONFIG.numDegrees; i++) {
+                    p.distances[i] = radius;
+                }
+            }
+        }
+
+        // P1: deg 0 = 0 rad (East), deg 90 = -PI/2 rad (North)
+        // P2: deg 0 = PI rad (West), deg 90 = PI/2 rad (South)
+        function degreeToAngleRad(playerId, deg) {
+            if (playerId === 0) {
+                return - (deg / 90.0) * (Math.PI * 0.5);
+            } else {
+                return Math.PI - (deg / 90.0) * (Math.PI * 0.5);
+            }
+        }
+
+        function getDotPosition(playerId, deg, r = gameState.players[playerId].distances[deg]) {
+            const p = gameState.players[playerId];
+            const rad = degreeToAngleRad(playerId, deg);
+            return {
+                x: p.hq.x + r * Math.cos(rad),
+                y: p.hq.y + r * Math.sin(rad)
+            };
+        }
+
+        function calculateInfluence(deltaDeg, spread, curveType) {
+            if (deltaDeg === 0) return 1.0;
+            if (deltaDeg > spread) return 0.0;
+            const norm = deltaDeg / spread;
+            if (curveType === 'smoothstep') {
+                return 1.0 - (3 * norm * norm - 2 * norm * norm * norm);
+            }
+            return Math.max(0.0, 1.0 - norm);
+        }
+
+        function calculateTapWeight(deltaDeg, initialDots, spreadMode, neighborSpread, neighborStrength, falloffCurve) {
+            const rCore = Math.floor((initialDots - 1) / 2);
+            if (spreadMode === 'rounded') {
+                if (deltaDeg <= rCore) {
+                    if (rCore === 0) return 1.0;
+                    const t = deltaDeg / (rCore + 1);
+                    return Math.cos(Math.PI * 0.25 * t);
+                }
+                const deltaOut = deltaDeg - rCore;
+                const edgeVal = Math.cos(Math.PI * 0.25 * (rCore / (rCore + 1)));
+                const inf = calculateInfluence(deltaOut, neighborSpread, falloffCurve);
+                return edgeVal * inf * neighborStrength;
+            }
+            return 1.0;
+        }
+
+        function getTerritoryPolygon(playerId) {
+            const p = gameState.players[playerId];
+            const poly = [{ x: p.hq.x, y: p.hq.y }];
+            for (let i = 0; i < CONFIG.numDegrees; i++) {
+                poly.push(getDotPosition(playerId, i));
+            }
+            return poly;
+        }
+
+        function isPointInPolygon(pt, poly) {
+            let inside = false;
+            for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+                const xi = poly[i].x, yi = poly[i].y;
+                const xj = poly[j].x, yj = poly[j].y;
+                const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+                    (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi + 1e-9) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        function distSqToSegment(p, a, b) {
+            const l2 = Math.hypot(b.x - a.x, b.y - a.y) ** 2;
+            if (l2 === 0) return Math.hypot(p.x - a.x, p.y - a.y) ** 2;
+            let t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y))) ** 2;
+        }
+
+        function isPointCrossingEnemy(playerId, pt, clearance = CONFIG.frontierClearance) {
+            const enemyId = 1 - playerId;
+            const enemyPoly = getTerritoryPolygon(enemyId);
+            const w = canvas.clientWidth;
+            const h = canvas.clientHeight;
+
+            if (pt.x < clearance || pt.x > w - clearance || pt.y < clearance || pt.y > h - clearance) {
+                return true;
+            }
+            if (isPointInPolygon(pt, enemyPoly)) {
+                return true;
+            }
+            const clSq = clearance * clearance;
+            for (let i = 0; i < enemyPoly.length; i++) {
+                const e1 = enemyPoly[i];
+                const e2 = enemyPoly[(i + 1) % enemyPoly.length];
+                if (distSqToSegment(pt, e1, e2) < clSq) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function findMaxSafeDelta(playerId, deg, currentR, desiredInc, clearance = CONFIG.frontierClearance) {
+            if (desiredInc <= 0.01) return 0;
+            const testPtMax = getDotPosition(playerId, deg, currentR + desiredInc);
+            if (!isPointCrossingEnemy(playerId, testPtMax, clearance)) {
+                return desiredInc;
+            }
+            let low = 0;
+            let high = desiredInc;
+            for (let iter = 0; iter < 12; iter++) {
+                const mid = (low + high) * 0.5;
+                const midPt = getDotPosition(playerId, deg, currentR + mid);
+                if (isPointCrossingEnemy(playerId, midPt, clearance)) {
+                    high = mid;
+                } else {
+                    low = mid;
+                }
+            }
+            return low;
+        }
+
+        function applyLaplacianSmoothing(array, weight = CONFIG.laplacianWeight, iterations = CONFIG.smoothingPasses) {
+            const n = array.length;
+            let current = new Float64Array(array);
+            for (let it = 0; it < iterations; it++) {
+                const next = new Float64Array(n);
+                for (let i = 0; i < n; i++) {
+                    const prev = i > 0 ? current[i - 1] : current[i];
+                    const succ = i < n - 1 ? current[i + 1] : current[i];
+                    next[i] = current[i] * (1.0 - 2.0 * weight) + (prev + succ) * weight;
+                }
+                current = next;
+            }
+            for (let i = 0; i < n; i++) {
+                array[i] = current[i];
+            }
+        }
+
+        function pushBorderAtDegree(playerId, centerDeg, pushAmount = CONFIG.tapDistance) {
+            if (centerDeg < 0 || centerDeg >= CONFIG.numDegrees) return;
+            const p = gameState.players[playerId];
+            const prevDistances = new Float64Array(p.distances);
+
+            const rCore = Math.floor((CONFIG.initialSpreadDots - 1) / 2);
+            const totalRadius = rCore + CONFIG.neighborSpread;
+            let pending = new Float64Array(CONFIG.numDegrees);
+
+            const minDeg = Math.max(0, Math.floor(centerDeg - totalRadius));
+            const maxDeg = Math.min(CONFIG.numDegrees - 1, Math.ceil(centerDeg + totalRadius));
+
+            for (let i = minDeg; i <= maxDeg; i++) {
+                const deltaDeg = Math.abs(i - centerDeg);
+                const weight = calculateTapWeight(
+                    deltaDeg,
+                    CONFIG.initialSpreadDots,
+                    CONFIG.spreadMode,
+                    CONFIG.neighborSpread,
+                    CONFIG.neighborStrength,
+                    CONFIG.falloffCurve
+                );
+                pending[i] = pushAmount * weight;
+            }
+
+            const currentR = new Float64Array(p.distances);
+            if (CONFIG.enableCollision) {
+                const MAX_PASSES = 60;
+                let pass = 0;
+                while (pass < MAX_PASSES) {
+                    pass++;
+                    let anyMoved = false;
+                    const nextPending = new Float64Array(CONFIG.numDegrees);
+                    for (let i = 0; i < CONFIG.numDegrees; i++) {
+                        const inc = pending[i];
+                        if (inc <= 0.005) continue;
+                        const maxSafeDelta = findMaxSafeDelta(playerId, i, currentR[i], inc, CONFIG.frontierClearance);
+                        if (maxSafeDelta > 0.005) {
+                            currentR[i] += maxSafeDelta;
+                            anyMoved = true;
+                        }
+                        const excess = inc - maxSafeDelta;
+                        if (excess > 0.01) {
+                            if (i === 0) nextPending[1] += excess;
+                            else if (i === CONFIG.numDegrees - 1) nextPending[CONFIG.numDegrees - 2] += excess;
+                            else {
+                                nextPending[i - 1] += excess * 0.5;
+                                nextPending[i + 1] += excess * 0.5;
+                            }
+                        }
+                    }
+                    pending = nextPending;
+                    if (!anyMoved) break;
+                }
+            } else {
+                for (let i = 0; i < CONFIG.numDegrees; i++) currentR[i] += pending[i];
+            }
+
+            p.distances.set(currentR);
+
+            if (CONFIG.smoothingPasses > 0) {
+                applyLaplacianSmoothing(p.distances, CONFIG.laplacianWeight, CONFIG.smoothingPasses);
+                if (CONFIG.enableCollision) {
+                    for (let i = 0; i < CONFIG.numDegrees; i++) {
+                        const pt = getDotPosition(playerId, i);
+                        if (isPointCrossingEnemy(playerId, pt, CONFIG.frontierClearance)) {
+                            p.distances[i] = currentR[i];
+                        }
+                    }
+                }
+            }
+
+            if (CONFIG.restrictContraction) {
+                for (let i = 0; i < CONFIG.numDegrees; i++) {
+                    if (p.distances[i] < prevDistances[i]) {
+                        p.distances[i] = prevDistances[i];
+                    }
+                }
+            }
+        }
+
+        // --- Station Placement & Occupied Neighbor Sliding ---
+        // "when a ray is clicked the dot becomes a station, if a station is already present a neighboring dot becomes the station"
+        function findAvailableStationDegree(playerId, targetDeg) {
+            const p = gameState.players[playerId];
+            const occupied = new Set(p.stations.map(s => s.degree));
+            if (!occupied.has(targetDeg)) return targetDeg;
+
+            // Search outward for the nearest free neighbor dot
+            for (let offset = 1; offset <= 90; offset++) {
+                const right = targetDeg + offset;
+                if (right <= 90 && !occupied.has(right)) return right;
+                const left = targetDeg - offset;
+                if (left >= 0 && !occupied.has(left)) return left;
+            }
+            return -1; // All 91 dots occupied
+        }
+
+        function deployStationAtDegree(playerId, targetDeg, isFree = false) {
+            const p = gameState.players[playerId];
+            if (!isFree && p.energy < COSTS.station) return false;
+
+            const finalDeg = findAvailableStationDegree(playerId, targetDeg);
+            if (finalDeg < 0) return false;
+
+            if (!isFree) p.energy -= COSTS.station;
+
+            const station = {
+                id: gameState.nextEntityId++,
+                degree: finalDeg,
+                hp: 150,
+                maxHp: 150,
+                range: 115,
+                cooldown: 0
+            };
+            p.stations.push(station);
+
+            // Expand border outward from that degree
+            pushBorderAtDegree(playerId, finalDeg, CONFIG.tapDistance);
+
+            // Audio & particle feedback
+            spawnRingParticles(getDotPosition(playerId, finalDeg), p.color, 16);
+            return true;
+        }
+
+        // --- Asteroid Generation with Flight Time Constraint ---
+        // "no asteroid should be within 1 second flight time to the HQ"
+        function initAsteroids() {
+            const w = canvas.clientWidth;
+            const h = canvas.clientHeight;
+            gameState.asteroids = [];
+
+            // Miner speed = 100 px/s, HQ radius = 18 px.
+            // Minimum distance to HQ center = 100 px + 18 px = 118 px.
+            // We enforce >= 145 px (at least 1.45 seconds flight time) for complete safety.
+            const MIN_HQ_FLIGHT_DIST = 145;
+
+            const rawLayout = [
+                // Near-Base Tiers (R ~ 160-200px: inside starting territory, but > 1.5s flight time)
+                { relX: 0.12, relY: 0.76, resources: 800, tier: 1 },
+                { relX: 0.22, relY: 0.88, resources: 800, tier: 1 },
+                { relX: 0.88, relY: 0.24, resources: 800, tier: 1 },
+                { relX: 0.78, relY: 0.12, resources: 800, tier: 1 },
+
+                // Mid-Range Expansion Tiers (R ~ 320-380px: requires 1-2 stations to envelope)
+                { relX: 0.20, relY: 0.58, resources: 1200, tier: 2 },
+                { relX: 0.38, relY: 0.80, resources: 1200, tier: 2 },
+                { relX: 0.80, relY: 0.42, resources: 1200, tier: 2 },
+                { relX: 0.62, relY: 0.20, resources: 1200, tier: 2 },
+
+                // Contested Flank Tiers (R ~ 480-550px: aggressive forward positions)
+                { relX: 0.34, relY: 0.46, resources: 1600, tier: 3 },
+                { relX: 0.66, relY: 0.54, resources: 1600, tier: 3 },
+
+                // Central Contested King Asteroid (Dead center)
+                { relX: 0.50, relY: 0.50, resources: 2500, tier: 4 }
+            ];
+
+            rawLayout.forEach((spec, idx) => {
+                const ax = spec.relX * w;
+                const ay = spec.relY * h;
+
+                // Check distance against both HQs
+                const d1 = Math.hypot(ax - gameState.players[0].hq.x, ay - gameState.players[0].hq.y);
+                const d2 = Math.hypot(ax - gameState.players[1].hq.x, ay - gameState.players[1].hq.y);
+
+                if (d1 >= MIN_HQ_FLIGHT_DIST && d2 >= MIN_HQ_FLIGHT_DIST) {
+                    gameState.asteroids.push({
+                        id: idx + 1,
+                        x: ax,
+                        y: ay,
+                        resources: spec.resources,
+                        maxResources: spec.resources,
+                        tier: spec.tier,
+                        radius: spec.tier === 4 ? 14 : 10 + spec.tier * 2,
+                        miners: 0
+                    });
+                }
+            });
+        }
+
+        // --- Starting Units ---
+        function initUnits() {
+            gameState.players.forEach((p, idx) => {
+                p.miners = [];
+                p.fighters = [];
+                p.stations = [];
+                p.energy = 150;
+                p.stance = 'defend';
+
+                // Initial 2 Miners spawned at HQ
+                for (let i = 0; i < 2; i++) {
+                    p.miners.push({
+                        id: gameState.nextEntityId++,
+                        x: p.hq.x + (i === 0 ? 15 : -15),
+                        y: p.hq.y + (i === 0 ? 15 : -15),
+                        hp: 40,
+                        maxHp: 40,
+                        speed: MINER_SPEED,
+                        payload: 0,
+                        maxPayload: 30,
+                        targetAsteroid: null,
+                        returning: false
+                    });
+                }
+
+                // Initial 3 Fighters escorting HQ
+                for (let i = 0; i < 3; i++) {
+                    const ang = idx === 0 ? -Math.PI * 0.25 : Math.PI * 0.75;
+                    const spread = (i - 1) * 0.35;
+                    p.fighters.push({
+                        id: gameState.nextEntityId++,
+                        x: p.hq.x + 45 * Math.cos(ang + spread),
+                        y: p.hq.y + 45 * Math.sin(ang + spread),
+                        hp: 60,
+                        maxHp: 60,
+                        speed: FIGHTER_SPEED,
+                        range: 65,
+                        cooldown: 0,
+                        patrolT: i * 0.33
+                    });
+                }
+
+                // Starting 3 Stations established on frontier (degrees 15°, 45°, 75°)
+                [15, 45, 75].forEach(deg => {
+                    deployStationAtDegree(idx, deg, true);
+                });
+            });
+        }
+
+        // --- Production Helpers ---
+        function queueMiner(playerId) {
+            const p = gameState.players[playerId];
+            if (p.energy >= COSTS.miner) {
+                p.energy -= COSTS.miner;
+                p.miners.push({
+                    id: gameState.nextEntityId++,
+                    x: p.hq.x,
+                    y: p.hq.y,
+                    hp: 40,
+                    maxHp: 40,
+                    speed: MINER_SPEED,
+                    payload: 0,
+                    maxPayload: 30,
+                    targetAsteroid: null,
+                    returning: false
+                });
+                spawnRingParticles(p.hq, '#3fb950', 12);
+            }
+        }
+
+        function queueFighter(playerId) {
+            const p = gameState.players[playerId];
+            if (p.energy >= COSTS.fighter) {
+                p.energy -= COSTS.fighter;
+                p.fighters.push({
+                    id: gameState.nextEntityId++,
+                    x: p.hq.x,
+                    y: p.hq.y,
+                    hp: 60,
+                    maxHp: 60,
+                    speed: FIGHTER_SPEED,
+                    range: 65,
+                    cooldown: 0,
+                    patrolT: Math.random()
+                });
+                spawnRingParticles(p.hq, '#f0883e', 12);
+            }
+        }
+
+        // --- Particles & FX ---
+        function spawnRingParticles(pos, color, count = 12) {
+            for (let i = 0; i < count; i++) {
+                const ang = (i / count) * Math.PI * 2;
+                const spd = 30 + Math.random() * 60;
+                gameState.particles.push({
+                    x: pos.x,
+                    y: pos.y,
+                    vx: Math.cos(ang) * spd,
+                    vy: Math.sin(ang) * spd,
+                    life: 0.5,
+                    maxLife: 0.5,
+                    color: color,
+                    size: 2.5
+                });
+            }
+        }
+
+        function spawnExplosion(pos, color, count = 20) {
+            for (let i = 0; i < count; i++) {
+                const ang = Math.random() * Math.PI * 2;
+                const spd = 20 + Math.random() * 120;
+                gameState.particles.push({
+                    x: pos.x,
+                    y: pos.y,
+                    vx: Math.cos(ang) * spd,
+                    vy: Math.sin(ang) * spd,
+                    life: 0.6,
+                    maxLife: 0.6,
+                    color: color,
+                    size: 3.5
+                });
+            }
+        }
+
+        // --- Game Simulation Loop (dt in seconds) ---
+        function update(dt) {
+            const p1 = gameState.players[0];
+            const p2 = gameState.players[1];
+            const p1Poly = getTerritoryPolygon(0);
+            const p2Poly = getTerritoryPolygon(1);
+
+            // 1. Miners Mining & Logistics
+            gameState.players.forEach(p => {
+                const enemyId = 1 - p.id;
+                const myPoly = (p.id === 0) ? p1Poly : p2Poly;
+                const enemyPoly = (p.id === 0) ? p2Poly : p1Poly;
+
+                // Identify captured asteroids inside friendly territory
+                const captured = gameState.asteroids.filter(a => {
+                    return a.resources > 0 && isPointInPolygon(a, myPoly) && !isPointInPolygon(a, enemyPoly);
+                });
+
+                p.miners.forEach(m => {
+                    if (m.returning) {
+                        const dx = p.hq.x - m.x;
+                        const dy = p.hq.y - m.y;
+                        const d = Math.hypot(dx, dy);
+                        if (d <= p.hq.radius + 8) {
+                            // Unload cargo
+                            p.energy += Math.round(m.payload);
+                            m.payload = 0;
+                            m.returning = false;
+                            m.targetAsteroid = null;
+                        } else {
+                            m.x += (dx / d) * m.speed * dt;
+                            m.y += (dy / d) * m.speed * dt;
+                        }
+                    } else if (!m.targetAsteroid) {
+                        // Find nearest captured asteroid with space (< 3 miners)
+                        let best = null;
+                        let minDist = Infinity;
+                        captured.forEach(a => {
+                            if ((a.miners || 0) < 3) {
+                                const dist = Math.hypot(a.x - m.x, a.y - m.y);
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    best = a;
+                                }
+                            }
+                        });
+                        if (best) {
+                            m.targetAsteroid = best;
+                            best.miners = (best.miners || 0) + 1;
+                        } else if (m.payload > 0) {
+                            m.returning = true;
+                        }
+                    } else {
+                        // Flying to asteroid or mining
+                        const a = m.targetAsteroid;
+                        if (!a || a.resources <= 0 || !isPointInPolygon(a, myPoly) || isPointInPolygon(a, enemyPoly)) {
+                            if (a) a.miners = Math.max(0, (a.miners || 1) - 1);
+                            m.targetAsteroid = null;
+                            if (m.payload > 0) m.returning = true;
+                            return;
+                        }
+
+                        const dx = a.x - m.x;
+                        const dy = a.y - m.y;
+                        const dist = Math.hypot(dx, dy);
+
+                        if (dist > a.radius + 6) {
+                            m.x += (dx / dist) * m.speed * dt;
+                            m.y += (dy / dist) * m.speed * dt;
+                        } else {
+                            // Extract resources
+                            const GATHER_RATE = 15; // res/sec
+                            const extract = Math.min(a.resources, GATHER_RATE * dt, m.maxPayload - m.payload);
+                            a.resources -= extract;
+                            m.payload += extract;
+
+                            // Extraction sparks
+                            if (Math.random() < 0.3) {
+                                gameState.particles.push({
+                                    x: a.x + (Math.random() - 0.5) * a.radius,
+                                    y: a.y + (Math.random() - 0.5) * a.radius,
+                                    vx: (m.x - a.x) * 1.5,
+                                    vy: (m.y - a.y) * 1.5,
+                                    life: 0.3,
+                                    maxLife: 0.3,
+                                    color: '#3fb950',
+                                    size: 2
+                                });
+                            }
+
+                            if (m.payload >= m.maxPayload || a.resources <= 0) {
+                                m.returning = true;
+                                a.miners = Math.max(0, (a.miners || 1) - 1);
+                            }
+                        }
+                    }
+                });
+            });
+
+            // 2. Asteroid Depletion & Cleanup
+            for (let i = gameState.asteroids.length - 1; i >= 0; i--) {
+                const a = gameState.asteroids[i];
+                if (a.resources <= 0) {
+                    spawnExplosion(a, '#8b949e', 24);
+                    // Detach miners
+                    gameState.players.forEach(p => {
+                        p.miners.forEach(m => {
+                            if (m.targetAsteroid === a) {
+                                m.targetAsteroid = null;
+                                if (m.payload > 0) m.returning = true;
+                            }
+                        });
+                    });
+                    gameState.asteroids.splice(i, 1);
+                }
+            }
+
+            // 3. Station Point-Defense Turrets
+            gameState.players.forEach(p => {
+                const enemy = gameState.players[1 - p.id];
+                p.stations.forEach(s => {
+                    s.cooldown = Math.max(0, s.cooldown - dt);
+                    const sPos = getDotPosition(p.id, s.degree);
+
+                    if (s.cooldown <= 0 && enemy.fighters.length > 0) {
+                        // Target nearest enemy fighter in range
+                        let target = null;
+                        let minDist = s.range;
+                        enemy.fighters.forEach(ef => {
+                            const d = Math.hypot(ef.x - sPos.x, ef.y - sPos.y);
+                            if (d <= minDist) {
+                                minDist = d;
+                                target = ef;
+                            }
+                        });
+
+                        if (target) {
+                            s.cooldown = 1.2;
+                            gameState.projectiles.push({
+                                x: sPos.x,
+                                y: sPos.y,
+                                targetX: target.x,
+                                targetY: target.y,
+                                speed: 400,
+                                damage: 18,
+                                color: p.color,
+                                target: target,
+                                targetType: 'fighter'
+                            });
+                        }
+                    }
+                });
+            });
+
+            // 4. Fighter Stance AI & Movement (3 Canonical Modes)
+            gameState.players.forEach(p => {
+                const enemy = gameState.players[1 - p.id];
+                const myPoly = (p.id === 0) ? p1Poly : p2Poly;
+
+                // When in Attack mode, choose shared high-value target
+                let sharedAttackTarget = null;
+                if (p.stance === 'attack') {
+                    if (enemy.stations.length > 0) {
+                        // Priority 1: Nearest enemy station
+                        let bestDist = Infinity;
+                        enemy.stations.forEach(es => {
+                            const ePos = getDotPosition(enemy.id, es.degree);
+                            const d = Math.hypot(ePos.x - p.hq.x, ePos.y - p.hq.y);
+                            if (d < bestDist) {
+                                bestDist = d;
+                                sharedAttackTarget = { x: ePos.x, y: ePos.y, entity: es, type: 'station' };
+                            }
+                        });
+                    } else if (enemy.fighters.length > 0) {
+                        sharedAttackTarget = { x: enemy.fighters[0].x, y: enemy.fighters[0].y, entity: enemy.fighters[0], type: 'fighter' };
+                    } else if (enemy.miners.length > 0) {
+                        sharedAttackTarget = { x: enemy.miners[0].x, y: enemy.miners[0].y, entity: enemy.miners[0], type: 'miner' };
+                    } else {
+                        sharedAttackTarget = { x: enemy.hq.x, y: enemy.hq.y, entity: enemy.hq, type: 'hq' };
+                    }
+                }
+
+                p.fighters.forEach((f, fIdx) => {
+                    f.cooldown = Math.max(0, f.cooldown - dt);
+                    let targetX = p.hq.x;
+                    let targetY = p.hq.y;
+                    let targetEntity = null;
+
+                    if (p.stance === 'defend') {
+                        // Check for threats entering friendly territory or approaching stations
+                        const threat = enemy.fighters.find(ef => {
+                            return isPointInPolygon(ef, myPoly) ||
+                                p.stations.some(s => {
+                                    const sPos = getDotPosition(p.id, s.degree);
+                                    return Math.hypot(ef.x - sPos.x, ef.y - sPos.y) <= 120;
+                                }) ||
+                                Math.hypot(ef.x - p.hq.x, ef.y - p.hq.y) <= 140;
+                        });
+
+                        if (threat) {
+                            targetX = threat.x;
+                            targetY = threat.y;
+                            targetEntity = threat;
+                        } else {
+                            // Hold defensive escort arc near HQ
+                            const baseAng = (p.id === 0 ? -Math.PI * 0.25 : Math.PI * 0.75);
+                            const spread = (fIdx - (p.fighters.length - 1) / 2) * 0.35;
+                            targetX = p.hq.x + 65 * Math.cos(baseAng + spread);
+                            targetY = p.hq.y + 65 * Math.sin(baseAng + spread);
+                        }
+                    } else if (p.stance === 'patrol') {
+                        // Cruise along the frontier dots
+                        f.patrolT = ((f.patrolT || 0) + 0.12 * dt) % 1.0;
+                        const patrolDeg = Math.round(f.patrolT * 90);
+                        const pos = getDotPosition(p.id, patrolDeg);
+                        targetX = pos.x;
+                        targetY = pos.y;
+
+                        // Intercept threats within 110px of border
+                        const threat = enemy.fighters.find(ef => Math.hypot(ef.x - f.x, ef.y - f.y) <= 110) ||
+                                       enemy.miners.find(em => Math.hypot(em.x - f.x, em.y - f.y) <= 110);
+                        if (threat) {
+                            targetX = threat.x;
+                            targetY = threat.y;
+                            targetEntity = threat;
+                        }
+                    } else if (p.stance === 'attack') {
+                        if (sharedAttackTarget) {
+                            targetX = sharedAttackTarget.x;
+                            targetY = sharedAttackTarget.y;
+                            targetEntity = sharedAttackTarget.entity;
+                        }
+                    }
+
+                    // Movement
+                    const dx = targetX - f.x;
+                    const dy = targetY - f.y;
+                    const d = Math.hypot(dx, dy);
+                    const stopRange = targetEntity ? f.range - 10 : 15;
+
+                    if (d > stopRange) {
+                        f.x += (dx / d) * f.speed * dt;
+                        f.y += (dy / d) * f.speed * dt;
+                    }
+
+                    // Combat Firing
+                    if (f.cooldown <= 0) {
+                        // Target enemy fighters or stations within range
+                        let shootTarget = enemy.fighters.find(ef => Math.hypot(ef.x - f.x, ef.y - f.y) <= f.range);
+                        let shootType = 'fighter';
+
+                        if (!shootTarget && p.stance === 'attack') {
+                            const nearStation = enemy.stations.find(es => {
+                                const sPos = getDotPosition(enemy.id, es.degree);
+                                return Math.hypot(sPos.x - f.x, sPos.y - f.y) <= f.range;
+                            });
+                            if (nearStation) {
+                                shootTarget = nearStation;
+                                shootType = 'station';
+                            }
+                        }
+
+                        if (!shootTarget) {
+                            shootTarget = enemy.miners.find(em => Math.hypot(em.x - f.x, em.y - f.y) <= f.range);
+                            shootType = 'miner';
+                        }
+
+                        if (shootTarget) {
+                            f.cooldown = 0.8;
+                            const tX = (shootType === 'station') ? getDotPosition(enemy.id, shootTarget.degree).x : shootTarget.x;
+                            const tY = (shootType === 'station') ? getDotPosition(enemy.id, shootTarget.degree).y : shootTarget.y;
+                            gameState.projectiles.push({
+                                x: f.x,
+                                y: f.y,
+                                targetX: tX,
+                                targetY: tY,
+                                speed: 450,
+                                damage: 12,
+                                color: p.color,
+                                target: shootTarget,
+                                targetType: shootType
+                            });
+                        }
+                    }
+                });
+            });
+
+            // 5. Projectiles Update
+            for (let i = gameState.projectiles.length - 1; i >= 0; i--) {
+                const p = gameState.projectiles[i];
+                let tx = p.targetX;
+                let ty = p.targetY;
+                if (p.target) {
+                    if (p.targetType === 'station') {
+                        // find station owner
+                        const ownerId = (gameState.players[0].stations.includes(p.target)) ? 0 : 1;
+                        const sPos = getDotPosition(ownerId, p.target.degree);
+                        tx = sPos.x;
+                        ty = sPos.y;
+                    } else {
+                        tx = p.target.x;
+                        ty = p.target.y;
+                    }
+                }
+
+                const dx = tx - p.x;
+                const dy = ty - p.y;
+                const dist = Math.hypot(dx, dy);
+                const step = p.speed * dt;
+
+                if (dist <= step || dist < 12) {
+                    // Hit target!
+                    if (p.target && p.target.hp > 0) {
+                        p.target.hp -= p.damage;
+                        spawnRingParticles({ x: tx, y: ty }, p.color, 4);
+                    }
+                    gameState.projectiles.splice(i, 1);
+                } else {
+                    p.x += (dx / dist) * step;
+                    p.y += (dy / dist) * step;
+                }
+            }
+
+            // 6. Cleanup Destroyed Units & Stations
+            gameState.players.forEach((p, pIdx) => {
+                // Destroyed fighters
+                for (let i = p.fighters.length - 1; i >= 0; i--) {
+                    if (p.fighters[i].hp <= 0) {
+                        spawnExplosion(p.fighters[i], p.color, 16);
+                        p.fighters.splice(i, 1);
+                    }
+                }
+                // Destroyed miners
+                for (let i = p.miners.length - 1; i >= 0; i--) {
+                    if (p.miners[i].hp <= 0) {
+                        spawnExplosion(p.miners[i], '#3fb950', 16);
+                        p.miners.splice(i, 1);
+                    }
+                }
+                // Destroyed stations
+                for (let i = p.stations.length - 1; i >= 0; i--) {
+                    const s = p.stations[i];
+                    if (s.hp <= 0) {
+                        const sPos = getDotPosition(pIdx, s.degree);
+                        spawnExplosion(sPos, p.color, 24);
+                        p.stations.splice(i, 1);
+                    }
+                }
+            });
+
+            // 7. Particles Update
+            for (let i = gameState.particles.length - 1; i >= 0; i--) {
+                const pt = gameState.particles[i];
+                pt.life -= dt;
+                if (pt.life <= 0) {
+                    gameState.particles.splice(i, 1);
+                } else {
+                    pt.x += pt.vx * dt;
+                    pt.y += pt.vy * dt;
+                }
+            }
+
+            // 8. CPU Opponent (Red AI)
+            if (gameState.cpuEnabled) {
+                gameState.aiActionCooldown -= dt;
+                if (gameState.aiActionCooldown <= 0) {
+                    gameState.aiActionCooldown = 2.0; // Evaluate every 2s
+                    const red = gameState.players[1];
+
+                    // A. Produce miners if below 4 and energy permits
+                    if (red.miners.length < 4 && red.energy >= COSTS.miner) {
+                        queueMiner(1);
+                    }
+                    // B. Produce fighters if below 6 and energy permits
+                    else if (red.fighters.length < 6 && red.energy >= COSTS.fighter) {
+                        queueFighter(1);
+                    }
+                    // C. Expand Stations toward uncaptured asteroids
+                    else if (red.energy >= COSTS.station && red.stations.length < 15) {
+                        // Pick asteroid closest to Red territory
+                        const uncaptured = gameState.asteroids.filter(a => !isPointInPolygon(a, p2Poly));
+                        if (uncaptured.length > 0) {
+                            let bestAsteroid = uncaptured[0];
+                            let bestDist = Infinity;
+                            uncaptured.forEach(a => {
+                                const d = Math.hypot(a.x - red.hq.x, a.y - red.hq.y);
+                                if (d < bestDist) {
+                                    bestDist = d;
+                                    bestAsteroid = a;
+                                }
+                            });
+                            // Compute degree toward that asteroid
+                            const dx = bestAsteroid.x - red.hq.x;
+                            const dy = bestAsteroid.y - red.hq.y;
+                            const rad = Math.atan2(dy, dx);
+                            const span = (Math.PI - rad) / (Math.PI * 0.5);
+                            const targetDeg = Math.max(0, Math.min(90, Math.round(span * 90.0)));
+                            deployStationAtDegree(1, targetDeg);
+                        } else {
+                            // Balanced expansion
+                            const candidateDegrees = [20, 35, 50, 65, 80];
+                            const pick = candidateDegrees[Math.floor(Math.random() * candidateDegrees.length)];
+                            deployStationAtDegree(1, pick);
+                        }
+                    }
+
+                    // Tactical Stance Management for CPU
+                    const blueInRed = p1.fighters.some(f => isPointInPolygon(f, p2Poly));
+                    if (blueInRed) {
+                        red.stance = 'defend';
+                    } else if (red.fighters.length >= 4 && red.fighters.length > p1.fighters.length) {
+                        red.stance = 'attack';
+                    } else {
+                        red.stance = 'patrol';
+                    }
+                }
+            }
+
+            // Update UI Ribbon
+            updateUI();
+        }
+
+        function updateUI() {
+            const p1 = gameState.players[0];
+            const p2 = gameState.players[1];
+
+            document.getElementById('p1-energy').innerText = Math.round(p1.energy);
+            document.getElementById('p1-stations').innerText = p1.stations.length;
+            document.getElementById('p1-miners').innerText = p1.miners.length;
+            document.getElementById('p1-fighters').innerText = p1.fighters.length;
+
+            document.getElementById('p2-energy').innerText = Math.round(p2.energy);
+            document.getElementById('p2-stations').innerText = p2.stations.length;
+            document.getElementById('p2-miners').innerText = p2.miners.length;
+            document.getElementById('p2-fighters').innerText = p2.fighters.length;
+
+            document.getElementById('insp-stance').innerText = p1.stance.toUpperCase();
+        }
+
+        // --- Rendering Routine (Strictly from prototype_border.html) ---
+        function render() {
+            const rect = canvas.getBoundingClientRect();
+            const w = rect.width;
+            const h = rect.height;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // 1. Diagonal Neutral Zone Guideline
+            ctx.save();
+            ctx.strokeStyle = 'rgba(48, 54, 61, 0.35)';
+            ctx.setLineDash([4, 6]);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(w, h);
+            ctx.stroke();
+            ctx.restore();
+
+            // 2. Render Territory For Both Players
+            gameState.players.forEach((p, idx) => {
+                const hx = p.hq.x;
+                const hy = p.hq.y;
+                const isP1 = (idx === 0);
+                const maxR = Math.max(...p.distances) + 40;
+
+                // Concentric Range Rings
+                ctx.save();
+                ctx.strokeStyle = isP1 ? 'rgba(56, 139, 253, 0.12)' : 'rgba(248, 81, 73, 0.12)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 5]);
+                for (let r = 100; r <= maxR; r += 100) {
+                    ctx.beginPath();
+                    const startAng = isP1 ? -Math.PI * 0.5 : Math.PI * 0.5;
+                    const endAng = isP1 ? 0 : Math.PI;
+                    ctx.arc(hx, hy, r, startAng, endAng, !isP1);
+                    ctx.stroke();
+                }
+                ctx.restore();
+
+                // Territory Fill
+                ctx.save();
+                const poly = getTerritoryPolygon(idx);
+                ctx.beginPath();
+                poly.forEach((pt, i) => {
+                    if (i === 0) ctx.moveTo(pt.x, pt.y);
+                    else ctx.lineTo(pt.x, pt.y);
+                });
+                ctx.closePath();
+
+                const fillGrad = ctx.createRadialGradient(hx, hy, 10, hx, hy, maxR);
+                if (isP1) {
+                    fillGrad.addColorStop(0, 'rgba(31, 111, 235, 0.28)');
+                    fillGrad.addColorStop(0.7, 'rgba(56, 139, 253, 0.12)');
+                    fillGrad.addColorStop(1, 'rgba(88, 166, 255, 0.04)');
+                } else {
+                    fillGrad.addColorStop(0, 'rgba(218, 54, 51, 0.28)');
+                    fillGrad.addColorStop(0.7, 'rgba(248, 81, 73, 0.12)');
+                    fillGrad.addColorStop(1, 'rgba(255, 123, 114, 0.04)');
+                }
+                ctx.fillStyle = fillGrad;
+                ctx.fill();
+                ctx.restore();
+
+                // 91 Radial Rays
+                ctx.save();
+                for (let i = 0; i < CONFIG.numDegrees; i++) {
+                    const pt = getDotPosition(idx, i);
+                    const isHovered = (idx === gameState.activePlayerId && i === gameState.hoveredDegree);
+
+                    ctx.beginPath();
+                    ctx.moveTo(hx, hy);
+                    ctx.lineTo(pt.x, pt.y);
+
+                    if (isHovered) {
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 1.8;
+                    } else if (i % 10 === 0) {
+                        ctx.strokeStyle = isP1 ? 'rgba(88, 166, 255, 0.40)' : 'rgba(248, 81, 73, 0.40)';
+                        ctx.lineWidth = 1.2;
+                    } else {
+                        ctx.strokeStyle = isP1 ? 'rgba(56, 139, 253, 0.14)' : 'rgba(248, 81, 73, 0.14)';
+                        ctx.lineWidth = 1.0;
+                    }
+                    ctx.stroke();
+                }
+                ctx.restore();
+
+                // Straight Lines Connecting Neighbor Dots
+                ctx.save();
+                ctx.beginPath();
+                for (let i = 0; i < CONFIG.numDegrees; i++) {
+                    const pt = getDotPosition(idx, i);
+                    if (i === 0) ctx.moveTo(pt.x, pt.y);
+                    else ctx.lineTo(pt.x, pt.y);
+                }
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = 2.0;
+                ctx.shadowColor = p.color;
+                ctx.shadowBlur = 6;
+                ctx.stroke();
+                ctx.restore();
+
+                // Ray End Dots
+                ctx.save();
+                for (let i = 0; i < CONFIG.numDegrees; i++) {
+                    const pt = getDotPosition(idx, i);
+                    const isHovered = (idx === gameState.activePlayerId && i === gameState.hoveredDegree);
+                    const isMajor = (i % 10 === 0);
+
+                    ctx.beginPath();
+                    let radius = isMajor ? 3.8 : 2.5;
+                    if (isHovered) radius = 6.0;
+
+                    ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
+
+                    if (isHovered) {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.shadowColor = p.color;
+                        ctx.shadowBlur = 12;
+                    } else if (isMajor) {
+                        ctx.fillStyle = p.dotColor;
+                        ctx.shadowColor = p.color;
+                        ctx.shadowBlur = 4;
+                    } else {
+                        ctx.fillStyle = p.dotColor;
+                        ctx.shadowBlur = 0;
+                    }
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                // Stations Pinned to Frontier Dots
+                p.stations.forEach(s => {
+                    const pos = getDotPosition(idx, s.degree);
+                    ctx.save();
+                    // Outer Range Aura
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, s.range, 0, Math.PI * 2);
+                    ctx.strokeStyle = isP1 ? 'rgba(57, 197, 207, 0.12)' : 'rgba(248, 81, 73, 0.12)';
+                    ctx.setLineDash([2, 4]);
+                    ctx.stroke();
+
+                    // Station Structure
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 8, 0, Math.PI * 2);
+                    ctx.fillStyle = isP1 ? '#093c71' : '#571311';
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = isP1 ? '#39c5cf' : '#ff7b72';
+                    ctx.stroke();
+
+                    // Inner Station Core
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 4, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fill();
+
+                    // Health Bar
+                    if (s.hp < s.maxHp) {
+                        const barW = 16;
+                        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                        ctx.fillRect(pos.x - barW/2, pos.y - 14, barW, 3);
+                        ctx.fillStyle = '#3fb950';
+                        ctx.fillRect(pos.x - barW/2, pos.y - 14, barW * (s.hp / s.maxHp), 3);
+                    }
+                    ctx.restore();
+                });
+
+                // HQ Base
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(hx, hy, p.hq.radius, 0, Math.PI * 2);
+                ctx.fillStyle = isP1 ? '#1f6feb' : '#da3633';
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = isP1 ? '#58a6ff' : '#ff7b72';
+                ctx.shadowColor = isP1 ? '#58a6ff' : '#ff7b72';
+                ctx.shadowBlur = 10;
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(hx, hy, 5, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+
+                ctx.fillStyle = '#e6edf3';
+                ctx.font = 'bold 12px ui-monospace, monospace';
+                ctx.shadowBlur = 0;
+                const hqLabelX = isP1 ? hx + 24 : hx - 120;
+                const hqLabelY = isP1 ? hy + 4 : hy + 4;
+                ctx.fillText(isP1 ? 'HQ 1 (Blue)' : 'HQ 2 (Red)', hqLabelX, hqLabelY);
+                ctx.restore();
+            });
+
+            // 3. Render Asteroids
+            gameState.asteroids.forEach(a => {
+                ctx.save();
+                // Asteroid Body
+                ctx.beginPath();
+                ctx.arc(a.x, a.y, a.radius, 0, Math.PI * 2);
+                ctx.fillStyle = a.tier === 4 ? '#d29922' : '#6e7681';
+                ctx.fill();
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = a.tier === 4 ? '#f2cc60' : '#8b949e';
+                ctx.stroke();
+
+                // Resource Glow Ring
+                ctx.beginPath();
+                ctx.arc(a.x, a.y, a.radius + 3, -Math.PI * 0.5, -Math.PI * 0.5 + (Math.PI * 2 * (a.resources / a.maxResources)));
+                ctx.strokeStyle = '#3fb950';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Resource Label
+                ctx.fillStyle = '#e6edf3';
+                ctx.font = '10px ui-monospace, monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${Math.round(a.resources)}`, a.x, a.y + a.radius + 12);
+                ctx.restore();
+            });
+
+            // 4. Render Miners
+            gameState.players.forEach((p, pIdx) => {
+                p.miners.forEach(m => {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(m.x, m.y, 5, 0, Math.PI * 2);
+                    ctx.fillStyle = '#238636';
+                    ctx.fill();
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeStyle = '#3fb950';
+                    ctx.stroke();
+
+                    // Cargo indicator
+                    if (m.payload > 0) {
+                        ctx.beginPath();
+                        ctx.arc(m.x, m.y, 2.5, 0, Math.PI * 2);
+                        ctx.fillStyle = '#e3b341';
+                        ctx.fill();
+                    }
+                    ctx.restore();
+                });
+            });
+
+            // 5. Render Fighters
+            gameState.players.forEach((p, pIdx) => {
+                p.fighters.forEach(f => {
+                    ctx.save();
+                    ctx.translate(f.x, f.y);
+
+                    // Draw sleek delta fighter icon
+                    ctx.beginPath();
+                    ctx.moveTo(7, 0);
+                    ctx.lineTo(-5, -5);
+                    ctx.lineTo(-2, 0);
+                    ctx.lineTo(-5, 5);
+                    ctx.closePath();
+
+                    ctx.fillStyle = p.color;
+                    ctx.shadowColor = p.color;
+                    ctx.shadowBlur = 6;
+                    ctx.fill();
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.stroke();
+
+                    // Health bar
+                    if (f.hp < f.maxHp) {
+                        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                        ctx.fillRect(-8, -9, 16, 2);
+                        ctx.fillStyle = '#3fb950';
+                        ctx.fillRect(-8, -9, 16 * (f.hp / f.maxHp), 2);
+                    }
+                    ctx.restore();
+                });
+            });
+
+            // 6. Render Projectiles (Laser Bolts)
+            gameState.projectiles.forEach(pr => {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(pr.x, pr.y, 2.5, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = pr.color;
+                ctx.shadowBlur = 8;
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // 7. Render Particles
+            gameState.particles.forEach(pt => {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, pt.size * (pt.life / pt.maxLife), 0, Math.PI * 2);
+                ctx.fillStyle = pt.color;
+                ctx.globalAlpha = pt.life / pt.maxLife;
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // 8. Hover Preview Contour on Active Player
+            if (gameState.hoveredDegree >= 0) {
+                ctx.save();
+                const pid = gameState.activePlayerId;
+                const centerDeg = gameState.hoveredDegree;
+                const rCore = Math.floor((CONFIG.initialSpreadDots - 1) / 2);
+                const totalRadius = rCore + CONFIG.neighborSpread;
+
+                const minDeg = Math.max(0, Math.floor(centerDeg - totalRadius));
+                const maxDeg = Math.min(CONFIG.numDegrees - 1, Math.ceil(centerDeg + totalRadius));
+
+                ctx.beginPath();
+                for (let i = minDeg; i <= maxDeg; i++) {
+                    const deltaDeg = Math.abs(i - centerDeg);
+                    const weight = calculateTapWeight(
+                        deltaDeg,
+                        CONFIG.initialSpreadDots,
+                        CONFIG.spreadMode,
+                        CONFIG.neighborSpread,
+                        CONFIG.neighborStrength,
+                        CONFIG.falloffCurve
+                    );
+                    const previewR = gameState.players[pid].distances[i] + CONFIG.tapDistance * weight;
+                    const pt = getDotPosition(pid, i, previewR);
+                    if (i === minDeg) ctx.moveTo(pt.x, pt.y);
+                    else ctx.lineTo(pt.x, pt.y);
+                }
+
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([3, 4]);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        // --- Interaction & Input Handling ---
+        function getPointerInfo(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const mx = clientX - rect.left;
+            const my = clientY - rect.top;
+
+            // Auto-detect player by proximity if CPU disabled, otherwise Player 0 (Blue)
+            let targetPlayer = 0;
+            if (!gameState.cpuEnabled) {
+                const d1 = Math.hypot(mx - gameState.players[0].hq.x, my - gameState.players[0].hq.y);
+                const d2 = Math.hypot(mx - gameState.players[1].hq.x, my - gameState.players[1].hq.y);
+                targetPlayer = (d1 <= d2) ? 0 : 1;
+            }
+
+            const p = gameState.players[targetPlayer];
+            const dx = mx - p.hq.x;
+            const dy = my - p.hq.y;
+            let rad = Math.atan2(dy, dx);
+            let deg = 0;
+
+            if (targetPlayer === 0) {
+                if (rad > 0 && rad <= Math.PI * 0.5) rad = 0;
+                if (rad > Math.PI * 0.5 || rad < -Math.PI) rad = -Math.PI * 0.5;
+                deg = Math.round((-rad / (Math.PI * 0.5)) * 90.0);
+            } else {
+                if (rad < 0 && rad >= -Math.PI * 0.5) rad = Math.PI;
+                if (rad < -Math.PI * 0.5 || rad > Math.PI) rad = Math.PI * 0.5;
+                const span = (Math.PI - rad) / (Math.PI * 0.5);
+                deg = Math.round(span * 90.0);
+            }
+
+            deg = Math.max(0, Math.min(90, deg));
+            return { playerId: targetPlayer, deg, mx, my };
+        }
+
+        function updateHover(e) {
+            const info = getPointerInfo(e);
+            gameState.activePlayerId = info.playerId;
+            gameState.hoveredDegree = info.deg;
+
+            const p = gameState.players[info.playerId];
+            const dist = p.distances[info.deg];
+            const isOccupied = p.stations.some(s => s.degree === info.deg);
+            const slideTarget = isOccupied ? findAvailableStationDegree(info.playerId, info.deg) : info.deg;
+
+            document.getElementById('insp-deg').innerText = `${info.deg}`;
+            document.getElementById('insp-dist').innerText = `${dist.toFixed(0)}`;
+
+            const stationStatus = document.getElementById('insp-station-status');
+            if (isOccupied) {
+                stationStatus.innerHTML = `<span class="slide-highlight">Occupied (Slides to ${slideTarget}°)</span>`;
+            } else {
+                stationStatus.innerHTML = `<span style="color:#39c5cf">Free (Establishes at ${info.deg}°)</span>`;
+            }
+        }
+
+        canvas.addEventListener('mousemove', updateHover);
+        canvas.addEventListener('mouseleave', () => {
+            gameState.hoveredDegree = -1;
+            document.getElementById('insp-deg').innerText = '--';
+            document.getElementById('insp-dist').innerText = '--';
+            document.getElementById('insp-station-status').innerText = 'Click ray to establish';
+        });
+
+        // Click to place station
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 0) {
+                const info = getPointerInfo(e);
+                deployStationAtDegree(info.playerId, info.deg);
+            }
+        });
+
+        // Touch support
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const info = getPointerInfo(e);
+            updateHover(e);
+            deployStationAtDegree(info.playerId, info.deg);
+        }, { passive: false });
+
+        // --- Keyboard Shortcuts & Toolbar Controls ---
+        window.addEventListener('keydown', (e) => {
+            if (e.key === '1') setStance('defend');
+            else if (e.key === '2') setStance('patrol');
+            else if (e.key === '3') setStance('attack');
+            else if (e.key.toLowerCase() === 'm') queueMiner(0);
+            else if (e.key.toLowerCase() === 'f') queueFighter(0);
+        });
+
+        function setStance(stance) {
+            gameState.players[0].stance = stance;
+            document.querySelectorAll('#command-deck button[data-stance]').forEach(btn => {
+                if (btn.dataset.stance === stance) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+            updateUI();
+        }
+
+        document.querySelectorAll('#command-deck button[data-stance]').forEach(btn => {
+            btn.addEventListener('click', () => setStance(btn.dataset.stance));
+        });
+
+        document.getElementById('btn-build-miner').addEventListener('click', () => queueMiner(0));
+        document.getElementById('btn-build-fighter').addEventListener('click', () => queueFighter(0));
+
+        // CPU Toggle
+        const btnCpu = document.getElementById('btn-toggle-cpu');
+        btnCpu.addEventListener('click', () => {
+            gameState.cpuEnabled = !gameState.cpuEnabled;
+            btnCpu.innerHTML = gameState.cpuEnabled ? '<span>🤖 CPU: ON</span>' : '<span>🎮 2-Player (Manual)</span>';
+            btnCpu.classList.toggle('active', gameState.cpuEnabled);
+        });
+
+        // Restart Match
+        document.getElementById('btn-restart').addEventListener('click', () => {
+            resetDistances();
+            initAsteroids();
+            initUnits();
+        });
+
+        // --- Canvas Resizing ---
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.resetTransform ? ctx.resetTransform() : ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+
+            const w = rect.width;
+            const h = rect.height;
+
+            // Player 1: Bottom-Left
+            gameState.players[0].hq.x = CONFIG.hqOffset;
+            gameState.players[0].hq.y = h - CONFIG.hqOffset;
+            gameState.players[0].corner.x = 0;
+            gameState.players[0].corner.y = h;
+
+            // Player 2: Top-Right
+            gameState.players[1].hq.x = w - CONFIG.hqOffset;
+            gameState.players[1].hq.y = CONFIG.hqOffset;
+            gameState.players[1].corner.x = w;
+            gameState.players[1].corner.y = 0;
+
+            if (gameState.asteroids.length === 0) {
+                initAsteroids();
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+        });
+
+        // --- Animation Frame Loop ---
+        let lastTime = performance.now();
+        function gameLoop(now) {
+            const dt = Math.min(0.1, (now - lastTime) / 1000);
+            lastTime = now;
+
+            update(dt);
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Boot Sequence ---
+        resizeCanvas();
+        resetDistances();
+        initAsteroids();
+        initUnits();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
