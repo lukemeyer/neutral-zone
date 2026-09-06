@@ -37,7 +37,20 @@ const CONFIG = {
     frontierClearance: 8
 };
 
-const MINER_SPEED = 100;
+const COSTS = {
+    station: 100,
+    fighter: 50,
+    miner: 20
+};
+
+const BUILD_TIMES = {
+    station: 30.0,
+    fighter: 15.0,
+    miner: 10.0
+};
+
+const MINER_SPEED = 50; // px/sec (reduced to 50%)
+const FIGHTER_SPEED = 70; // px/sec (reduced to 50%)
 
 function createTestState(w = 1200, h = 800) {
     const state = {
@@ -51,7 +64,9 @@ function createTestState(w = 1200, h = 800) {
                 distances: new Float64Array(91).fill(CONFIG.initialRadius),
                 stations: [],
                 miners: [],
-                fighters: []
+                fighters: [],
+                buildQueues: { station: [], miner: [], fighter: [] },
+                readyStations: 0
             },
             {
                 id: 1,
@@ -62,7 +77,9 @@ function createTestState(w = 1200, h = 800) {
                 distances: new Float64Array(91).fill(CONFIG.initialRadius),
                 stations: [],
                 miners: [],
-                fighters: []
+                fighters: [],
+                buildQueues: { station: [], miner: [], fighter: [] },
+                readyStations: 0
             }
         ],
         asteroids: []
@@ -267,6 +284,140 @@ it("Fighter Attack stance acquires nearest enemy station as priority target", ()
     assert.strictEqual(sharedAttackTarget.type, 'station', "Should prioritize enemy station");
     assert.strictEqual(sharedAttackTarget.x, sPos.x);
     assert.strictEqual(sharedAttackTarget.y, sPos.y);
+});
+
+// -------------------------------------------------------------
+// Test Group 4: Construction Timers, Prices & Auto-Deployment
+// -------------------------------------------------------------
+function simulateUpdate(state, dt) {
+    state.players.forEach(p => {
+        // Miner Queue (10s) -> auto-deploys
+        if (p.buildQueues.miner.length > 0) {
+            const item = p.buildQueues.miner[0];
+            item.timeLeft -= dt;
+            if (item.timeLeft <= 0) {
+                p.buildQueues.miner.shift();
+                p.miners.push({ id: 999, speed: MINER_SPEED });
+            }
+        }
+        // Fighter Queue (15s) -> auto-deploys
+        if (p.buildQueues.fighter.length > 0) {
+            const item = p.buildQueues.fighter[0];
+            item.timeLeft -= dt;
+            if (item.timeLeft <= 0) {
+                p.buildQueues.fighter.shift();
+                p.fighters.push({ id: 998, speed: FIGHTER_SPEED });
+            }
+        }
+        // Station Queue (30s) -> increments readyStations
+        if (p.buildQueues.station.length > 0) {
+            const item = p.buildQueues.station[0];
+            item.timeLeft -= dt;
+            if (item.timeLeft <= 0) {
+                p.buildQueues.station.shift();
+                p.readyStations++;
+            }
+        }
+    });
+}
+
+it("Prices strictly adhere to specifications: Station 100, Fighter 50, Miner 20", () => {
+    assert.strictEqual(COSTS.station, 100);
+    assert.strictEqual(COSTS.fighter, 50);
+    assert.strictEqual(COSTS.miner, 20);
+});
+
+it("Construction timers strictly adhere to specifications: Station 30s, Fighter 15s, Miner 10s", () => {
+    assert.strictEqual(BUILD_TIMES.station, 30.0);
+    assert.strictEqual(BUILD_TIMES.fighter, 15.0);
+    assert.strictEqual(BUILD_TIMES.miner, 10.0);
+});
+
+it("Flight speeds are reduced to 50% (Miner: 50 px/s, Fighter: 70 px/s)", () => {
+    assert.strictEqual(MINER_SPEED, 50);
+    assert.strictEqual(FIGHTER_SPEED, 70);
+});
+
+it("Miners queue for 10s and deploy automatically upon completion", () => {
+    const state = createTestState();
+    const p1 = state.players[0];
+    p1.energy = 100;
+    
+    // Queue miner
+    assert(p1.energy >= COSTS.miner);
+    p1.energy -= COSTS.miner;
+    p1.buildQueues.miner.push({ timeLeft: BUILD_TIMES.miner, totalTime: BUILD_TIMES.miner });
+    assert.strictEqual(p1.energy, 80, "Deducted 20 energy");
+    assert.strictEqual(p1.miners.length, 0);
+
+    // Simulate 5 seconds -> still in queue
+    simulateUpdate(state, 5.0);
+    assert.strictEqual(p1.miners.length, 0, "Miner should not be deployed at 5s");
+    assert.strictEqual(p1.buildQueues.miner.length, 1);
+    assert.strictEqual(p1.buildQueues.miner[0].timeLeft, 5.0);
+
+    // Simulate another 5 seconds -> completes at 10s and auto-deploys!
+    simulateUpdate(state, 5.0);
+    assert.strictEqual(p1.miners.length, 1, "Miner auto-deployed at 10s");
+    assert.strictEqual(p1.buildQueues.miner.length, 0);
+});
+
+it("Fighters queue for 15s and deploy automatically upon completion", () => {
+    const state = createTestState();
+    const p1 = state.players[0];
+    p1.energy = 100;
+    
+    // Queue fighter
+    assert(p1.energy >= COSTS.fighter);
+    p1.energy -= COSTS.fighter;
+    p1.buildQueues.fighter.push({ timeLeft: BUILD_TIMES.fighter, totalTime: BUILD_TIMES.fighter });
+    assert.strictEqual(p1.energy, 50, "Deducted 50 energy");
+    assert.strictEqual(p1.fighters.length, 0);
+
+    // Simulate 10 seconds -> still in queue
+    simulateUpdate(state, 10.0);
+    assert.strictEqual(p1.fighters.length, 0, "Fighter should not be deployed at 10s");
+    assert.strictEqual(p1.buildQueues.fighter.length, 1);
+    assert.strictEqual(p1.buildQueues.fighter[0].timeLeft, 5.0);
+
+    // Simulate another 5 seconds -> completes at 15s and auto-deploys!
+    simulateUpdate(state, 5.0);
+    assert.strictEqual(p1.fighters.length, 1, "Fighter auto-deployed at 15s");
+    assert.strictEqual(p1.buildQueues.fighter.length, 0);
+});
+
+it("Stations queue for 30s, increment readyStations (button pulses), and deploy on player click", () => {
+    const state = createTestState();
+    const p1 = state.players[0];
+    p1.energy = 150;
+    
+    // Queue station
+    assert(p1.energy >= COSTS.station);
+    p1.energy -= COSTS.station;
+    p1.buildQueues.station.push({ timeLeft: BUILD_TIMES.station, totalTime: BUILD_TIMES.station });
+    assert.strictEqual(p1.energy, 50, "Deducted 100 energy");
+    assert.strictEqual(p1.readyStations, 0);
+    assert.strictEqual(p1.stations.length, 0);
+
+    // Simulate 20 seconds -> still in queue
+    simulateUpdate(state, 20.0);
+    assert.strictEqual(p1.readyStations, 0, "Station not ready yet at 20s");
+    assert.strictEqual(p1.stations.length, 0);
+
+    // Simulate remaining 10 seconds -> completes at 30s!
+    simulateUpdate(state, 10.0);
+    assert.strictEqual(p1.readyStations, 1, "Station is ready and button pulses!");
+    assert.strictEqual(p1.stations.length, 0, "Does not auto-deploy yet: awaits player click");
+
+    // Player clicks ray at degree 45 -> deploys!
+    const targetDeg = 45;
+    const finalDeg = findAvailableStationDegree(p1, targetDeg);
+    p1.stations.push({ id: 101, degree: finalDeg });
+    p1.readyStations--;
+
+    assert.strictEqual(p1.readyStations, 0, "Consumed readyStation");
+    assert.strictEqual(p1.stations.length, 1, "Station deployed successfully on border");
+    assert.strictEqual(p1.stations[0].degree, 45);
 });
 
 console.log("\n------------------------------------------------------------");

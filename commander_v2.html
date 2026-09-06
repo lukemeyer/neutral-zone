@@ -200,6 +200,35 @@
             border-color: var(--accent-red);
         }
 
+        @keyframes pulse-glow {
+            0% {
+                box-shadow: 0 0 4px rgba(57, 197, 207, 0.4);
+                border-color: rgba(57, 197, 207, 0.5);
+                background: #1f6feb;
+                color: #ffffff;
+            }
+            50% {
+                box-shadow: 0 0 16px rgba(57, 197, 207, 0.9), 0 0 24px rgba(88, 166, 255, 0.6);
+                border-color: #39c5cf;
+                background: #238636;
+                color: #ffffff;
+                transform: scale(1.05);
+            }
+            100% {
+                box-shadow: 0 0 4px rgba(57, 197, 207, 0.4);
+                border-color: rgba(57, 197, 207, 0.5);
+                background: #1f6feb;
+                color: #ffffff;
+            }
+        }
+
+        .btn-deck.ready-pulse {
+            animation: pulse-glow 1.1s infinite ease-in-out;
+            color: #ffffff !important;
+            font-weight: 700 !important;
+            border-color: #39c5cf !important;
+        }
+
         .divider {
             width: 1px;
             height: 24px;
@@ -351,7 +380,7 @@
             </div>
 
             <div id="hint-banner">
-                <span>👉 <b>Click any ray</b> to deploy a station & expand your border! If occupied, slides to nearest neighbor dot.</span>
+                <span>👉 <b>Construct Station (30s)</b> in Command Deck. When complete, button pulses—click any ray to deploy!</span>
             </div>
 
             <!-- Tactical Command Deck for Blue Player -->
@@ -375,11 +404,14 @@
                 <!-- Unit Production -->
                 <div class="deck-group">
                     <span class="deck-label">Build:</span>
-                    <button type="button" class="btn-deck" id="btn-build-miner" title="Build Miner (40 Energy) [Key M]">
-                        <span>⛏️ + Miner (40⚡)</span>
+                    <button type="button" class="btn-deck" id="btn-build-station" title="Construct Station (100 Energy, 30s) [Key S]">
+                        <span id="btn-station-text">🛰️ + Station (100⚡)</span>
                     </button>
-                    <button type="button" class="btn-deck" id="btn-build-fighter" title="Build Fighter (60 Energy) [Key F]">
-                        <span>⚔️ + Fighter (60⚡)</span>
+                    <button type="button" class="btn-deck" id="btn-build-miner" title="Construct Miner (20 Energy, 10s) [Key M]">
+                        <span id="btn-miner-text">⛏️ + Miner (20⚡)</span>
+                    </button>
+                    <button type="button" class="btn-deck" id="btn-build-fighter" title="Construct Fighter (50 Energy, 15s) [Key F]">
+                        <span id="btn-fighter-text">⚔️ + Fighter (50⚡)</span>
                     </button>
                 </div>
             </div>
@@ -394,15 +426,21 @@
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
 
-        // Costs & Combat Tuning
+        // Costs & Construction Timers & 50% Speeds
         const COSTS = {
-            station: 50,
-            miner: 40,
-            fighter: 60
+            station: 100,
+            fighter: 50,
+            miner: 20
         };
 
-        const MINER_SPEED = 100; // px/sec
-        const FIGHTER_SPEED = 140; // px/sec
+        const BUILD_TIMES = {
+            station: 30.0,
+            fighter: 15.0,
+            miner: 10.0
+        };
+
+        const MINER_SPEED = 50; // px/sec (reduced to 50%)
+        const FIGHTER_SPEED = 70; // px/sec (reduced to 50%)
 
         // Fixed mathematical settings identical to prototype_border.html
         const CONFIG = {
@@ -442,7 +480,13 @@
                     distances: new Float64Array(91),
                     stations: [],
                     miners: [],
-                    fighters: []
+                    fighters: [],
+                    buildQueues: {
+                        station: [],
+                        miner: [],
+                        fighter: []
+                    },
+                    readyStations: 0
                 },
                 {
                     id: 1,
@@ -457,7 +501,13 @@
                     distances: new Float64Array(91),
                     stations: [],
                     miners: [],
-                    fighters: []
+                    fighters: [],
+                    buildQueues: {
+                        station: [],
+                        miner: [],
+                        fighter: []
+                    },
+                    readyStations: 0
                 }
             ],
 
@@ -801,6 +851,8 @@
                 p.stations = [];
                 p.energy = 150;
                 p.stance = 'defend';
+                p.buildQueues = { station: [], miner: [], fighter: [] };
+                p.readyStations = 0;
 
                 // Initial 2 Miners spawned at HQ
                 for (let i = 0; i < 2; i++) {
@@ -842,44 +894,76 @@
             });
         }
 
-        // --- Production Helpers ---
+        // --- Production Helpers & Timers ---
+        function queueStation(playerId) {
+            const p = gameState.players[playerId];
+            if (p.energy >= COSTS.station && p.buildQueues.station.length + p.readyStations < 5) {
+                p.energy -= COSTS.station;
+                p.buildQueues.station.push({ timeLeft: BUILD_TIMES.station, totalTime: BUILD_TIMES.station });
+                spawnRingParticles(p.hq, '#39c5cf', 12);
+                updateUI();
+                return true;
+            }
+            return false;
+        }
+
         function queueMiner(playerId) {
             const p = gameState.players[playerId];
-            if (p.energy >= COSTS.miner) {
+            if (p.energy >= COSTS.miner && p.buildQueues.miner.length < 5) {
                 p.energy -= COSTS.miner;
-                p.miners.push({
-                    id: gameState.nextEntityId++,
-                    x: p.hq.x,
-                    y: p.hq.y,
-                    hp: 40,
-                    maxHp: 40,
-                    speed: MINER_SPEED,
-                    payload: 0,
-                    maxPayload: 30,
-                    targetAsteroid: null,
-                    returning: false
-                });
+                p.buildQueues.miner.push({ timeLeft: BUILD_TIMES.miner, totalTime: BUILD_TIMES.miner });
                 spawnRingParticles(p.hq, '#3fb950', 12);
+                updateUI();
+                return true;
             }
+            return false;
         }
 
         function queueFighter(playerId) {
             const p = gameState.players[playerId];
-            if (p.energy >= COSTS.fighter) {
+            if (p.energy >= COSTS.fighter && p.buildQueues.fighter.length < 5) {
                 p.energy -= COSTS.fighter;
-                p.fighters.push({
-                    id: gameState.nextEntityId++,
-                    x: p.hq.x,
-                    y: p.hq.y,
-                    hp: 60,
-                    maxHp: 60,
-                    speed: FIGHTER_SPEED,
-                    range: 65,
-                    cooldown: 0,
-                    patrolT: Math.random()
-                });
+                p.buildQueues.fighter.push({ timeLeft: BUILD_TIMES.fighter, totalTime: BUILD_TIMES.fighter });
                 spawnRingParticles(p.hq, '#f0883e', 12);
+                updateUI();
+                return true;
             }
+            return false;
+        }
+
+        function deployMiner(playerId) {
+            const p = gameState.players[playerId];
+            p.miners.push({
+                id: gameState.nextEntityId++,
+                x: p.hq.x,
+                y: p.hq.y,
+                hp: 40,
+                maxHp: 40,
+                speed: MINER_SPEED,
+                payload: 0,
+                maxPayload: 30,
+                targetAsteroid: null,
+                returning: false
+            });
+            spawnRingParticles(p.hq, '#3fb950', 16);
+            updateUI();
+        }
+
+        function deployFighter(playerId) {
+            const p = gameState.players[playerId];
+            p.fighters.push({
+                id: gameState.nextEntityId++,
+                x: p.hq.x,
+                y: p.hq.y,
+                hp: 60,
+                maxHp: 60,
+                speed: FIGHTER_SPEED,
+                range: 65,
+                cooldown: 0,
+                patrolT: Math.random()
+            });
+            spawnRingParticles(p.hq, '#f0883e', 16);
+            updateUI();
         }
 
         // --- Particles & FX ---
@@ -923,6 +1007,38 @@
             const p2 = gameState.players[1];
             const p1Poly = getTerritoryPolygon(0);
             const p2Poly = getTerritoryPolygon(1);
+
+            // 0. Construction Queues Update (Timers & Automatic Deployment)
+            gameState.players.forEach(p => {
+                // Miner Queue (10s) -> auto-deploys when built
+                if (p.buildQueues.miner.length > 0) {
+                    const item = p.buildQueues.miner[0];
+                    item.timeLeft -= dt;
+                    if (item.timeLeft <= 0) {
+                        p.buildQueues.miner.shift();
+                        deployMiner(p.id);
+                    }
+                }
+                // Fighter Queue (15s) -> auto-deploys when built
+                if (p.buildQueues.fighter.length > 0) {
+                    const item = p.buildQueues.fighter[0];
+                    item.timeLeft -= dt;
+                    if (item.timeLeft <= 0) {
+                        p.buildQueues.fighter.shift();
+                        deployFighter(p.id);
+                    }
+                }
+                // Station Queue (30s) -> pulses button and awaits player click
+                if (p.buildQueues.station.length > 0) {
+                    const item = p.buildQueues.station[0];
+                    item.timeLeft -= dt;
+                    if (item.timeLeft <= 0) {
+                        p.buildQueues.station.shift();
+                        p.readyStations++;
+                        spawnRingParticles(p.hq, '#39c5cf', 24);
+                    }
+                }
+            });
 
             // 1. Miners Mining & Logistics
             gameState.players.forEach(p => {
@@ -1287,17 +1403,22 @@
                     const red = gameState.players[1];
 
                     // A. Produce miners if below 4 and energy permits
-                    if (red.miners.length < 4 && red.energy >= COSTS.miner) {
+                    if (red.miners.length + red.buildQueues.miner.length < 4 && red.energy >= COSTS.miner && red.buildQueues.miner.length === 0) {
                         queueMiner(1);
                     }
                     // B. Produce fighters if below 6 and energy permits
-                    else if (red.fighters.length < 6 && red.energy >= COSTS.fighter) {
+                    else if (red.fighters.length + red.buildQueues.fighter.length < 6 && red.energy >= COSTS.fighter && red.buildQueues.fighter.length === 0) {
                         queueFighter(1);
                     }
-                    // C. Expand Stations toward uncaptured asteroids
-                    else if (red.energy >= COSTS.station && red.stations.length < 15) {
-                        // Pick asteroid closest to Red territory
+                    // C. Construct Stations toward uncaptured asteroids
+                    else if (red.energy >= COSTS.station && red.stations.length + red.readyStations + red.buildQueues.station.length < 15 && red.buildQueues.station.length === 0 && red.readyStations === 0) {
+                        queueStation(1);
+                    }
+
+                    // D. Deploy ready station
+                    if (red.readyStations > 0) {
                         const uncaptured = gameState.asteroids.filter(a => !isPointInPolygon(a, p2Poly));
+                        let targetDeg = 45;
                         if (uncaptured.length > 0) {
                             let bestAsteroid = uncaptured[0];
                             let bestDist = Infinity;
@@ -1308,18 +1429,17 @@
                                     bestAsteroid = a;
                                 }
                             });
-                            // Compute degree toward that asteroid
                             const dx = bestAsteroid.x - red.hq.x;
                             const dy = bestAsteroid.y - red.hq.y;
                             const rad = Math.atan2(dy, dx);
                             const span = (Math.PI - rad) / (Math.PI * 0.5);
-                            const targetDeg = Math.max(0, Math.min(90, Math.round(span * 90.0)));
-                            deployStationAtDegree(1, targetDeg);
+                            targetDeg = Math.max(0, Math.min(90, Math.round(span * 90.0)));
                         } else {
-                            // Balanced expansion
                             const candidateDegrees = [20, 35, 50, 65, 80];
-                            const pick = candidateDegrees[Math.floor(Math.random() * candidateDegrees.length)];
-                            deployStationAtDegree(1, pick);
+                            targetDeg = candidateDegrees[Math.floor(Math.random() * candidateDegrees.length)];
+                        }
+                        if (deployStationAtDegree(1, targetDeg, true)) {
+                            red.readyStations--;
                         }
                     }
 
@@ -1354,6 +1474,52 @@
             document.getElementById('p2-fighters').innerText = p2.fighters.length;
 
             document.getElementById('insp-stance').innerText = p1.stance.toUpperCase();
+
+            // Button countdowns & pulsing updates
+            const btnStation = document.getElementById('btn-build-station');
+            const btnStationText = document.getElementById('btn-station-text');
+            const btnMiner = document.getElementById('btn-build-miner');
+            const btnMinerText = document.getElementById('btn-miner-text');
+            const btnFighter = document.getElementById('btn-build-fighter');
+            const btnFighterText = document.getElementById('btn-fighter-text');
+
+            if (btnStation && btnStationText) {
+                if (p1.readyStations > 0) {
+                    btnStation.classList.add('ready-pulse');
+                    btnStationText.innerText = p1.readyStations > 1
+                        ? `🛰️ DEPLOY (${p1.readyStations} READY!)`
+                        : `🛰️ DEPLOY STATION!`;
+                } else {
+                    btnStation.classList.remove('ready-pulse');
+                    if (p1.buildQueues.station.length > 0) {
+                        const t = Math.ceil(p1.buildQueues.station[0].timeLeft);
+                        const extra = p1.buildQueues.station.length > 1 ? ` +${p1.buildQueues.station.length - 1}` : '';
+                        btnStationText.innerText = `🛰️ Station (${t}s${extra})`;
+                    } else {
+                        btnStationText.innerText = `🛰️ + Station (100⚡)`;
+                    }
+                }
+            }
+
+            if (btnMiner && btnMinerText) {
+                if (p1.buildQueues.miner.length > 0) {
+                    const t = Math.ceil(p1.buildQueues.miner[0].timeLeft);
+                    const extra = p1.buildQueues.miner.length > 1 ? ` +${p1.buildQueues.miner.length - 1}` : '';
+                    btnMinerText.innerText = `⛏️ Miner (${t}s${extra})`;
+                } else {
+                    btnMinerText.innerText = `⛏️ + Miner (20⚡)`;
+                }
+            }
+
+            if (btnFighter && btnFighterText) {
+                if (p1.buildQueues.fighter.length > 0) {
+                    const t = Math.ceil(p1.buildQueues.fighter[0].timeLeft);
+                    const extra = p1.buildQueues.fighter.length > 1 ? ` +${p1.buildQueues.fighter.length - 1}` : '';
+                    btnFighterText.innerText = `⚔️ Fighter (${t}s${extra})`;
+                } else {
+                    btnFighterText.innerText = `⚔️ + Fighter (50⚡)`;
+                }
+            }
         }
 
         // --- Rendering Routine (Strictly from prototype_border.html) ---
@@ -1743,10 +1909,22 @@
             document.getElementById('insp-dist').innerText = `${dist.toFixed(0)}`;
 
             const stationStatus = document.getElementById('insp-station-status');
-            if (isOccupied) {
-                stationStatus.innerHTML = `<span class="slide-highlight">Occupied (Slides to ${slideTarget}°)</span>`;
+            const isReady = p.readyStations > 0;
+            if (isReady) {
+                if (isOccupied) {
+                    stationStatus.innerHTML = `<span class="slide-highlight">READY: Slides to ${slideTarget}° (Click to place)</span>`;
+                } else {
+                    stationStatus.innerHTML = `<span style="color:#3fb950;font-weight:bold;">READY: Establishes at ${info.deg}° (Click to place)</span>`;
+                }
+            } else if (p.buildQueues.station.length > 0) {
+                const t = Math.ceil(p.buildQueues.station[0].timeLeft);
+                stationStatus.innerHTML = `<span style="color:#f0883e">Constructing (${t}s remaining)</span>`;
             } else {
-                stationStatus.innerHTML = `<span style="color:#39c5cf">Free (Establishes at ${info.deg}°)</span>`;
+                if (isOccupied) {
+                    stationStatus.innerHTML = `<span class="slide-highlight">Occupied (Slides to ${slideTarget}°)</span>`;
+                } else {
+                    stationStatus.innerHTML = `<span style="color:#39c5cf">Free (Establishes at ${info.deg}°)</span>`;
+                }
             }
         }
 
@@ -1755,14 +1933,42 @@
             gameState.hoveredDegree = -1;
             document.getElementById('insp-deg').innerText = '--';
             document.getElementById('insp-dist').innerText = '--';
-            document.getElementById('insp-station-status').innerText = 'Click ray to establish';
+            const p1 = gameState.players[0];
+            document.getElementById('insp-station-status').innerText = p1.readyStations > 0
+                ? 'Station ready! Click any ray to deploy'
+                : 'Construct station in Command Deck';
         });
 
-        // Click to place station
+        // Click on ray/field to deploy station
+        function handleCanvasDeploy(info) {
+            const p = gameState.players[info.playerId];
+            if (p.readyStations > 0) {
+                if (deployStationAtDegree(info.playerId, info.deg, true)) {
+                    p.readyStations--;
+                    updateUI();
+                    const hb = document.getElementById('hint-banner');
+                    if (hb) hb.innerHTML = `<span>🛰️ Station deployed at ${info.deg}°! Border expanded outward.</span>`;
+                }
+            } else if (p.buildQueues.station.length > 0) {
+                const t = Math.ceil(p.buildQueues.station[0].timeLeft);
+                const hb = document.getElementById('hint-banner');
+                if (hb) hb.innerHTML = `<span>⏳ Station under construction (${t}s remaining)... Click ray once ready!</span>`;
+            } else {
+                if (p.energy >= COSTS.station) {
+                    queueStation(info.playerId);
+                    const hb = document.getElementById('hint-banner');
+                    if (hb) hb.innerHTML = `<span>🛰️ Station queued (30s)! Tap ray again when ready to deploy.</span>`;
+                } else {
+                    const hb = document.getElementById('hint-banner');
+                    if (hb) hb.innerHTML = `<span>⚠️ Need ${COSTS.station}⚡ to construct Station (Current: ${Math.round(p.energy)}⚡)</span>`;
+                }
+            }
+        }
+
         canvas.addEventListener('mousedown', (e) => {
             if (e.button === 0) {
                 const info = getPointerInfo(e);
-                deployStationAtDegree(info.playerId, info.deg);
+                handleCanvasDeploy(info);
             }
         });
 
@@ -1771,14 +1977,33 @@
             e.preventDefault();
             const info = getPointerInfo(e);
             updateHover(e);
-            deployStationAtDegree(info.playerId, info.deg);
+            handleCanvasDeploy(info);
         }, { passive: false });
+
+        // Station button click handler: queues if not ready, deploys if ready!
+        function handleStationAction(playerId) {
+            const p = gameState.players[playerId];
+            if (p.readyStations > 0) {
+                const targetDeg = (gameState.hoveredDegree >= 0 && gameState.activePlayerId === playerId)
+                    ? gameState.hoveredDegree
+                    : 45;
+                if (deployStationAtDegree(playerId, targetDeg, true)) {
+                    p.readyStations--;
+                    updateUI();
+                    const hb = document.getElementById('hint-banner');
+                    if (hb) hb.innerHTML = `<span>🛰️ Station deployed at ${targetDeg}°! Border expanded.</span>`;
+                }
+            } else {
+                queueStation(playerId);
+            }
+        }
 
         // --- Keyboard Shortcuts & Toolbar Controls ---
         window.addEventListener('keydown', (e) => {
             if (e.key === '1') setStance('defend');
             else if (e.key === '2') setStance('patrol');
             else if (e.key === '3') setStance('attack');
+            else if (e.key.toLowerCase() === 's') handleStationAction(0);
             else if (e.key.toLowerCase() === 'm') queueMiner(0);
             else if (e.key.toLowerCase() === 'f') queueFighter(0);
         });
@@ -1796,6 +2021,7 @@
             btn.addEventListener('click', () => setStance(btn.dataset.stance));
         });
 
+        document.getElementById('btn-build-station').addEventListener('click', () => handleStationAction(0));
         document.getElementById('btn-build-miner').addEventListener('click', () => queueMiner(0));
         document.getElementById('btn-build-fighter').addEventListener('click', () => queueFighter(0));
 
