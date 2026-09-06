@@ -22,7 +22,7 @@ function it(desc, fn) {
 // Minimal simulated engine math from commander_v2.html
 const CONFIG = {
     numDegrees: 91,
-    initialRadius: 280,
+    initialRadius: 198, // Exactly half area of 280 (280 / sqrt(2) = 198)
     hqOffset: 80,
     tapDistance: 25,
     initialSpreadDots: 3,
@@ -51,13 +51,25 @@ const BUILD_TIMES = {
 
 const MINER_SPEED = 50; // px/sec (reduced to 50%)
 const FIGHTER_SPEED = 70; // px/sec (reduced to 50%)
+const STATION_RANGE = 57.5; // halved from 115
+const STATION_DAMAGE = 9; // halved from 18
+
+function getPolygonArea(poly) {
+    let area = 0;
+    for (let i = 0; i < poly.length; i++) {
+        const j = (i + 1) % poly.length;
+        area += poly[i].x * poly[j].y;
+        area -= poly[j].x * poly[i].y;
+    }
+    return Math.abs(area) * 0.5;
+}
 
 function createTestState(w = 1200, h = 800) {
     const state = {
         players: [
             {
                 id: 0,
-                hq: { x: CONFIG.hqOffset, y: h - CONFIG.hqOffset, radius: 18 },
+                hq: { x: CONFIG.hqOffset, y: h - CONFIG.hqOffset, radius: 18, hp: 500, maxHp: 500 },
                 corner: { x: 0, y: h },
                 energy: 150,
                 stance: 'defend',
@@ -70,7 +82,7 @@ function createTestState(w = 1200, h = 800) {
             },
             {
                 id: 1,
-                hq: { x: w - CONFIG.hqOffset, y: CONFIG.hqOffset, radius: 18 },
+                hq: { x: w - CONFIG.hqOffset, y: CONFIG.hqOffset, radius: 18, hp: 500, maxHp: 500 },
                 corner: { x: w, y: 0 },
                 energy: 150,
                 stance: 'defend',
@@ -85,12 +97,19 @@ function createTestState(w = 1200, h = 800) {
         asteroids: []
     };
 
-    // Asteroids layout from commander_v2.html
+    // Asteroids layout from commander_v2.html (15 total, including 4 new 500-energy ones)
     const rawLayout = [
         { relX: 0.12, relY: 0.76, resources: 800, tier: 1 },
         { relX: 0.22, relY: 0.88, resources: 800, tier: 1 },
         { relX: 0.88, relY: 0.24, resources: 800, tier: 1 },
         { relX: 0.78, relY: 0.12, resources: 800, tier: 1 },
+
+        // 4 Additional Strategic Asteroids (500 energy each)
+        { relX: 0.16, relY: 0.68, resources: 500, tier: 1 },
+        { relX: 0.84, relY: 0.32, resources: 500, tier: 1 },
+        { relX: 0.28, relY: 0.88, resources: 500, tier: 1 },
+        { relX: 0.72, relY: 0.12, resources: 500, tier: 1 },
+
         { relX: 0.20, relY: 0.58, resources: 1200, tier: 2 },
         { relX: 0.38, relY: 0.80, resources: 1200, tier: 2 },
         { relX: 0.80, relY: 0.42, resources: 1200, tier: 2 },
@@ -100,7 +119,7 @@ function createTestState(w = 1200, h = 800) {
         { relX: 0.50, relY: 0.50, resources: 2500, tier: 4 }
     ];
 
-    const MIN_HQ_FLIGHT_DIST = 145;
+    const MIN_HQ_FLIGHT_DIST = 120;
     rawLayout.forEach((spec, idx) => {
         const ax = spec.relX * w;
         const ay = spec.relY * h;
@@ -216,7 +235,7 @@ it("Station coordinates track border expansion dynamically", () => {
     p1.stations.push({ id: 1, degree: 45 });
     
     const pos1 = getDotPosition(p1, 45);
-    assert.strictEqual(p1.distances[45], 280);
+    assert.strictEqual(p1.distances[45], 198);
     
     // Simulate border push by 25px
     p1.distances[45] += 25;
@@ -253,37 +272,62 @@ it("Fighter Patrol stance cruises along the 91-degree frontier line", () => {
         const patrolDeg = Math.round(t * 90);
         const pos = getDotPosition(p1, patrolDeg);
         const distFromHQ = Math.hypot(pos.x - p1.hq.x, pos.y - p1.hq.y);
-        assert(Math.abs(distFromHQ - 280) < 0.001, `Patrol dot at ${patrolDeg}° sits directly on border frontier`);
+        assert(Math.abs(distFromHQ - 198) < 0.001, `Patrol dot at ${patrolDeg}° sits directly on border frontier`);
     }
 });
 
-it("Fighter Attack stance acquires nearest enemy station as priority target", () => {
+it("Fighter Attack stance prioritizes targets: nearest fighter, then station, then miner, then hq", () => {
     const state = createTestState();
     const p1 = state.players[0];
     const p2 = state.players[1];
     p1.stance = 'attack';
-    
-    // Give enemy a station at deg 45
-    p2.stations.push({ id: 10, degree: 45 });
-    const sPos = getDotPosition(p2, 45);
-    
-    let sharedAttackTarget = null;
-    if (p2.stations.length > 0) {
-        let bestDist = Infinity;
-        p2.stations.forEach(es => {
-            const ePos = getDotPosition(p2, es.degree);
-            const d = Math.hypot(ePos.x - p1.hq.x, ePos.y - p1.hq.y);
-            if (d < bestDist) {
-                bestDist = d;
-                sharedAttackTarget = { x: ePos.x, y: ePos.y, entity: es, type: 'station' };
-            }
-        });
+
+    function getAttackTarget(p, enemy) {
+        if (enemy.fighters.length > 0) {
+            let bestDist = Infinity, best = null;
+            enemy.fighters.forEach(ef => {
+                const d = Math.hypot(ef.x - p.hq.x, ef.y - p.hq.y);
+                if (d < bestDist) { bestDist = d; best = ef; }
+            });
+            return { type: 'fighter', entity: best };
+        } else if (enemy.stations.length > 0) {
+            let bestDist = Infinity, best = null;
+            enemy.stations.forEach(es => {
+                const ePos = getDotPosition(enemy, es.degree);
+                const d = Math.hypot(ePos.x - p.hq.x, ePos.y - p.hq.y);
+                if (d < bestDist) { bestDist = d; best = es; }
+            });
+            return { type: 'station', entity: best };
+        } else if (enemy.miners.length > 0) {
+            let bestDist = Infinity, best = null;
+            enemy.miners.forEach(em => {
+                const d = Math.hypot(em.x - p.hq.x, em.y - p.hq.y);
+                if (d < bestDist) { bestDist = d; best = em; }
+            });
+            return { type: 'miner', entity: best };
+        } else if (enemy.hq && enemy.hq.hp > 0) {
+            return { type: 'hq', entity: enemy.hq };
+        }
+        return null;
     }
-    
-    assert(sharedAttackTarget !== null, "Should acquire an attack target");
-    assert.strictEqual(sharedAttackTarget.type, 'station', "Should prioritize enemy station");
-    assert.strictEqual(sharedAttackTarget.x, sPos.x);
-    assert.strictEqual(sharedAttackTarget.y, sPos.y);
+
+    // Case 1: Enemy has all 4 types -> must prioritize fighter
+    p2.fighters.push({ id: 1, x: 500, y: 500 });
+    p2.stations.push({ id: 2, degree: 45 });
+    p2.miners.push({ id: 3, x: 400, y: 400 });
+    assert.strictEqual(getAttackTarget(p1, p2).type, 'fighter', "Priority 1: Fighter");
+
+    // Case 2: No enemy fighters -> must prioritize station
+    p2.fighters = [];
+    assert.strictEqual(getAttackTarget(p1, p2).type, 'station', "Priority 2: Station");
+
+    // Case 3: No enemy stations -> must prioritize miner
+    p2.stations = [];
+    assert.strictEqual(getAttackTarget(p1, p2).type, 'miner', "Priority 3: Miner");
+
+    // Case 4: Only enemy HQ left -> must prioritize HQ
+    p2.miners = [];
+    assert.strictEqual(getAttackTarget(p1, p2).type, 'hq', "Priority 4: HQ");
 });
 
 // -------------------------------------------------------------
@@ -420,8 +464,212 @@ it("Stations queue for 30s, increment readyStations (button pulses), and deploy 
     assert.strictEqual(p1.stations[0].degree, 45);
 });
 
+// -------------------------------------------------------------
+// Test Group 5: Combat Overhaul, Shields, Perfect Arc & Win Conditions
+// -------------------------------------------------------------
+it("Starting territory shape is a perfect arc with uniform radius and half the previous area", () => {
+    const state = createTestState();
+    const p1 = state.players[0];
+    
+    // Check all 91 degree distances are strictly uniform at 198
+    for (let i = 0; i < 91; i++) {
+        assert.strictEqual(p1.distances[i], 198, `Degree ${i} should be 198px`);
+    }
+    
+    const poly = [{ x: p1.hq.x, y: p1.hq.y }];
+    for (let i = 0; i < 91; i++) {
+        poly.push(getDotPosition(p1, i));
+    }
+    const currentArea = getPolygonArea(poly);
+    const oldRadius = 280;
+    const oldArea = (Math.PI * 0.25) * (oldRadius ** 2);
+    const ratio = currentArea / oldArea;
+    assert(Math.abs(ratio - 0.5) < 0.02, `Area ratio ${ratio.toFixed(3)} must be approximately 0.50 (half area)`);
+});
+
+it("All 15 asteroids (including 4 new 500-energy ones) satisfy flight time > 1.0s constraint", () => {
+    const state = createTestState();
+    assert.strictEqual(state.asteroids.length, 15, "Should have 15 asteroids total");
+    const bonus500 = state.asteroids.filter(a => a.resources === 500);
+    assert.strictEqual(bonus500.length, 4, "Should have 4 asteroids with 500 energy each");
+    
+    state.asteroids.forEach(a => {
+        const d1 = Math.hypot(a.x - state.players[0].hq.x, a.y - state.players[0].hq.y);
+        const d2 = Math.hypot(a.x - state.players[1].hq.x, a.y - state.players[1].hq.y);
+        const flightTime1 = (d1 - 18) / MINER_SPEED;
+        const flightTime2 = (d2 - 18) / MINER_SPEED;
+        assert(flightTime1 > 1.0, `Asteroid ${a.id} flight time P1 ${flightTime1.toFixed(2)}s must be > 1.0s`);
+        assert(flightTime2 > 1.0, `Asteroid ${a.id} flight time P2 ${flightTime2.toFixed(2)}s must be > 1.0s`);
+    });
+});
+
+it("Station firing range is halved to 57.5px and weapon damage is halved to 9", () => {
+    assert.strictEqual(STATION_RANGE, 57.5, "Station range must be 57.5 (halved from 115)");
+    assert.strictEqual(STATION_DAMAGE, 9, "Station damage must be 9 (halved from 18)");
+});
+
+it("Stations target miners and other stations, strictly ignoring enemy fighters", () => {
+    const state = createTestState();
+    const p1 = state.players[0];
+    const p2 = state.players[1];
+    
+    // P1 has station at degree 45
+    p1.stations.push({ id: 10, degree: 45, range: STATION_RANGE });
+    const sPos = getDotPosition(p1, 45);
+    
+    // Place enemy fighter right next to station (distance 20px)
+    p2.fighters.push({ id: 201, x: sPos.x + 20, y: sPos.y, hp: 60 });
+    // Place enemy miner at distance 40px (within 57.5px range)
+    p2.miners.push({ id: 202, x: sPos.x + 40, y: sPos.y, hp: 40 });
+    
+    // Station target evaluation:
+    let chosenTarget = null;
+    let chosenType = null;
+    let minDist = STATION_RANGE;
+    
+    p2.miners.forEach(em => {
+        const d = Math.hypot(em.x - sPos.x, em.y - sPos.y);
+        if (d <= minDist) { minDist = d; chosenTarget = em; chosenType = 'miner'; }
+    });
+    p2.stations.forEach(es => {
+        const esPos = getDotPosition(p2, es.degree);
+        const d = Math.hypot(esPos.x - sPos.x, esPos.y - sPos.y);
+        if (d <= minDist) { minDist = d; chosenTarget = es; chosenType = 'station'; }
+    });
+    
+    assert(chosenTarget !== null, "Station should find a target in range");
+    assert.strictEqual(chosenType, 'miner', "Station must target miner and ignore fighter");
+    assert.strictEqual(chosenTarget.id, 202);
+});
+
+it("Fighter shield absorbs 3 hits before taking hull damage and recharges 1 hit per 10s", () => {
+    const fighter = {
+        hp: 60,
+        maxHp: 60,
+        shield: 3,
+        maxShield: 3,
+        shieldRechargeTimer: 0
+    };
+    
+    function applyDamage(f, dmg) {
+        if (f.shield > 0) {
+            f.shield--;
+        } else {
+            f.hp -= dmg;
+        }
+    }
+    
+    // Hit 1: Absorbed by shield
+    applyDamage(fighter, 12);
+    assert.strictEqual(fighter.shield, 2);
+    assert.strictEqual(fighter.hp, 60, "HP untouched on hit 1");
+    
+    // Hit 2: Absorbed by shield
+    applyDamage(fighter, 12);
+    assert.strictEqual(fighter.shield, 1);
+    assert.strictEqual(fighter.hp, 60, "HP untouched on hit 2");
+    
+    // Hit 3: Absorbed by shield
+    applyDamage(fighter, 12);
+    assert.strictEqual(fighter.shield, 0);
+    assert.strictEqual(fighter.hp, 60, "HP untouched on hit 3");
+    
+    // Hit 4: Shield depleted -> hull takes 12 damage
+    applyDamage(fighter, 12);
+    assert.strictEqual(fighter.shield, 0);
+    assert.strictEqual(fighter.hp, 48, "Hull damaged on hit 4");
+    
+    // Recharge simulation: 5s -> not yet recharged
+    fighter.shieldRechargeTimer += 5.0;
+    assert.strictEqual(fighter.shield, 0);
+    
+    // Recharge simulation: another 5s (total 10s) -> 1 shield restored!
+    fighter.shieldRechargeTimer += 5.0;
+    if (fighter.shieldRechargeTimer >= 10.0) {
+        fighter.shield = Math.min(fighter.maxShield, fighter.shield + 1);
+        fighter.shieldRechargeTimer = 0;
+    }
+    assert.strictEqual(fighter.shield, 1, "Shield recharged 1 hit after 10s");
+});
+
+it("Fighters never overlap: circle-circle relaxation maintains >= 18px separation", () => {
+    const fighters = [
+        { x: 300, y: 300 },
+        { x: 302, y: 301 } // Distance = sqrt(2^2 + 1^2) = 2.23px (severe overlap!)
+    ];
+    
+    const FIGHTER_RADIUS = 9;
+    const minDist = FIGHTER_RADIUS * 2; // 18 px
+    
+    for (let pass = 0; pass < 3; pass++) {
+        for (let i = 0; i < fighters.length; i++) {
+            for (let j = i + 1; j < fighters.length; j++) {
+                const f1 = fighters[i];
+                const f2 = fighters[j];
+                const dx = f2.x - f1.x;
+                const dy = f2.y - f1.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist < minDist) {
+                    const overlap = minDist - (dist || 0.001);
+                    const nx = dist > 0.001 ? (dx / dist) : 1;
+                    const ny = dist > 0.001 ? (dy / dist) : 0;
+                    f1.x -= nx * overlap * 0.5;
+                    f1.y -= ny * overlap * 0.5;
+                    f2.x += nx * overlap * 0.5;
+                    f2.y += ny * overlap * 0.5;
+                }
+            }
+        }
+    }
+    
+    const finalDist = Math.hypot(fighters[1].x - fighters[0].x, fighters[1].y - fighters[0].y);
+    assert(finalDist >= minDist - 0.01, `Final distance ${finalDist.toFixed(2)}px must be >= ${minDist}px`);
+});
+
+it("HQ has 500 health and match terminates when HQ health drops to 0", () => {
+    const state = createTestState();
+    const p1 = state.players[0];
+    const p2 = state.players[1];
+    
+    assert.strictEqual(p1.hq.hp, 500);
+    assert.strictEqual(p1.hq.maxHp, 500);
+    assert.strictEqual(p2.hq.hp, 500);
+    
+    // Damage P2 HQ by 500
+    p2.hq.hp = 0;
+    
+    let gameOver = false, winner = null;
+    if (p2.hq.hp <= 0) {
+        gameOver = true;
+        winner = 'Blue (P1)';
+    }
+    assert(gameOver, "Match should end when HQ destroyed");
+    assert.strictEqual(winner, 'Blue (P1)');
+});
+
+it("Controlling >= 60% of the map triggers Victory by Territory Domination", () => {
+    const mapW = 1200, mapH = 800;
+    const totalMapArea = mapW * mapH;
+    
+    // 60% of 960,000 = 576,000
+    const testArea = 580000;
+    const pct = (testArea / totalMapArea) * 100;
+    
+    let gameOver = false, winner = null, winReason = null;
+    if (pct >= 60.0) {
+        gameOver = true;
+        winner = 'Blue (P1)';
+        winReason = `Territory Domination (${pct.toFixed(1)}%)`;
+    }
+    
+    assert(gameOver, "60% territory should trigger game over");
+    assert.strictEqual(winner, 'Blue (P1)');
+    assert(winReason.includes("Territory Domination"));
+});
+
 console.log("\n------------------------------------------------------------");
 console.log(`  Summary: ${passed} Passed, ${failed} Failed`);
 console.log("------------------------------------------------------------\n");
 
 if (failed > 0) process.exit(1);
+

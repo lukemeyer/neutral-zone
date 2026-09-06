@@ -343,6 +343,8 @@
             <div class="p-stat-box blue">
                 <span style="color: var(--accent-blue); font-weight: bold;">🔵 Blue (P1)</span>
                 <div class="stat-item" title="Energy"><span class="energy">⚡</span> <span id="p1-energy" class="val energy">150</span></div>
+                <div class="stat-item" title="HQ Health"><span style="color:#3fb950">❤️</span> <span id="p1-hq-hp" class="val" style="color:#3fb950">500</span></div>
+                <div class="stat-item" title="Territory Control (60% to Win)"><span style="color:#58a6ff">🌐</span> <span id="p1-territory" class="val" style="color:#58a6ff">0%</span></div>
                 <div class="stat-item" title="Stations"><span class="station">🛰️</span> <span id="p1-stations" class="val station">0</span></div>
                 <div class="stat-item" title="Miners"><span class="miner">⛏️</span> <span id="p1-miners" class="val miner">2</span></div>
                 <div class="stat-item" title="Fighters"><span class="fighter">⚔️</span> <span id="p1-fighters" class="val fighter">3</span></div>
@@ -352,6 +354,8 @@
             <div class="p-stat-box red">
                 <span style="color: var(--accent-red); font-weight: bold;">🔴 Red (P2)</span>
                 <div class="stat-item" title="Energy"><span class="energy">⚡</span> <span id="p2-energy" class="val energy">150</span></div>
+                <div class="stat-item" title="HQ Health"><span style="color:#ff7b72">❤️</span> <span id="p2-hq-hp" class="val" style="color:#ff7b72">500</span></div>
+                <div class="stat-item" title="Territory Control (60% to Win)"><span style="color:#ff7b72">🌐</span> <span id="p2-territory" class="val" style="color:#ff7b72">0%</span></div>
                 <div class="stat-item" title="Stations"><span class="station">🛰️</span> <span id="p2-stations" class="val station">0</span></div>
                 <div class="stat-item" title="Miners"><span class="miner">⛏️</span> <span id="p2-miners" class="val miner">2</span></div>
                 <div class="stat-item" title="Fighters"><span class="fighter">⚔️</span> <span id="p2-fighters" class="val fighter">3</span></div>
@@ -381,6 +385,15 @@
 
             <div id="hint-banner">
                 <span>👉 <b>Construct Station (30s)</b> in Command Deck. When complete, button pulses—click any ray to deploy!</span>
+            </div>
+
+            <!-- Game Over Modal Overlay -->
+            <div id="game-over-modal" style="display:none; position:absolute; inset:0; background:rgba(13,17,23,0.85); backdrop-filter:blur(8px); z-index:100; align-items:center; justify-content:center;">
+                <div style="background:#161b22; border:1px solid #30363d; border-radius:12px; padding:32px 40px; text-align:center; box-shadow:0 12px 40px rgba(0,0,0,0.8); max-width:420px;">
+                    <h2 id="modal-title" style="font-size:26px; margin-bottom:8px; color:#ffffff;">Victory!</h2>
+                    <p id="modal-subtitle" style="color:#8b949e; font-size:14px; margin-bottom:24px;">Blue conquered 60% of the territory.</p>
+                    <button id="modal-restart" class="btn-deck" style="padding:10px 24px; font-size:14px; font-weight:bold; background:#238636; border-color:#2ea043; color:#ffffff; cursor:pointer;">Play Again</button>
+                </div>
             </div>
 
             <!-- Tactical Command Deck for Blue Player -->
@@ -445,7 +458,7 @@
         // Fixed mathematical settings identical to prototype_border.html
         const CONFIG = {
             numDegrees: 91,
-            initialRadius: 280,
+            initialRadius: 198, // Exactly half area of 280 (280 / sqrt(2) = 198)
             hqOffset: 80,
             tapDistance: 25,
             initialSpreadDots: 3,
@@ -465,6 +478,9 @@
             hoveredDegree: -1,
             activePlayerId: 0,
             nextEntityId: 100,
+            gameOver: false,
+            winner: null,
+            winReason: '',
 
             players: [
                 {
@@ -473,7 +489,7 @@
                     color: '#58a6ff',
                     accentColor: '#1f6feb',
                     dotColor: '#79c0ff',
-                    hq: { x: 80, y: 0, radius: 18 },
+                    hq: { x: 80, y: 0, radius: 18, hp: 500, maxHp: 500 },
                     corner: { x: 0, y: 0 },
                     energy: 150,
                     stance: 'defend',
@@ -494,7 +510,7 @@
                     color: '#f85149',
                     accentColor: '#da3633',
                     dotColor: '#ff7b72',
-                    hq: { x: 0, y: 80, radius: 18 },
+                    hq: { x: 0, y: 80, radius: 18, hp: 500, maxHp: 500 },
                     corner: { x: 0, y: 0 },
                     energy: 150,
                     stance: 'defend',
@@ -580,6 +596,16 @@
                 poly.push(getDotPosition(playerId, i));
             }
             return poly;
+        }
+
+        function getPolygonArea(poly) {
+            let area = 0;
+            for (let i = 0; i < poly.length; i++) {
+                const j = (i + 1) % poly.length;
+                area += poly[i].x * poly[j].y;
+                area -= poly[j].x * poly[i].y;
+            }
+            return Math.abs(area) * 0.5;
         }
 
         function isPointInPolygon(pt, poly) {
@@ -774,7 +800,7 @@
                 degree: finalDeg,
                 hp: 150,
                 maxHp: 150,
-                range: 115,
+                range: 57.5, // Range cut in half (was 115)
                 cooldown: 0
             };
             p.stations.push(station);
@@ -794,17 +820,23 @@
             const h = canvas.clientHeight;
             gameState.asteroids = [];
 
-            // Miner speed = 100 px/s, HQ radius = 18 px.
-            // Minimum distance to HQ center = 100 px + 18 px = 118 px.
-            // We enforce >= 145 px (at least 1.45 seconds flight time) for complete safety.
-            const MIN_HQ_FLIGHT_DIST = 145;
+            // Miner speed = 50 px/s, HQ radius = 18 px.
+            // Minimum distance to HQ center = 50 px + 18 px = 68 px.
+            // We enforce >= 120 px (at least 2.0 seconds flight time at 50px/s) for complete safety (> 1.0s requirement).
+            const MIN_HQ_FLIGHT_DIST = 120;
 
             const rawLayout = [
-                // Near-Base Tiers (R ~ 160-200px: inside starting territory, but > 1.5s flight time)
+                // Near-Base Tiers (R ~ 160-200px: inside starting territory, but > 2.5s flight time)
                 { relX: 0.12, relY: 0.76, resources: 800, tier: 1 },
                 { relX: 0.22, relY: 0.88, resources: 800, tier: 1 },
                 { relX: 0.88, relY: 0.24, resources: 800, tier: 1 },
                 { relX: 0.78, relY: 0.12, resources: 800, tier: 1 },
+
+                // 4 Additional Strategic Asteroids (500 energy each)
+                { relX: 0.16, relY: 0.68, resources: 500, tier: 1 },
+                { relX: 0.84, relY: 0.32, resources: 500, tier: 1 },
+                { relX: 0.28, relY: 0.88, resources: 500, tier: 1 },
+                { relX: 0.72, relY: 0.12, resources: 500, tier: 1 },
 
                 // Mid-Range Expansion Tiers (R ~ 320-380px: requires 1-2 stations to envelope)
                 { relX: 0.20, relY: 0.58, resources: 1200, tier: 2 },
@@ -853,6 +885,7 @@
                 p.stance = 'defend';
                 p.buildQueues = { station: [], miner: [], fighter: [] };
                 p.readyStations = 0;
+                p.hq.hp = p.hq.maxHp = 500;
 
                 // Initial 2 Miners spawned at HQ
                 for (let i = 0; i < 2; i++) {
@@ -870,7 +903,7 @@
                     });
                 }
 
-                // Initial 3 Fighters escorting HQ
+                // Initial 3 Fighters escorting HQ (3 shield hits, recharges 1 per 10s, dynamic facing)
                 for (let i = 0; i < 3; i++) {
                     const ang = idx === 0 ? -Math.PI * 0.25 : Math.PI * 0.75;
                     const spread = (i - 1) * 0.35;
@@ -880,6 +913,10 @@
                         y: p.hq.y + 45 * Math.sin(ang + spread),
                         hp: 60,
                         maxHp: 60,
+                        shield: 3,
+                        maxShield: 3,
+                        shieldRechargeTimer: 0,
+                        angle: ang,
                         speed: FIGHTER_SPEED,
                         range: 65,
                         cooldown: 0,
@@ -888,8 +925,16 @@
                 }
 
                 // Starting 3 Stations established on frontier (degrees 15°, 45°, 75°)
+                // Note: Placed directly on the circular arc without pushBorderAtDegree so starting border is a PERFECT smooth arc
                 [15, 45, 75].forEach(deg => {
-                    deployStationAtDegree(idx, deg, true);
+                    p.stations.push({
+                        id: gameState.nextEntityId++,
+                        degree: deg,
+                        hp: 150,
+                        maxHp: 150,
+                        range: 57.5,
+                        cooldown: 0
+                    });
                 });
             });
         }
@@ -951,12 +996,17 @@
 
         function deployFighter(playerId) {
             const p = gameState.players[playerId];
+            const defaultAng = playerId === 0 ? -Math.PI * 0.25 : Math.PI * 0.75;
             p.fighters.push({
                 id: gameState.nextEntityId++,
                 x: p.hq.x,
                 y: p.hq.y,
                 hp: 60,
                 maxHp: 60,
+                shield: 3,
+                maxShield: 3,
+                shieldRechargeTimer: 0,
+                angle: defaultAng,
                 speed: FIGHTER_SPEED,
                 range: 65,
                 cooldown: 0,
@@ -1151,36 +1201,55 @@
             }
 
             // 3. Station Point-Defense Turrets
+            // "station firing range should be cut in half" (57.5 px)
+            // "station weapon damage should be half" (9)
+            // "stations should target miners and other stations"
             gameState.players.forEach(p => {
                 const enemy = gameState.players[1 - p.id];
                 p.stations.forEach(s => {
                     s.cooldown = Math.max(0, s.cooldown - dt);
                     const sPos = getDotPosition(p.id, s.degree);
 
-                    if (s.cooldown <= 0 && enemy.fighters.length > 0) {
-                        // Target nearest enemy fighter in range
+                    if (s.cooldown <= 0) {
                         let target = null;
+                        let targetType = null;
                         let minDist = s.range;
-                        enemy.fighters.forEach(ef => {
-                            const d = Math.hypot(ef.x - sPos.x, ef.y - sPos.y);
+
+                        // Target enemy miners in range
+                        enemy.miners.forEach(em => {
+                            const d = Math.hypot(em.x - sPos.x, em.y - sPos.y);
                             if (d <= minDist) {
                                 minDist = d;
-                                target = ef;
+                                target = em;
+                                targetType = 'miner';
+                            }
+                        });
+
+                        // Target enemy stations in range
+                        enemy.stations.forEach(es => {
+                            const esPos = getDotPosition(enemy.id, es.degree);
+                            const d = Math.hypot(esPos.x - sPos.x, esPos.y - sPos.y);
+                            if (d <= minDist) {
+                                minDist = d;
+                                target = es;
+                                targetType = 'station';
                             }
                         });
 
                         if (target) {
                             s.cooldown = 1.2;
+                            const tX = (targetType === 'station') ? getDotPosition(enemy.id, target.degree).x : target.x;
+                            const tY = (targetType === 'station') ? getDotPosition(enemy.id, target.degree).y : target.y;
                             gameState.projectiles.push({
                                 x: sPos.x,
                                 y: sPos.y,
-                                targetX: target.x,
-                                targetY: target.y,
+                                targetX: tX,
+                                targetY: tY,
                                 speed: 400,
-                                damage: 18,
+                                damage: 9, // Halved damage (was 18)
                                 color: p.color,
                                 target: target,
-                                targetType: 'fighter'
+                                targetType: targetType
                             });
                         }
                     }
@@ -1188,15 +1257,27 @@
             });
 
             // 4. Fighter Stance AI & Movement (3 Canonical Modes)
+            // Fighters have shields (absorb 3 hits, recharge 1 per 10s), always face velocity/firing direction
             gameState.players.forEach(p => {
                 const enemy = gameState.players[1 - p.id];
                 const myPoly = (p.id === 0) ? p1Poly : p2Poly;
 
-                // When in Attack mode, choose shared high-value target
+                // When in Attack mode, prioritize: nearest fighter -> station -> miner -> hq
                 let sharedAttackTarget = null;
                 if (p.stance === 'attack') {
-                    if (enemy.stations.length > 0) {
-                        // Priority 1: Nearest enemy station
+                    // Priority 1: Nearest enemy fighter
+                    if (enemy.fighters.length > 0) {
+                        let bestDist = Infinity;
+                        enemy.fighters.forEach(ef => {
+                            const d = Math.hypot(ef.x - p.hq.x, ef.y - p.hq.y);
+                            if (d < bestDist) {
+                                bestDist = d;
+                                sharedAttackTarget = { x: ef.x, y: ef.y, entity: ef, type: 'fighter' };
+                            }
+                        });
+                    }
+                    // Priority 2: Nearest enemy station
+                    else if (enemy.stations.length > 0) {
                         let bestDist = Infinity;
                         enemy.stations.forEach(es => {
                             const ePos = getDotPosition(enemy.id, es.degree);
@@ -1206,17 +1287,39 @@
                                 sharedAttackTarget = { x: ePos.x, y: ePos.y, entity: es, type: 'station' };
                             }
                         });
-                    } else if (enemy.fighters.length > 0) {
-                        sharedAttackTarget = { x: enemy.fighters[0].x, y: enemy.fighters[0].y, entity: enemy.fighters[0], type: 'fighter' };
-                    } else if (enemy.miners.length > 0) {
-                        sharedAttackTarget = { x: enemy.miners[0].x, y: enemy.miners[0].y, entity: enemy.miners[0], type: 'miner' };
-                    } else {
+                    }
+                    // Priority 3: Nearest enemy miner
+                    else if (enemy.miners.length > 0) {
+                        let bestDist = Infinity;
+                        enemy.miners.forEach(em => {
+                            const d = Math.hypot(em.x - p.hq.x, em.y - p.hq.y);
+                            if (d < bestDist) {
+                                bestDist = d;
+                                sharedAttackTarget = { x: em.x, y: em.y, entity: em, type: 'miner' };
+                            }
+                        });
+                    }
+                    // Priority 4: Enemy HQ
+                    else if (enemy.hq && enemy.hq.hp > 0) {
                         sharedAttackTarget = { x: enemy.hq.x, y: enemy.hq.y, entity: enemy.hq, type: 'hq' };
                     }
                 }
 
                 p.fighters.forEach((f, fIdx) => {
                     f.cooldown = Math.max(0, f.cooldown - dt);
+
+                    // Shield Recharge (1 hit per 10s)
+                    if (f.shield < f.maxShield) {
+                        f.shieldRechargeTimer = (f.shieldRechargeTimer || 0) + dt;
+                        if (f.shieldRechargeTimer >= 10.0) {
+                            f.shield = Math.min(f.maxShield, f.shield + 1);
+                            f.shieldRechargeTimer = 0;
+                            spawnRingParticles(f, '#58a6ff', 8);
+                        }
+                    } else {
+                        f.shieldRechargeTimer = 0;
+                    }
+
                     let targetX = p.hq.x;
                     let targetY = p.hq.y;
                     let targetEntity = null;
@@ -1267,7 +1370,7 @@
                         }
                     }
 
-                    // Movement
+                    // Movement & Direction Facing
                     const dx = targetX - f.x;
                     const dy = targetY - f.y;
                     const d = Math.hypot(dx, dy);
@@ -1276,15 +1379,22 @@
                     if (d > stopRange) {
                         f.x += (dx / d) * f.speed * dt;
                         f.y += (dy / d) * f.speed * dt;
+                        f.angle = Math.atan2(dy, dx);
                     }
 
-                    // Combat Firing
+                    // Combat Firing (Fighter -> Station -> Miner -> HQ)
                     if (f.cooldown <= 0) {
-                        // Target enemy fighters or stations within range
-                        let shootTarget = enemy.fighters.find(ef => Math.hypot(ef.x - f.x, ef.y - f.y) <= f.range);
-                        let shootType = 'fighter';
+                        let shootTarget = null;
+                        let shootType = null;
 
-                        if (!shootTarget && p.stance === 'attack') {
+                        // 1. Nearest fighter in range
+                        const nearFighter = enemy.fighters.find(ef => Math.hypot(ef.x - f.x, ef.y - f.y) <= f.range);
+                        if (nearFighter) {
+                            shootTarget = nearFighter;
+                            shootType = 'fighter';
+                        }
+                        // 2. Nearest station in range
+                        if (!shootTarget) {
                             const nearStation = enemy.stations.find(es => {
                                 const sPos = getDotPosition(enemy.id, es.degree);
                                 return Math.hypot(sPos.x - f.x, sPos.y - f.y) <= f.range;
@@ -1294,16 +1404,33 @@
                                 shootType = 'station';
                             }
                         }
-
+                        // 3. Nearest miner in range
                         if (!shootTarget) {
-                            shootTarget = enemy.miners.find(em => Math.hypot(em.x - f.x, em.y - f.y) <= f.range);
-                            shootType = 'miner';
+                            const nearMiner = enemy.miners.find(em => Math.hypot(em.x - f.x, em.y - f.y) <= f.range);
+                            if (nearMiner) {
+                                shootTarget = nearMiner;
+                                shootType = 'miner';
+                            }
+                        }
+                        // 4. Enemy HQ in range
+                        if (!shootTarget && enemy.hq && enemy.hq.hp > 0) {
+                            if (Math.hypot(enemy.hq.x - f.x, enemy.hq.y - f.y) <= f.range + enemy.hq.radius) {
+                                shootTarget = enemy.hq;
+                                shootType = 'hq';
+                            }
                         }
 
                         if (shootTarget) {
                             f.cooldown = 0.8;
-                            const tX = (shootType === 'station') ? getDotPosition(enemy.id, shootTarget.degree).x : shootTarget.x;
-                            const tY = (shootType === 'station') ? getDotPosition(enemy.id, shootTarget.degree).y : shootTarget.y;
+                            let tX = shootTarget.x;
+                            let tY = shootTarget.y;
+                            if (shootType === 'station') {
+                                const sPos = getDotPosition(enemy.id, shootTarget.degree);
+                                tX = sPos.x;
+                                tY = sPos.y;
+                            }
+                            f.angle = Math.atan2(tY - f.y, tX - f.x); // Face target while firing
+
                             gameState.projectiles.push({
                                 x: f.x,
                                 y: f.y,
@@ -1320,6 +1447,32 @@
                 });
             });
 
+            // Fighter Anti-Overlap: Positional Relaxation ensures fighters never overlap
+            const FIGHTER_COL_RADIUS = 9;
+            const allFighters = [];
+            gameState.players.forEach(pl => allFighters.push(...pl.fighters));
+            for (let pass = 0; pass < 2; pass++) {
+                for (let i = 0; i < allFighters.length; i++) {
+                    for (let j = i + 1; j < allFighters.length; j++) {
+                        const f1 = allFighters[i];
+                        const f2 = allFighters[j];
+                        const dx = f2.x - f1.x;
+                        const dy = f2.y - f1.y;
+                        const dist = Math.hypot(dx, dy);
+                        const minDist = FIGHTER_COL_RADIUS * 2; // 18 px
+                        if (dist < minDist) {
+                            const overlap = minDist - (dist || 0.001);
+                            const nx = dist > 0.001 ? (dx / dist) : 1;
+                            const ny = dist > 0.001 ? (dy / dist) : 0;
+                            f1.x -= nx * overlap * 0.5;
+                            f1.y -= ny * overlap * 0.5;
+                            f2.x += nx * overlap * 0.5;
+                            f2.y += ny * overlap * 0.5;
+                        }
+                    }
+                }
+            }
+
             // 5. Projectiles Update
             for (let i = gameState.projectiles.length - 1; i >= 0; i--) {
                 const p = gameState.projectiles[i];
@@ -1327,11 +1480,13 @@
                 let ty = p.targetY;
                 if (p.target) {
                     if (p.targetType === 'station') {
-                        // find station owner
                         const ownerId = (gameState.players[0].stations.includes(p.target)) ? 0 : 1;
                         const sPos = getDotPosition(ownerId, p.target.degree);
                         tx = sPos.x;
                         ty = sPos.y;
+                    } else if (p.targetType === 'hq') {
+                        tx = p.target.x;
+                        ty = p.target.y;
                     } else {
                         tx = p.target.x;
                         ty = p.target.y;
@@ -1345,9 +1500,24 @@
 
                 if (dist <= step || dist < 12) {
                     // Hit target!
-                    if (p.target && p.target.hp > 0) {
-                        p.target.hp -= p.damage;
-                        spawnRingParticles({ x: tx, y: ty }, p.color, 4);
+                    if (p.target) {
+                        if (p.targetType === 'fighter') {
+                            if (p.target.shield > 0) {
+                                p.target.shield--;
+                                spawnRingParticles({ x: tx, y: ty }, '#58a6ff', 8);
+                            } else if (p.target.hp > 0) {
+                                p.target.hp -= p.damage;
+                                spawnRingParticles({ x: tx, y: ty }, p.color, 4);
+                            }
+                        } else if (p.targetType === 'hq') {
+                            if (p.target.hp > 0) {
+                                p.target.hp = Math.max(0, p.target.hp - p.damage);
+                                spawnRingParticles({ x: tx, y: ty }, '#f85149', 8);
+                            }
+                        } else if (p.target.hp > 0) {
+                            p.target.hp -= p.damage;
+                            spawnRingParticles({ x: tx, y: ty }, p.color, 4);
+                        }
                     }
                     gameState.projectiles.splice(i, 1);
                 } else {
@@ -1455,7 +1625,67 @@
                 }
             }
 
+            // 9. Win Conditions (HQ Destruction & 60% Territory Domination)
+            const totalMapArea = canvas.clientWidth * canvas.clientHeight;
+            const p1Area = getPolygonArea(p1Poly);
+            const p2Area = getPolygonArea(p2Poly);
+            gameState.p1TerritoryPct = totalMapArea > 0 ? (p1Area / totalMapArea) * 100 : 0;
+            gameState.p2TerritoryPct = totalMapArea > 0 ? (p2Area / totalMapArea) * 100 : 0;
+
+            if (!gameState.gameOver) {
+                if (p1.hq.hp <= 0) {
+                    gameState.gameOver = true;
+                    gameState.winner = 'Red (P2)';
+                    gameState.winReason = 'Blue HQ was destroyed in combat!';
+                    showGameOverModal(gameState.winner, gameState.winReason);
+                } else if (p2.hq.hp <= 0) {
+                    gameState.gameOver = true;
+                    gameState.winner = 'Blue (P1)';
+                    gameState.winReason = 'Red HQ was destroyed in combat!';
+                    showGameOverModal(gameState.winner, gameState.winReason);
+                } else if (gameState.p1TerritoryPct >= 60.0) {
+                    gameState.gameOver = true;
+                    gameState.winner = 'Blue (P1)';
+                    gameState.winReason = `Territory Domination achieved (${gameState.p1TerritoryPct.toFixed(1)}% of map controlled)!`;
+                    showGameOverModal(gameState.winner, gameState.winReason);
+                } else if (gameState.p2TerritoryPct >= 60.0) {
+                    gameState.gameOver = true;
+                    gameState.winner = 'Red (P2)';
+                    gameState.winReason = `Territory Domination achieved (${gameState.p2TerritoryPct.toFixed(1)}% of map controlled)!`;
+                    showGameOverModal(gameState.winner, gameState.winReason);
+                }
+            }
+
             // Update UI Ribbon
+            updateUI();
+        }
+
+        function showGameOverModal(winner, reason) {
+            const modal = document.getElementById('game-over-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+                const title = document.getElementById('modal-title');
+                if (title) title.innerText = `${winner} Victory!`;
+                const subtitle = document.getElementById('modal-subtitle');
+                if (subtitle) subtitle.innerText = reason;
+                const restartBtn = document.getElementById('modal-restart');
+                if (restartBtn) {
+                    restartBtn.onclick = () => {
+                        resetMatch();
+                    };
+                }
+            }
+        }
+
+        function resetMatch() {
+            gameState.gameOver = false;
+            gameState.winner = null;
+            gameState.winReason = '';
+            const modal = document.getElementById('game-over-modal');
+            if (modal) modal.style.display = 'none';
+            resetDistances();
+            initAsteroids();
+            initUnits();
             updateUI();
         }
 
@@ -1472,6 +1702,16 @@
             document.getElementById('p2-stations').innerText = p2.stations.length;
             document.getElementById('p2-miners').innerText = p2.miners.length;
             document.getElementById('p2-fighters').innerText = p2.fighters.length;
+
+            const p1Hq = document.getElementById('p1-hq-hp');
+            if (p1Hq) p1Hq.innerText = `${Math.max(0, Math.round(p1.hq.hp))}`;
+            const p2Hq = document.getElementById('p2-hq-hp');
+            if (p2Hq) p2Hq.innerText = `${Math.max(0, Math.round(p2.hq.hp))}`;
+
+            const p1Terr = document.getElementById('p1-territory');
+            if (p1Terr) p1Terr.innerText = `${(gameState.p1TerritoryPct || 0).toFixed(0)}%`;
+            const p2Terr = document.getElementById('p2-territory');
+            if (p2Terr) p2Terr.innerText = `${(gameState.p2TerritoryPct || 0).toFixed(0)}%`;
 
             document.getElementById('insp-stance').innerText = p1.stance.toUpperCase();
 
@@ -1707,12 +1947,20 @@
                 ctx.fillStyle = '#ffffff';
                 ctx.fill();
 
+                // HQ Health Bar
+                const hqBarW = 38;
+                const hqBarY = isP1 ? hy - 26 : hy - 26;
+                ctx.fillStyle = 'rgba(0,0,0,0.75)';
+                ctx.fillRect(hx - hqBarW/2, hqBarY, hqBarW, 4);
+                ctx.fillStyle = (p.hq.hp / p.hq.maxHp > 0.3) ? (isP1 ? '#58a6ff' : '#ff7b72') : '#f85149';
+                ctx.fillRect(hx - hqBarW/2, hqBarY, hqBarW * Math.max(0, p.hq.hp / p.hq.maxHp), 4);
+
                 ctx.fillStyle = '#e6edf3';
                 ctx.font = 'bold 12px ui-monospace, monospace';
                 ctx.shadowBlur = 0;
                 const hqLabelX = isP1 ? hx + 24 : hx - 120;
                 const hqLabelY = isP1 ? hy + 4 : hy + 4;
-                ctx.fillText(isP1 ? 'HQ 1 (Blue)' : 'HQ 2 (Red)', hqLabelX, hqLabelY);
+                ctx.fillText(isP1 ? `HQ 1 (${Math.round(p.hq.hp)} HP)` : `HQ 2 (${Math.round(p.hq.hp)} HP)`, hqLabelX, hqLabelY);
                 ctx.restore();
             });
 
@@ -1766,13 +2014,14 @@
                 });
             });
 
-            // 5. Render Fighters
+            // 5. Render Fighters (Dynamic Orientation Facing Velocity/Firing, Shield Bubble & Pips)
             gameState.players.forEach((p, pIdx) => {
                 p.fighters.forEach(f => {
                     ctx.save();
                     ctx.translate(f.x, f.y);
+                    ctx.rotate(f.angle || 0);
 
-                    // Draw sleek delta fighter icon
+                    // Draw sleek delta fighter icon oriented in flight/firing direction
                     ctx.beginPath();
                     ctx.moveTo(7, 0);
                     ctx.lineTo(-5, -5);
@@ -1788,12 +2037,31 @@
                     ctx.strokeStyle = '#ffffff';
                     ctx.stroke();
 
-                    // Health bar
+                    // Shield Bubble Glow
+                    if (f.shield > 0) {
+                        ctx.beginPath();
+                        ctx.arc(0, 0, 10.5, 0, Math.PI * 2);
+                        ctx.strokeStyle = `rgba(88, 166, 255, ${0.35 + 0.2 * f.shield})`;
+                        ctx.lineWidth = 1.5;
+                        ctx.shadowColor = '#58a6ff';
+                        ctx.shadowBlur = 6;
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+
+                    // Health and Shield HUD (horizontal unrotated)
+                    ctx.save();
+                    ctx.translate(f.x, f.y);
                     if (f.hp < f.maxHp) {
                         ctx.fillStyle = 'rgba(0,0,0,0.6)';
                         ctx.fillRect(-8, -9, 16, 2);
                         ctx.fillStyle = '#3fb950';
                         ctx.fillRect(-8, -9, 16 * (f.hp / f.maxHp), 2);
+                    }
+                    // Shield Pips (3 Hits Max)
+                    for (let s = 0; s < f.maxShield; s++) {
+                        ctx.fillStyle = (s < f.shield) ? '#58a6ff' : 'rgba(255,255,255,0.2)';
+                        ctx.fillRect(-8 + s * 6, -13, 4, 2);
                     }
                     ctx.restore();
                 });
@@ -2034,11 +2302,7 @@
         });
 
         // Restart Match
-        document.getElementById('btn-restart').addEventListener('click', () => {
-            resetDistances();
-            initAsteroids();
-            initUnits();
-        });
+        document.getElementById('btn-restart').addEventListener('click', resetMatch);
 
         // --- Canvas Resizing ---
         function resizeCanvas() {
