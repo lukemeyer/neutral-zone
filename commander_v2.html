@@ -460,7 +460,7 @@
             numDegrees: 91,
             initialRadius: 198, // Exactly half area of 280 (280 / sqrt(2) = 198)
             hqOffset: 80,
-            tapDistance: 25,
+            tapDistance: 50, // Doubled tap distance (was 25 px)
             initialSpreadDots: 3,
             spreadMode: 'rounded',
             neighborStrength: 1.00,
@@ -820,17 +820,42 @@
             const h = canvas.clientHeight;
             gameState.asteroids = [];
 
-            // Miner speed = 50 px/s, HQ radius = 18 px.
-            // Minimum distance to HQ center = 50 px + 18 px = 68 px.
-            // We enforce >= 120 px (at least 2.0 seconds flight time at 50px/s) for complete safety (> 1.0s requirement).
-            const MIN_HQ_FLIGHT_DIST = 120;
+            const hq0 = gameState.players[0].hq;
+            const hq1 = gameState.players[1].hq;
+            // Dedicated in-territory asteroid distance: 135 px.
+            // Satisfies 135 < 198 (CONFIG.initialRadius) so it is ALWAYS inside starting territory,
+            // and (135 - 18) / 50 = 2.34s > 1.0s flight time.
+            const START_ASTEROID_DIST = 135;
 
-            const rawLayout = [
-                // Near-Base Tiers (R ~ 160-200px: inside starting territory, but > 2.5s flight time)
-                { relX: 0.12, relY: 0.76, resources: 800, tier: 1 },
-                { relX: 0.22, relY: 0.88, resources: 800, tier: 1 },
-                { relX: 0.88, relY: 0.24, resources: 800, tier: 1 },
-                { relX: 0.78, relY: 0.12, resources: 800, tier: 1 },
+            // 1. Dedicated Starting Asteroid in Player 1 Territory (800 energy, Tier 1)
+            gameState.asteroids.push({
+                id: 1,
+                x: hq0.x + START_ASTEROID_DIST * Math.cos(-Math.PI * 0.25),
+                y: hq0.y + START_ASTEROID_DIST * Math.sin(-Math.PI * 0.25),
+                resources: 800,
+                maxResources: 800,
+                tier: 1,
+                radius: 12,
+                miners: 0
+            });
+
+            // 2. Dedicated Starting Asteroid in Player 2 Territory (800 energy, Tier 1)
+            gameState.asteroids.push({
+                id: 2,
+                x: hq1.x + START_ASTEROID_DIST * Math.cos(Math.PI * 0.75),
+                y: hq1.y + START_ASTEROID_DIST * Math.sin(Math.PI * 0.75),
+                resources: 800,
+                maxResources: 800,
+                tier: 1,
+                radius: 12,
+                miners: 0
+            });
+
+            // 3. Thirteen Neutral Expansion Asteroids (Strictly outside both starting territories: d >= initialRadius + 25)
+            const neutralSpecs = [
+                // Near-Expansion Tiers (outside starting territory: ~225px from HQ)
+                { relX: 0.25, relY: 0.85, resources: 800, tier: 1 },
+                { relX: 0.75, relY: 0.15, resources: 800, tier: 1 },
 
                 // 4 Additional Strategic Asteroids (500 energy each)
                 { relX: 0.16, relY: 0.68, resources: 500, tier: 1 },
@@ -838,13 +863,13 @@
                 { relX: 0.28, relY: 0.88, resources: 500, tier: 1 },
                 { relX: 0.72, relY: 0.12, resources: 500, tier: 1 },
 
-                // Mid-Range Expansion Tiers (R ~ 320-380px: requires 1-2 stations to envelope)
+                // Mid-Range Expansion Tiers (R ~ 320-380px)
                 { relX: 0.20, relY: 0.58, resources: 1200, tier: 2 },
                 { relX: 0.38, relY: 0.80, resources: 1200, tier: 2 },
                 { relX: 0.80, relY: 0.42, resources: 1200, tier: 2 },
                 { relX: 0.62, relY: 0.20, resources: 1200, tier: 2 },
 
-                // Contested Flank Tiers (R ~ 480-550px: aggressive forward positions)
+                // Contested Flank Tiers (R ~ 480-550px)
                 { relX: 0.34, relY: 0.46, resources: 1600, tier: 3 },
                 { relX: 0.66, relY: 0.54, resources: 1600, tier: 3 },
 
@@ -852,26 +877,37 @@
                 { relX: 0.50, relY: 0.50, resources: 2500, tier: 4 }
             ];
 
-            rawLayout.forEach((spec, idx) => {
-                const ax = spec.relX * w;
-                const ay = spec.relY * h;
+            const safeBuffer = CONFIG.initialRadius + 25; // 223 px
+            neutralSpecs.forEach((spec, idx) => {
+                let ax = spec.relX * w;
+                let ay = spec.relY * h;
 
-                // Check distance against both HQs
-                const d1 = Math.hypot(ax - gameState.players[0].hq.x, ay - gameState.players[0].hq.y);
-                const d2 = Math.hypot(ax - gameState.players[1].hq.x, ay - gameState.players[1].hq.y);
-
-                if (d1 >= MIN_HQ_FLIGHT_DIST && d2 >= MIN_HQ_FLIGHT_DIST) {
-                    gameState.asteroids.push({
-                        id: idx + 1,
-                        x: ax,
-                        y: ay,
-                        resources: spec.resources,
-                        maxResources: spec.resources,
-                        tier: spec.tier,
-                        radius: spec.tier === 4 ? 14 : 10 + spec.tier * 2,
-                        miners: 0
-                    });
+                // Ensure strictly outside P1 starting territory
+                const d0 = Math.hypot(ax - hq0.x, ay - hq0.y);
+                if (d0 < safeBuffer) {
+                    const ang = Math.atan2(ay - hq0.y, ax - hq0.x);
+                    ax = hq0.x + safeBuffer * Math.cos(ang);
+                    ay = hq0.y + safeBuffer * Math.sin(ang);
                 }
+
+                // Ensure strictly outside P2 starting territory
+                const d1 = Math.hypot(ax - hq1.x, ay - hq1.y);
+                if (d1 < safeBuffer) {
+                    const ang = Math.atan2(ay - hq1.y, ax - hq1.x);
+                    ax = hq1.x + safeBuffer * Math.cos(ang);
+                    ay = hq1.y + safeBuffer * Math.sin(ang);
+                }
+
+                gameState.asteroids.push({
+                    id: idx + 3,
+                    x: ax,
+                    y: ay,
+                    resources: spec.resources,
+                    maxResources: spec.resources,
+                    tier: spec.tier,
+                    radius: spec.tier === 4 ? 14 : 10 + spec.tier * 2,
+                    miners: 0
+                });
             });
         }
 
@@ -1214,6 +1250,15 @@
                         let target = null;
                         let targetType = null;
                         let minDist = s.range;
+                        // Target enemy fighters in range ("stations should still target fighters")
+                        enemy.fighters.forEach(ef => {
+                            const d = Math.hypot(ef.x - sPos.x, ef.y - sPos.y);
+                            if (d <= minDist) {
+                                minDist = d;
+                                target = ef;
+                                targetType = 'fighter';
+                            }
+                        });
 
                         // Target enemy miners in range
                         enemy.miners.forEach(em => {
@@ -1566,33 +1611,56 @@
             }
 
             // 8. CPU Opponent (Red AI)
+            // "make sure the CPU knows to prioritize having enough energy to expand and capture asteroids"
             if (gameState.cpuEnabled) {
                 gameState.aiActionCooldown -= dt;
                 if (gameState.aiActionCooldown <= 0) {
-                    gameState.aiActionCooldown = 2.0; // Evaluate every 2s
+                    gameState.aiActionCooldown = 1.5; // Evaluate every 1.5s
                     const red = gameState.players[1];
+                    const blue = gameState.players[0];
 
-                    // A. Produce miners if below 4 and energy permits
-                    if (red.miners.length + red.buildQueues.miner.length < 4 && red.energy >= COSTS.miner && red.buildQueues.miner.length === 0) {
+                    const capturedAsteroids = gameState.asteroids.filter(a => isPointInPolygon(a, p2Poly) && a.resources > 0);
+                    const uncapturedAsteroids = gameState.asteroids.filter(a => !isPointInPolygon(a, p2Poly) && a.resources > 0);
+
+                    // 1. Economic Foundation: Ensure miners are harvesting captured asteroids
+                    // Each captured asteroid supports up to 3 miners. CPU targets 2 miners per captured asteroid (min 2, max 6).
+                    const desiredMiners = Math.min(6, Math.max(2, capturedAsteroids.length * 2));
+                    const totalMiners = red.miners.length + red.buildQueues.miner.length;
+                    
+                    if (totalMiners < desiredMiners && red.energy >= COSTS.miner && red.buildQueues.miner.length === 0) {
                         queueMiner(1);
                     }
-                    // B. Produce fighters if below 6 and energy permits
-                    else if (red.fighters.length + red.buildQueues.fighter.length < 6 && red.energy >= COSTS.fighter && red.buildQueues.fighter.length === 0) {
-                        queueFighter(1);
-                    }
-                    // C. Construct Stations toward uncaptured asteroids
-                    else if (red.energy >= COSTS.station && red.stations.length + red.readyStations + red.buildQueues.station.length < 15 && red.buildQueues.station.length === 0 && red.readyStations === 0) {
-                        queueStation(1);
+                    // 2. High Priority: Expansion to capture asteroids!
+                    // If we have uncaptured asteroids (or haven't reached station limit) and no station is currently in progress:
+                    else if (red.stations.length + red.readyStations + red.buildQueues.station.length < 15 && red.buildQueues.station.length === 0 && red.readyStations === 0) {
+                        if (red.energy >= COSTS.station) {
+                            queueStation(1);
+                        }
+                        // If energy < COSTS.station (100⚡), we RESERVE our energy for station expansion!
+                        // Do NOT spend energy on fighters unless defending from active invasion.
                     }
 
-                    // D. Deploy ready station
+                    // 3. Military: Build fighters ONLY if expansion energy is secured or in emergency defense
+                    const blueInRed = blue.fighters.some(f => isPointInPolygon(f, p2Poly));
+                    const hasStationInProgress = red.buildQueues.station.length > 0 || red.readyStations > 0;
+                    const hasExpansionReserve = red.energy >= COSTS.station + COSTS.fighter; // >= 150 energy
+                    const canBuildFighter = red.fighters.length + red.buildQueues.fighter.length < 8 && red.energy >= COSTS.fighter && red.buildQueues.fighter.length === 0;
+
+                    // Build fighter if:
+                    // - Under emergency invasion (blue fighters inside red territory), OR
+                    // - A station is already in progress (queued or ready) and we have enough for a fighter, OR
+                    // - We have surplus energy above the 100 energy station expansion reserve
+                    if (canBuildFighter && (blueInRed || hasStationInProgress || hasExpansionReserve)) {
+                        queueFighter(1);
+                    }
+
+                    // 4. Deploy ready station toward the closest uncaptured asteroid to expand territory
                     if (red.readyStations > 0) {
-                        const uncaptured = gameState.asteroids.filter(a => !isPointInPolygon(a, p2Poly));
                         let targetDeg = 45;
-                        if (uncaptured.length > 0) {
-                            let bestAsteroid = uncaptured[0];
+                        if (uncapturedAsteroids.length > 0) {
+                            let bestAsteroid = uncapturedAsteroids[0];
                             let bestDist = Infinity;
-                            uncaptured.forEach(a => {
+                            uncapturedAsteroids.forEach(a => {
                                 const d = Math.hypot(a.x - red.hq.x, a.y - red.hq.y);
                                 if (d < bestDist) {
                                     bestDist = d;
@@ -1614,10 +1682,9 @@
                     }
 
                     // Tactical Stance Management for CPU
-                    const blueInRed = p1.fighters.some(f => isPointInPolygon(f, p2Poly));
                     if (blueInRed) {
                         red.stance = 'defend';
-                    } else if (red.fighters.length >= 4 && red.fighters.length > p1.fighters.length) {
+                    } else if (red.fighters.length >= 4 && red.fighters.length > blue.fighters.length) {
                         red.stance = 'attack';
                     } else {
                         red.stance = 'patrol';
@@ -2353,6 +2420,8 @@
         resetDistances();
         initAsteroids();
         initUnits();
+        update(0);
+        render();
         requestAnimationFrame(gameLoop);
     </script>
 </body>

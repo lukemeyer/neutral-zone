@@ -24,7 +24,7 @@ const CONFIG = {
     numDegrees: 91,
     initialRadius: 198, // Exactly half area of 280 (280 / sqrt(2) = 198)
     hqOffset: 80,
-    tapDistance: 25,
+    tapDistance: 50, // Doubled tap distance (was 25 px)
     initialSpreadDots: 3,
     spreadMode: 'rounded',
     neighborStrength: 1.00,
@@ -64,6 +64,18 @@ function getPolygonArea(poly) {
     return Math.abs(area) * 0.5;
 }
 
+function isPointInPolygon(pt, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const xi = poly[i].x, yi = poly[i].y;
+        const xj = poly[j].x, yj = poly[j].y;
+        const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+            (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi + 1e-9) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+
 function createTestState(w = 1200, h = 800) {
     const state = {
         players: [
@@ -97,19 +109,42 @@ function createTestState(w = 1200, h = 800) {
         asteroids: []
     };
 
-    // Asteroids layout from commander_v2.html (15 total, including 4 new 500-energy ones)
-    const rawLayout = [
-        { relX: 0.12, relY: 0.76, resources: 800, tier: 1 },
-        { relX: 0.22, relY: 0.88, resources: 800, tier: 1 },
-        { relX: 0.88, relY: 0.24, resources: 800, tier: 1 },
-        { relX: 0.78, relY: 0.12, resources: 800, tier: 1 },
+    const hq0 = state.players[0].hq;
+    const hq1 = state.players[1].hq;
+    const START_ASTEROID_DIST = 135;
 
-        // 4 Additional Strategic Asteroids (500 energy each)
+    // 1. Dedicated Starting Asteroid in Player 1 Territory (800 energy, Tier 1)
+    state.asteroids.push({
+        id: 1,
+        x: hq0.x + START_ASTEROID_DIST * Math.cos(-Math.PI * 0.25),
+        y: hq0.y + START_ASTEROID_DIST * Math.sin(-Math.PI * 0.25),
+        resources: 800,
+        maxResources: 800,
+        tier: 1,
+        radius: 12,
+        miners: 0
+    });
+
+    // 2. Dedicated Starting Asteroid in Player 2 Territory (800 energy, Tier 1)
+    state.asteroids.push({
+        id: 2,
+        x: hq1.x + START_ASTEROID_DIST * Math.cos(Math.PI * 0.75),
+        y: hq1.y + START_ASTEROID_DIST * Math.sin(Math.PI * 0.75),
+        resources: 800,
+        maxResources: 800,
+        tier: 1,
+        radius: 12,
+        miners: 0
+    });
+
+    // 3. Thirteen Neutral Expansion Asteroids (Strictly outside both starting territories)
+    const neutralSpecs = [
+        { relX: 0.25, relY: 0.85, resources: 800, tier: 1 },
+        { relX: 0.75, relY: 0.15, resources: 800, tier: 1 },
         { relX: 0.16, relY: 0.68, resources: 500, tier: 1 },
         { relX: 0.84, relY: 0.32, resources: 500, tier: 1 },
         { relX: 0.28, relY: 0.88, resources: 500, tier: 1 },
         { relX: 0.72, relY: 0.12, resources: 500, tier: 1 },
-
         { relX: 0.20, relY: 0.58, resources: 1200, tier: 2 },
         { relX: 0.38, relY: 0.80, resources: 1200, tier: 2 },
         { relX: 0.80, relY: 0.42, resources: 1200, tier: 2 },
@@ -119,24 +154,35 @@ function createTestState(w = 1200, h = 800) {
         { relX: 0.50, relY: 0.50, resources: 2500, tier: 4 }
     ];
 
-    const MIN_HQ_FLIGHT_DIST = 120;
-    rawLayout.forEach((spec, idx) => {
-        const ax = spec.relX * w;
-        const ay = spec.relY * h;
-        const d1 = Math.hypot(ax - state.players[0].hq.x, ay - state.players[0].hq.y);
-        const d2 = Math.hypot(ax - state.players[1].hq.x, ay - state.players[1].hq.y);
-        if (d1 >= MIN_HQ_FLIGHT_DIST && d2 >= MIN_HQ_FLIGHT_DIST) {
-            state.asteroids.push({
-                id: idx + 1,
-                x: ax,
-                y: ay,
-                resources: spec.resources,
-                maxResources: spec.resources,
-                tier: spec.tier,
-                radius: 12,
-                miners: 0
-            });
+    const safeBuffer = CONFIG.initialRadius + 25;
+    neutralSpecs.forEach((spec, idx) => {
+        let ax = spec.relX * w;
+        let ay = spec.relY * h;
+
+        const d0 = Math.hypot(ax - hq0.x, ay - hq0.y);
+        if (d0 < safeBuffer) {
+            const ang = Math.atan2(ay - hq0.y, ax - hq0.x);
+            ax = hq0.x + safeBuffer * Math.cos(ang);
+            ay = hq0.y + safeBuffer * Math.sin(ang);
         }
+
+        const d1 = Math.hypot(ax - hq1.x, ay - hq1.y);
+        if (d1 < safeBuffer) {
+            const ang = Math.atan2(ay - hq1.y, ax - hq1.x);
+            ax = hq1.x + safeBuffer * Math.cos(ang);
+            ay = hq1.y + safeBuffer * Math.sin(ang);
+        }
+
+        state.asteroids.push({
+            id: idx + 3,
+            x: ax,
+            y: ay,
+            resources: spec.resources,
+            maxResources: spec.resources,
+            tier: spec.tier,
+            radius: 12,
+            miners: 0
+        });
     });
 
     return state;
@@ -168,6 +214,47 @@ function getDotPosition(p, deg, r = p.distances[deg]) {
         x: p.hq.x + r * Math.cos(rad),
         y: p.hq.y + r * Math.sin(rad)
     };
+}
+
+function calculateInfluence(deltaDeg, spread, curveType) {
+    if (deltaDeg === 0) return 1.0;
+    if (deltaDeg > spread) return 0.0;
+    const norm = deltaDeg / spread;
+    if (curveType === 'smoothstep') {
+        return 1.0 - (3 * norm * norm - 2 * norm * norm * norm);
+    }
+    return Math.max(0.0, 1.0 - norm);
+}
+
+function calculateTapWeight(deltaDeg, initialDots, spreadMode, neighborSpread, neighborStrength, falloffCurve) {
+    const rCore = Math.floor((initialDots - 1) / 2);
+    if (spreadMode === 'rounded') {
+        if (deltaDeg <= rCore) {
+            if (rCore === 0) return 1.0;
+            const t = deltaDeg / (rCore + 1);
+            return Math.cos(Math.PI * 0.25 * t);
+        }
+        const deltaOut = deltaDeg - rCore;
+        const edgeVal = Math.cos(Math.PI * 0.25 * (rCore / (rCore + 1)));
+        const inf = calculateInfluence(deltaOut, neighborSpread, falloffCurve);
+        return edgeVal * inf * neighborStrength;
+    }
+    return 1.0;
+}
+
+function pushBorderAtDegree(player, centerDeg, pushAmount = CONFIG.tapDistance) {
+    for (let deg = 0; deg < CONFIG.numDegrees; deg++) {
+        const delta = Math.abs(deg - centerDeg);
+        const weight = calculateTapWeight(
+            delta,
+            CONFIG.initialSpreadDots,
+            CONFIG.spreadMode,
+            CONFIG.neighborSpread,
+            CONFIG.neighborStrength,
+            CONFIG.falloffCurve
+        );
+        player.distances[deg] += pushAmount * weight;
+    }
 }
 
 // -------------------------------------------------------------
@@ -508,7 +595,7 @@ it("Station firing range is halved to 57.5px and weapon damage is halved to 9", 
     assert.strictEqual(STATION_DAMAGE, 9, "Station damage must be 9 (halved from 18)");
 });
 
-it("Stations target miners and other stations, strictly ignoring enemy fighters", () => {
+it("Stations still target fighters as well as miners and stations in range", () => {
     const state = createTestState();
     const p1 = state.players[0];
     const p2 = state.players[1];
@@ -527,6 +614,10 @@ it("Stations target miners and other stations, strictly ignoring enemy fighters"
     let chosenType = null;
     let minDist = STATION_RANGE;
     
+    p2.fighters.forEach(ef => {
+        const d = Math.hypot(ef.x - sPos.x, ef.y - sPos.y);
+        if (d <= minDist) { minDist = d; chosenTarget = ef; chosenType = 'fighter'; }
+    });
     p2.miners.forEach(em => {
         const d = Math.hypot(em.x - sPos.x, em.y - sPos.y);
         if (d <= minDist) { minDist = d; chosenTarget = em; chosenType = 'miner'; }
@@ -538,8 +629,8 @@ it("Stations target miners and other stations, strictly ignoring enemy fighters"
     });
     
     assert(chosenTarget !== null, "Station should find a target in range");
-    assert.strictEqual(chosenType, 'miner', "Station must target miner and ignore fighter");
-    assert.strictEqual(chosenTarget.id, 202);
+    assert.strictEqual(chosenType, 'fighter', "Station should still target fighters in range");
+    assert.strictEqual(chosenTarget.id, 201);
 });
 
 it("Fighter shield absorbs 3 hits before taking hull damage and recharges 1 hit per 10s", () => {
@@ -665,6 +756,92 @@ it("Controlling >= 60% of the map triggers Victory by Territory Domination", () 
     assert(gameOver, "60% territory should trigger game over");
     assert.strictEqual(winner, 'Blue (P1)');
     assert(winReason.includes("Territory Domination"));
+});
+
+// ============================================================
+// Test Group 6: Territory Starting Asteroids, 50px Tap Distance & CPU Expansion Priority
+// ============================================================
+
+it("There is always exactly 1 asteroid in each player territory at the beginning of the game across viewports", () => {
+    const viewports = [
+        { w: 1200, h: 800 },
+        { w: 1280, h: 720 },
+        { w: 1920, h: 1080 },
+        { w: 800, h: 600 },
+        { w: 390, h: 844 }
+    ];
+
+    viewports.forEach(vp => {
+        const state = createTestState(vp.w, vp.h);
+        const poly0 = [{ x: state.players[0].hq.x, y: state.players[0].hq.y }];
+        const poly1 = [{ x: state.players[1].hq.x, y: state.players[1].hq.y }];
+        for (let i = 0; i < 91; i++) {
+            poly0.push(getDotPosition(state.players[0], i));
+            poly1.push(getDotPosition(state.players[1], i));
+        }
+
+        let inP1 = 0, inP2 = 0;
+        state.asteroids.forEach(a => {
+            if (isPointInPolygon(a, poly0)) inP1++;
+            if (isPointInPolygon(a, poly1)) inP2++;
+        });
+
+        assert.strictEqual(inP1, 1, `Viewport ${vp.w}x${vp.h} must have exactly 1 asteroid in P1 territory at start`);
+        assert.strictEqual(inP2, 1, `Viewport ${vp.w}x${vp.h} must have exactly 1 asteroid in P2 territory at start`);
+        assert.strictEqual(state.asteroids.length, 15, `Viewport ${vp.w}x${vp.h} must have 15 total asteroids`);
+    });
+});
+
+it("Double the tap distance: CONFIG.tapDistance is 50px and pushes frontier by 50px", () => {
+    assert.strictEqual(CONFIG.tapDistance, 50, "CONFIG.tapDistance must be doubled to 50px (was 25px)");
+    const state = createTestState();
+    const p1 = state.players[0];
+    
+    // Test pushBorderAtDegree default push amount
+    const centerDeg = 45;
+    pushBorderAtDegree(p1, centerDeg, CONFIG.tapDistance);
+    
+    // Core degree should have increased by 50px
+    const expected = CONFIG.initialRadius + 50;
+    assert(Math.abs(p1.distances[centerDeg] - expected) < 0.01, `Distance at degree ${centerDeg} must be ${expected}, got ${p1.distances[centerDeg]}`);
+});
+
+it("CPU AI prioritizes reserving energy for stations to expand and capture asteroids over fighters", () => {
+    const state = createTestState();
+    const red = state.players[1];
+    const blue = state.players[0];
+    
+    // Red has 80 energy (can afford 50-energy fighter, but cannot yet afford 100-energy station)
+    red.energy = 80;
+    red.miners = [{ id: 1 }, { id: 2 }]; // Has miners for starting asteroid
+    red.fighters = [{ id: 10 }]; // 1 fighter
+    red.buildQueues = { station: [], miner: [], fighter: [] };
+    red.readyStations = 0;
+    
+    const p2Poly = [{ x: red.hq.x, y: red.hq.y }];
+    for (let i = 0; i < 91; i++) p2Poly.push(getDotPosition(red, i));
+    
+    // CPU decision logic:
+    const blueInRed = blue.fighters.some(f => isPointInPolygon(f, p2Poly));
+    const hasStationInProgress = red.buildQueues.station.length > 0 || red.readyStations > 0;
+    const hasExpansionReserve = red.energy >= COSTS.station + COSTS.fighter; // >= 150
+    const canBuildFighter = red.fighters.length < 8 && red.energy >= COSTS.fighter && red.buildQueues.fighter.length === 0;
+
+    // Red has 80 energy. Should it spend 50 on a fighter?
+    // No! It must reserve energy for a station to expand and capture asteroids!
+    const shouldBuildFighter = canBuildFighter && (blueInRed || hasStationInProgress || hasExpansionReserve);
+    assert.strictEqual(shouldBuildFighter, false, "CPU must reserve energy for expansion rather than buying unnecessary fighters");
+    
+    // Once Red saves to 100 energy:
+    red.energy = 100;
+    const shouldBuildStation = red.energy >= COSTS.station && red.buildQueues.station.length === 0 && red.readyStations === 0;
+    assert.strictEqual(shouldBuildStation, true, "CPU must immediately queue a station to expand when reaching 100 energy");
+    
+    // Once station is in progress and Red gains surplus energy:
+    red.buildQueues.station.push({ timeRemaining: 30.0 });
+    red.energy = 60;
+    const shouldBuildFighterNow = (red.fighters.length < 8 && red.energy >= COSTS.fighter) && (blueInRed || red.buildQueues.station.length > 0);
+    assert.strictEqual(shouldBuildFighterNow, true, "CPU can produce a fighter once station expansion is already underway");
 });
 
 console.log("\n------------------------------------------------------------");
